@@ -72,6 +72,7 @@ PianoRollEditorComponent::PianoRollEditorComponent() : noteGrid(styleSheet), con
     {
          stopPlayback();
     };
+
 }
 
 
@@ -80,6 +81,7 @@ PianoRollEditorComponent::~PianoRollEditorComponent()
 {
     
 }
+
 
 void PianoRollEditorComponent::startPlayback()
 {
