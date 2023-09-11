@@ -7,7 +7,6 @@
 
 #include "KeyboardComponent.hpp"
 
-
 KeyboardComponent::KeyboardComponent ()
 {
     blackPitches.add(1);

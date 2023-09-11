@@ -85,12 +85,12 @@ PianoRollEditorComponent::~PianoRollEditorComponent()
 
 void PianoRollEditorComponent::startPlayback()
 {
-    // ここに再生開始の処理を実装する
+
 }
 
 void PianoRollEditorComponent::stopPlayback()
 {
-    // ここに再生停止の処理を実装する
+
 }
 
 //==============================================================================
@@ -123,7 +123,7 @@ void PianoRollEditorComponent::resized()
     
     int buttonWidth = 90;
     int buttonHeight = 40;
-    int centerX = (getWidth() - buttonWidth * 2) / 2; // ボタンが中央に配置されるように計算
+    int centerX = (getWidth() - buttonWidth * 2) / 2; // ﾆ畜ﾆ耽ﾆ停懌堋ｪ窶吮窶ｰ窶ｺ窶堙俄掏窶冰窶堋ｳ窶堙ｪ窶堙ｩ窶堙ｦ窶堋､窶堙嫁致ﾅｽZ
     int bottomY = getHeight() - buttonHeight;
 
     playButton.setBounds(centerX, bottomY, buttonWidth, buttonHeight);
