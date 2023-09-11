@@ -86,13 +86,11 @@ PianoRollEditorComponent::~PianoRollEditorComponent()
 void PianoRollEditorComponent::startPlayback()
 {
     // ‚±‚±‚ÉÄ¶ŠJn‚Ìˆ—‚ğÀ‘•‚·‚é
-    isPlaying = true;
 }
 
 void PianoRollEditorComponent::stopPlayback()
 {
     // ‚±‚±‚ÉÄ¶’â~‚Ìˆ—‚ğÀ‘•‚·‚é
-    isPlaying = false;
 }
 
 //==============================================================================
