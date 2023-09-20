@@ -85,12 +85,19 @@ PianoRollEditorComponent::~PianoRollEditorComponent()
 
 void PianoRollEditorComponent::startPlayback()
 {
-
+    // サウンドデータの読み込みや初期化
+    // サウンドデバイスの設定
+    // 再生位置の初期化
+    // サウンドの再生開始
+    // 他の再生に関連する処理を追加
 }
 
 void PianoRollEditorComponent::stopPlayback()
 {
-
+    // 再生の停止
+    // 再生位置のリセット
+    // サウンドデバイスのクリーンアップ
+    // 他の停止に関連する処理を追加
 }
 
 //==============================================================================
