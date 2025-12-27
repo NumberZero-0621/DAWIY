@@ -6,7 +6,7 @@ node_modules
 *.DS_STORE
 
 storage/*
-*.env
+
 *.pem
 /bank/storage
 /bank/loops
