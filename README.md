@@ -1,15 +1,8 @@
-# Wam-Studio
-Updated September 7, 2023
-
-Wam-Studio’s is an online tool for creating audio projects that you can imagine as multi-track music. Each track corresponds to a different "layer" of audio content that can be recorded, edited, or just integrated (using audio files for example). Some track can be used to control virtual instruments: in that case we record the sound that is generated internally by these virtual instruments (and played using a MIDI piano keyboard, for example). Tracks can be added or removed, played isolated or with other tracks. They can also be "armed" for recording, and when the recording starts, all other tracks will play along, while the armed track will record new content.
-
-Current features: robust audio track recording, track regions, loop area on tracks, track plugin fx chain, parameter automation, audio input and output device selection, latency measuring tool + inout latency compensation when recording, project saving on cloud (audio + all metadata), rendering mix with choice of tracks to render, viewport management on tracks (zoom in/out) using pixiJS/WebGL canvas.
-
-<img width="800" alt="image" src="https://i.ibb.co/DkzGZrc/Wam-Studio-Sept2023.jpg">
-### Citation
-
-If you use our resource, please cite the following articles:
-
+※元来の「Wam-Studio」のREADMEはフォーク元の[リポジトリ](https://github.com/Brotherta/wam-studio)を参照してください  
+DAWIYそのものの説明は下のほうにあるよ
+***
+### 使用上の注意（フォーク元のリポジトリより）
+論文等でこのリポジトリを使用する場合は、参考文献（`.bib`ファイル想定？）に以下の文献を引用してください、とのこと：
 ```
 @inproceedings{buffa2023wam,
   title={WAM-studio, a Digital Audio Workstation (DAW) for the Web},
@@ -19,47 +12,206 @@ If you use our resource, please cite the following articles:
   year={2023}
 }
 ```
-# Running guide
+***
+# スタートガイド
+## ローカルで実行
+### フロントエンド(`public`)
+1. `cd public`を実行して`public`フォルダに移動
+2. `npm install`を実行して依存関係をインストール
+3. `public`フォルダ直下に`.env`ファイルを作成
+4. `.env`内で以下の変数を設定
+   - `PORT`･･･ フロントエンドが実行されるポート番号（例：`5002`）
+   - `HTTPS`･･･ HTTPSを有効にする場合はこれを`true`に設定
+     - `true`の場合は証明書を作成し変数`SSL_CRT_FILE`と`SSL_KEY_FILE`を設定する必要あり
+   - `BACKEND_URL`･･･ バックエンドのURL（例：`http://localhost:6002`）
+   - `BANK_PLUGIN_URL`･･･ バンクプラグインのURL（例：`http://localhost:6002`）
+   - 記述例（元々あった`.env.example`参考 とりあえずこれで動くはず）：
+        ```
+        PORT=5002
+        HTTPS=false
+        BACKEND_URL=http://localhost:6002
+        BANK_PLUGIN_URL=http://localhost:6002
+        SONGS_FILE_URL=http://localhost:6002
+        HTTPS_DEV=false
+        ```
+5. `npm start`を実行してフロントエンドを起動
+### バックエンド(`bank`)
+1. `cd bank`を実行して`bank`フォルダに移動
+2. `npm install`を実行して依存関係をインストール
+3. `bank`フォルダ直下に`.env`ファイルを作成
+4. `.env`内で以下の変数を設定
+   - `PORT`･･･ バックエンドが実行されるポート番号（例：`6002`）
+   - `STORAGE_DIR`･･･ バックエンドがデータを保存するディレクトリ（例：`storage`）
+   - `ADMIN_PASSWORD`･･･ 管理者のパスワード
+   - `JWT_SECRET`･･･ JSON Web Token (JWT) のシークレット
+   - `NODE_ENV`･･･ バックエンドが実行されている環境（例：`development`）
+   - 記述例（元々あった`.env.example`参考 とりあえずこれで動くはず）：
+        ```
+        PORT=6002
+        STORAGE_DIR=storage
+        ADMIN_PASSWORD=123456
+        JWT_SECRET=123456
+        NODE_ENV=development
+        HTTPS=false
+        BANKURL=http://localhost:6002
+        ```
+5. `npm start`を実行してバックエンドを起動
+## Dockerで実行
+1. まだインストールしてない場合はマシンにDockerをインストール
+2. リポジトリをローカルに複製
+3. ルートディレクトリに移動
+4. `docker-compose up`を実行してDockerで起動
+5. Dockerは`docker-compose.yml`を読み取ってコンテナを構築＆実行する
+6. `docker-compose.yml`内で次の変数を設定
+   - `HTTPS`･･･ HTTPSを有効にする場合はこれを`true`に設定
+     - `true`の場合は証明書を作成し変数`SSL_CRT_FILE`と`SSL_KEY_FILE`を設定する必要あり
+   - `BACKEND_URL`･･･ バックエンドのURL（例：`http://localhost:6002`）
+   - `BANK_PLUGIN_URL`･･･ バンクプラグインのURL（例：`http://localhost:7002`）
+   - `STORAGE_DIR`･･･ バックエンドがデータを保存するディレクトリ（ボリューム内）（例：`/data/storage`） 
+   - `ADMIN_PASSWORD`･･･ 管理者のパスワード
+   - `JWT_SECRET`･･･ JSON Web Token (JWT) のシークレット
 
-## Running the Application Locally
+（※サーバーとプラグインバンクは他の場所でホストできる その場合`public`フォルダの`.env`か`docker-compose.yml`でURLの提供が必要）
 
-### Frontend
-1. Navigate to the `public` folder.
-2. Install dependencies by running `npm install`.
-3. Create a `.env` file in the root directory of the `public` folder.
-4. Configure the following variables in the `.env` file:
-   - `PORT`: The port number that the frontend server will run on. For example, `5002`.
-   - `HTTPS`: Set this to `true` if you want to enable HTTPS. If `true`, you must create a certificate and set the `SSL_CRT_FILE` and `SSL_KEY_FILE` variables.
-   - `BACKEND_URL`: The URL of the backend server. For example, `http://localhost:6002`.
-   - `BANK_PLUGIN_URL`: The URL of the bank plugin. For example, `http://localhost:6002`.
-5. Start the frontend server by running `npm start`.
+以上でアプリケーションが実行されるはず ブラウザで`http://localhost:5002`にてフロントエンドにアクセスできる
+***
+# DAWIY
 
-### Back-end (Bank Plugin)
-1. Navigate to the `bank` folder.
-2. Install dependencies by running `npm install`.
-3. Create a `.env.local` file in the root directory of the `bank` folder.
-4. Configure the following variables in the `.env.local` file:
-   - `PORT`: The port number that the bank plugin server will run on. For example, `6002`.
-   - `STORAGE_DIR`: The directory where the bank plugin will store data. For example, `storage`.
-   - `ADMIN_PASSWORD`: The password for the admin user.
-   - `JWT_SECRET`: The secret for JSON Web Tokens (JWT).
-   - `NODE_ENV`: The environment that the bank plugin is running in. For example, `development`.
-5. Start the bank plugin server by running `npm start`.
+### DAW(Digital Audio Workstation) + DIY(Do It Yourself) = DAWIY
 
-## Running the Application with Docker
-1. Install Docker on your machine if you haven't already.
-2. Clone the project repository to your local machine.
-3. Navigate to the root directory of the project.
-4. Start the application with Docker by running `docker-compose up`.
-5. Docker will read the `docker-compose.yml` file to build and run the containers.
-6. Configure the following variables in the `docker-compose.yml` file:
-   - `HTTPS`: Set this to `false` to disable HTTPS. If `true`, you must create a certificate and set the `SSL_CRT_FILE` and `SSL_KEY_FILE`
-   - `BACKEND_URL`: The URL of the backend server. For example, `http://localhost:6002`.
-   - `BANK_PLUGIN_URL`: The URL of the bank plugin. For example, `http://localhost:7002`.
-   - `STORAGE_DIR`: The directory where the backend will store data. For example, `/data/storage` (inside the volume).
-   - `ADMIN_PASSWORD`: The password for the admin user.
-   - `JWT_SECRET`: The secret for JSON Web Tokens (JWT).
+「**自分好みのDAW環境をDIYする共通プラットフォーム**」…を目指している
+<img width="1919" height="1030" alt="2025-12-28時点のDAWIY" src="https://github.com/user-attachments/assets/4e275fc2-b5f3-4795-b554-5ea1f6a50a06" />
+※画像は2025年12月28日時点
 
-Note : The server and the plugin bank can be hosted elsewhere, in that case do not forget to provide the URLs in the public `.env` or in the `docker-compose.yml`.
+WAM-Studioをベースに、改造を施し、自分なりに模索しています
+# 今までに自分で実装してきたこと
+だいぶ大まかやけど･･･
+## DAW的な機能の部分
+- ピアノロール
+  - ノートの追加・削除
+  - 再生バー
+  - ノートの伸び縮み
+  - 直感的な範囲選択
+  - ショートカットキー
+  - etc.
+    - まだまだ改良の余地あり
+    <img width="50%" alt="ピアノロール画面" src="https://github.com/user-attachments/assets/6c42081a-fe5c-4da3-86cb-cbced9aa7ad9" />
+- dawprojectファイルの入出力機能の追加
+  - dawprojectを読み込み、プロジェクトとして展開
+  - DAW上のイベント等を読み取り、`.dawproject`に出力
+    <img width="100%" alt="dawproject読み込みの様子" src="https://github.com/user-attachments/assets/b0224dee-3983-44a5-bb12-9050a6d8358c" />
+## DIY的な機能の部分
+いきなり「**機能の自由な追加・削除**」･･･ は難しいので
+- 第1弾として、確率的メロディ生成機能を実装
 
-That's it! The application should now be running. You can access the frontend by going to `http://localhost:5002` in your web browser.
+   <img width="75%" alt="Stochastic Note Generator" src="https://github.com/user-attachments/assets/b2da422e-fc52-42f2-b166-5ee1c0600f01" />
+- プラグインのパッケージマネージャーのプロトタイプも実装
+
+   <img width="50%" alt="パッケージマネージャー" src="https://github.com/user-attachments/assets/26e19b7e-673c-49b8-8a91-de243f38f251" />
+
+- 機能の自由な追加・削除には程遠い
+  - サーバとの連携・インストール等々･･･ 課題は山積み
+***
+# 自作の関連文献
+- [ProjectDAWIY - GriCo: Excel VBAを用いた確率的自動作曲システム(EC2025)](https://ipsj.ixsq.nii.ac.jp/records/2003653)
+- [ProjectDAWIY - GriCo: 自分好みのDAW環境をDIYする共通プラットフォームの構築に向けて(MUS144-夏25)](https://ipsj.ixsq.nii.ac.jp/records/2003750)
+***
+以下、2025年10月27日時点での背景、目的、理想等のメモ書き  
+## 背景 / 現状 / 課題（何が不満なの？）
+私は趣味でDTMをやっているのですが、DAWを使っているうちに、いくつか課題点や問題点を考えるようになりました。  
+まず、DAWごとに操作感や拡張子やフォーマットなどの環境が異なるため、共同で音楽制作を行うのが難しい、と思いました。  
+そして、DAWによってはサービスを終了してしまうので、それによって今まで使い慣れてきたDAWを手放すことになり、新しい環境で1から制作をやるのは中々面倒です。  
+次に、機能やUIなどで、「もっとこうだったらいいのに...」という不満を感じることがあります。  
+- DAWによってはある程度設定を変更することで操作感や見た目を変えることが出来ますが、機能単位で、自分好みにカスタマイズ出来ると尚嬉しいな、と思いました。  
+- もちろん、VSTプラグイン等のエフェクターやインストゥルメント系のプラグインは豊富にあり、多くのDAWではそれらが使えるようになっているので、音色や効果についてはユーザーはかなり自由に操作することができるのですが、もっと、制作フローというか、ワークステーションそのものを思い通りにカスタマイズ出来るといいな、ということです。
+
+## その背景を経ての目的（だから、どうしたい？）
+これらの課題を解決するために、私は、「**自分好みのDAW環境をDIYする、共通プラットフォームの構築**」という研究テーマを掲げました。  
+このプラットフォームを私はDAWとDIYの造語で「DAWIY」と名付けました。  
+ユーザーそれぞれが自分好みの音楽制作環境を自ら構築出来るようにしたい、ということです。  
+要は音楽版のAviUtlを作りてぇなぁってことですよ
+- DAWでもユーザ主導の設計・展開を！
+- 誰もが機能を追加・改良できる「DAWツールキット」を開発したい
+- もっと思い通りに、もっと手早く、もっとわかりやすくやりたい
+- もっと自由に音作りがしたい！
+- 作曲を、もっと楽しく！
+- クリエイターが理想の環境を自力で手に入れ、音楽の可能性をさらに探究できる未来を目指す
+
+## その目的を達成するための要件 / 理想（何が出来れば満足？）
+やや具体化して要件をいくつか挙げるとするなら、
+- 試したい新しい機能の自由な取捨選択が可能であること
+  - AviUtlのプラグインのノリ。機能の開発も自分たちで出来ちゃう！
+  - パッケージマネージャーがあると嬉しい
+- GUIを柔軟に調整出来ること
+- ショートカットキーなど、馴染みのある操作が可能であること
+- なるべくPCスペックに優しく、またOSによる不自由(Windows・Macだから導入出来ない、など)が少ないこと
+- 非プログラマーであっても、なるべく直感的に機能の追加・削除やUIの調整が行えること
+
+などです。  
+理想形としては、「2人のDTMerがいた時に、それぞれ全く違う見た目・制作環境に見えるのに、実は内部的には同じフォーマットのプロジェクトファイルで動作しており、容易にファイルの共有や共同編集が出来てしまう」というイメージです。
+
+## 実際に欲しい「試したい新しい機能」一覧
+モチベアップのためにも具体的に書き出してみよう（出来そうか出来なさそうか既にありそうかどうかに関わらず）
+- UTAU-歌声合成ツール、NEUTRINOなど、音声合成ソフトウェアでのマルチトラック化
+  - というかDAWの中で直接いじりたいよね（スタンドアロンのものが割とあるため）
+    - ピアノロールに音素を打ち込めるようにできないかしら
+- メロディの確率的生成
+  - GriCoでやった通りではある　メロディのポン出しや、アイディア出しに使える？
+  - とにかく、「新しいメロディ」なるよくわからないものを模索していた
+  - パートのどこかに実験的に組み込むことで面白い効果があるかもしれない
+- AIに操作を代行させる
+  - ウェブ系なら比較的やりやすいかもしれない
+  - オーディオを生成してもらう、というよりは、「こういうエフェクトをかけたいんだけど手持ちのVSTの中から探してー」とか「ここからここまでのトラックに一括でこういう処理をしたいからやってー」とか「ここに適当にベース入れといてー」とか、自分にとってやりたくない、めんどくさい操作が仮にあったとしよう。それを代行してもらうことでモチベをなるべく下げずにやりたい操作に集中出来るのではないだろうか
+- UIの中にGIFを仕込んだり、イラストを入れたり、めちゃめちゃヲタクチックに見た目を魔改造
+  - あんまり俺はやるほうじゃないけど、時々PCをこういう風にヲタク全開にしてる人いるじゃない。DAWもそういう見た目に改造出来たりしたらやる気出るんじゃない？（ピアノロール画面の背景とかにイラストを薄く差し込む、などなど）（ピアノロールの上をキャラに走らせる、とかも面白いかもしれない）
+  - REAPERは既にプラグインなどの発達もあり結構UIいじれる印象
+- VSTプラグインをお手軽に試用する機能
+  - 新しいプラグインが発売された時とかに、プロモーション動画とかよくあるけど、それだけじゃどういう使い勝手なのか、とか、実際自分が求めているものなのか、とか、わかり辛いところがある。
+  - なので、無料トライアルとして、エフェクターなりインストゥルメンタルなり、一旦挿せる！
+  - ただそれを試用している状態なら音声のエクスポートはできないなどで制限をかける、購入までのフローを構築
+  - 申し込んだプラグイン、会社など、そのリストに登録されたものだけを試用出来るようにする（世の中の全てのVSTプラグインを試用出来るようにしろと言っているわけではない）
+  - 宣伝にもなるし、トライアルから購入までをDAW内でシームレスに出来ると、売上も上がるんじゃないかな（希望的観測）
+- ピアノロールを微分音等のように音律をいじれるようにする
+  - 現在の微分音作曲環境は厳しい、手間がかかる、めんどい
+    - Ableton Liveとかならそれらしいことが出来るみたい？
+  - もっとお手軽に直感的に微分音作曲が出来るようにしたい
+  - ピアノロールのそれぞれのHz等を細かく指定出来たりすると良いのではないか
+  - インストゥルメンタル側も対応している必要がある
+  - 駒沢大が関係のあることをやっていたはず
+- ピアノロールからピアノ要素を消す、アナログに周波数を変化させられるようにする(ピッチを描く！)
+  - もう出来るプラグイン自体はあるはず
+  - 要はCeVIOとかならピッチが描けるけど、それの楽器版をやりたいってこと
+  - ヴァイオリンやギターなどの弦楽器ならわかりやすいと思う
+  - ピアノとかドラムとか、本来音程がデジタル的なもの(？)でピッチを曲線にすると新しい音作りが出来るのではないか？
+  - これの応用で、SVGとか、PNGとか、画像ファイルなどを取り込んでピッチに変換し、音にしてしまう、というのは、そういうコンセプトの曲とかMVとかならアリなのでは
+    - MIDIアートの亜種、もっと解像度高い版？
+    - これは既にありそう
+- 再生する度に演奏が(MIDI配列などの大規模なものから、若干響きが変わるみたいな軽度のものまで)変化する音源の作成
+- バイノーラルなど、立体音響、3D音響などの制作をもっと手軽に
+  - 現行のDAWでも5.1chとか割とあるが、有料のものが多い印象
+  - これは実際そこまで触れてないのでにわか状態、そこまで実現したいのかどうかもわからん
+- フォルダーに入ってる音源達の波形を分析して、元のオーディオに似た波形を毎秒探してコラージュして似たようなオーディオを再生成する、自動音MAD製造機
+  - こいつはVSTプラグインのノリな気もするが、まぁブレインストーミングなので...
+- 純粋にマクロ機能が欲しい
+  - AI代行でも似たようなことは言ったが、VBAのノリで、手動でも出来る操作を記憶させて、関数を選択して一括で自動的に実行してもらう、ということが出来ると嬉しいんじゃないだろうか
+    - コミュニティでマクロを共有なんかあるとより良い
+- VSTプラグインのツリー構造をもっとわかりやすく
+  - プラグインマネージャーでいくらでも出来るという意見は首肯。これは私が手を抜いているところが多分にありますごめんなさい
+  - ただ、プラグインのサムネイルを表示、というかですね、パット見でどんなプラグインなのか、どういう機能があるのか、今欲しいやつなのかがわかると嬉しいと思うんですよ
+  - 現行の作業だと一旦挿入して起動させて触ってみてやっとどういう働きをするかがわかるのでね
+- それこそLLMを組み込んで作曲を実践しながら音楽理論とかDAWの使い方とかの講座を家庭教師みたいに個々人に合わせてフレキシブルに出来たら面白いかもね
+  - とにかく、最近Copilot君とかLLMがPCを操作出来るムーブメントが来ているので、そのままLLM君がDAWを操作出来る、という時代が来れば得られるものは大きいと思っている
+- オンライン同期リアルタイム同時共同音楽制作（アホみたいなネーミング）
+  - scrapboxとか、wordとかみたいに、共同で編集出来たら面白いかもしれない
+  - 実装には非常に困難を伴う
+    - [Design and Evaluation of a Scalable Real-Time Online Digital Audio Workstation Collaboration Framework](https://www.researchgate.net/publication/352107472_Design_and_Evaluation_of_a_Scalable_Real-Time_Online_Digital_Audio_Workstation_Collaboration_Framework)みたいなのがあるみたい？
+- 動画編集、MV制作などと合体
+  - 制作する動画にMIDIの情報をリアルタイムに反映させたり、打ち込んだ歌詞をそのまま字幕情報として利用するなどして、今よりも楽にMVもどきが作れるかも
+  - DAWを録画してちょっと編集して投稿、みたいな動画結構あるじゃないですか。あれをもっと華やかに出来ればなーとか
+- デイリーミッション的なものをつけてみる？
+  - やはり毎日コツコツやるのが大事なので、チェックボックス的な？デイリーミッション的な？報酬はよくわからんけど
+  - 少しずつでもいいからちょっとずつ進める、進めざるを得ない、といった状態は欲しいかもしれない
+- 意見は随時募集。要はもっと楽して思い通りの曲が作りたいんですよ、作曲の美味しい場所だけ食べていたいんですよ、人間って怠惰なんですよ、そんなもんすよね
+  - 実は大半の機能がMaxで出来てしまうのではないかという恐怖が常につきまとい続ける
+  - 「既存のこれを使えば出来そう」というものが見つかり次第書き込みたいところ
+  - とにかくかゆいところに手を届けようぜ
