@@ -160,7 +160,13 @@ export default class EditorController {
         }
 
         // Zoom
+        const oldRatio = RATIO_MILLS_BY_PX;
         setZoomLevel(new_zoom_level)
+        const newRatio = RATIO_MILLS_BY_PX;
+
+        this._app.playheadController.updateRangeAfterZoom(oldRatio, newRatio);
+        this._app.pianoRollController.updateRangeAfterZoom(oldRatio, newRatio);
+
         this._app.host.playhead= this._app.host.playhead
         this._view.playhead.viewportLeft= (zoomTarget/RATIO_MILLS_BY_PX)-this._view.playhead.viewportWidth*zoomTargetPos
         await this._view.resizeCanvas()

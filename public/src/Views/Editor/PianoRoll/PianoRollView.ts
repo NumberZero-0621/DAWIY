@@ -1,4 +1,4 @@
-import { Container, Graphics, FederatedPointerEvent, Text } from "pixi.js";
+import { Container, Graphics, FederatedPointerEvent, Text, Rectangle } from "pixi.js";
 import MIDIRegion from "../../../Models/Region/MIDIRegion";
 import Track from "../../../Models/Track/Track";
 import { RATIO_MILLS_BY_PX, HEIGHT_TRACK, MAX_DURATION_SEC } from "../../../Env";
@@ -13,7 +13,15 @@ export default class PianoRollView extends Container {
     public playheadContainer: Container;
     public playheadLine: Graphics;
     public selectionBox: Graphics;
+    public rangeSelectionGraphics: Graphics;
+    public timelineRangeGraphics: Graphics;
     public timelineContainer: Container;
+    public loopContainer: Container;
+    public loopBackground: Graphics;
+    public loopBar: Graphics;
+    public loopOverlay: Graphics;
+    public loopHandleLeft: Graphics;
+    public loopHandleRight: Graphics;
     public contentContainer: Container; // Holds grid and notes, scrolls
     public closeButton: Container;
     
@@ -28,6 +36,10 @@ export default class PianoRollView extends Container {
     public readonly SELECTION_BOX_COLOR = 0xFFFFFF;
     public readonly SELECTION_BOX_ALPHA = 0.3;
     public readonly TIMELINE_HEIGHT = 20;
+    public readonly LOOP_HEIGHT = 10;
+    public get HEADER_HEIGHT() { return this.LOOP_HEIGHT + this.TIMELINE_HEIGHT; }
+    public readonly LOOP_COLOR_ACTIVE = 0x5C69C; // Same as LoopView
+    public readonly LOOP_COLOR_INACTIVE = 0x426c8a;
 
     // Viewport state
     public viewportWidth: number = 800;
@@ -53,6 +65,41 @@ export default class PianoRollView extends Container {
         this.timelineContainer = new Container();
         this.timelineContainer.interactive = true;
         this.contentContainer.addChild(this.timelineContainer); // Scrolls X, Fixed Y logic in updateScroll
+
+        this.loopBackground = new Graphics();
+        this.loopBackground.interactive = true;
+        this.contentContainer.addChild(this.loopBackground);
+
+        this.loopOverlay = new Graphics();
+        this.loopOverlay.eventMode = 'none';
+        this.contentContainer.addChild(this.loopOverlay);
+
+        this.loopContainer = new Container();
+        this.loopContainer.interactive = true;
+        this.contentContainer.addChild(this.loopContainer);
+        
+        this.loopBar = new Graphics();
+        this.loopBar.interactive = true;
+        this.loopBar.cursor = "grab";
+        this.loopContainer.addChild(this.loopBar);
+        
+        this.loopHandleLeft = new Graphics();
+        this.loopHandleLeft.interactive = true;
+        this.loopHandleLeft.cursor = "w-resize";
+        this.loopContainer.addChild(this.loopHandleLeft);
+        
+        this.loopHandleRight = new Graphics();
+        this.loopHandleRight.interactive = true;
+        this.loopHandleRight.cursor = "e-resize";
+        this.loopContainer.addChild(this.loopHandleRight);
+
+        this.rangeSelectionGraphics = new Graphics();
+        this.rangeSelectionGraphics.eventMode = 'none';
+        this.contentContainer.addChild(this.rangeSelectionGraphics);
+
+        this.timelineRangeGraphics = new Graphics();
+        this.timelineRangeGraphics.eventMode = 'none';
+        this.contentContainer.addChild(this.timelineRangeGraphics);
 
         this.playheadContainer = new Container();
         this.contentContainer.addChild(this.playheadContainer);
@@ -126,7 +173,7 @@ export default class PianoRollView extends Container {
         this.playheadLine.clear();
 
         const width = 12;
-        const headHeight = this.TIMELINE_HEIGHT;
+        const headHeight = this.HEADER_HEIGHT;
         const rectHeight = headHeight * 0.67;
 
         this.playheadLine.lineStyle(1, this.PLAYHEAD_COLOR);
@@ -146,6 +193,31 @@ export default class PianoRollView extends Container {
 
     public setPlayheadPosition(x: number) {
         this.playheadLine.x = x;
+    }
+
+    public drawTimelineSelection(x: number, width: number) {
+        this.timelineRangeGraphics.clear();
+        this.timelineRangeGraphics.beginFill(0xFFFFFF, 0.8);
+        this.timelineRangeGraphics.drawRect(x, 0, width, this.TIMELINE_HEIGHT);
+        this.timelineRangeGraphics.endFill();
+    }
+
+    public clearTimelineSelection() {
+        this.timelineRangeGraphics.clear();
+    }
+
+    public drawRangeSelection(x: number, width: number) {
+        this.rangeSelectionGraphics.clear();
+        this.rangeSelectionGraphics.beginFill(0xFFFFFF, 0.3);
+        this.rangeSelectionGraphics.drawRect(x, 0, width, 128 * this.NOTE_HEIGHT);
+        this.rangeSelectionGraphics.endFill();
+        
+        this.drawTimelineSelection(x, width);
+    }
+
+    public clearRangeSelection() {
+        this.rangeSelectionGraphics.clear();
+        this.clearTimelineSelection();
     }
 
     public drawSelectionBox(x: number, y: number, width: number, height: number) {
@@ -168,13 +240,13 @@ export default class PianoRollView extends Container {
         // Background for keys header (corner)
         const headerBg = new Graphics();
         headerBg.beginFill(0x333333);
-        headerBg.drawRect(0, 0, this.KEY_WIDTH, this.TIMELINE_HEIGHT);
+        headerBg.drawRect(0, 0, this.KEY_WIDTH, this.HEADER_HEIGHT);
         headerBg.endFill();
         this.keysContainer.addChild(headerBg);
         
         for (let i = startNote; i <= endNote; i++) {
-            const y = (127 - i) * this.NOTE_HEIGHT - this.scrollY + this.TIMELINE_HEIGHT;
-            if (y < this.TIMELINE_HEIGHT - this.NOTE_HEIGHT || y > this.viewportHeight) continue; // Clip with header consideration
+            const y = (127 - i) * this.NOTE_HEIGHT - this.scrollY + this.HEADER_HEIGHT;
+            if (y < this.HEADER_HEIGHT - this.NOTE_HEIGHT || y > this.viewportHeight) continue; // Clip with header consideration
 
             const key = new Graphics();
             const isBlack = [1, 3, 6, 8, 10].includes(i % 12);
@@ -206,6 +278,17 @@ export default class PianoRollView extends Container {
         
         const g = new Graphics();
 
+        // Timeline Background
+        const timelineBg = new Graphics();
+        timelineBg.beginFill(0x3c4044);
+        timelineBg.drawRect(0, 0, width, this.TIMELINE_HEIGHT);
+        timelineBg.endFill();
+        this.timelineContainer.addChild(timelineBg);
+
+        // Timeline Lines Graphics
+        const timelineG = new Graphics();
+        this.timelineContainer.addChild(timelineG);
+
         // Draw row backgrounds (Lighter for white keys)
         for (let i = 0; i <= 127; i++) {
             const y = (127 - i) * this.NOTE_HEIGHT;
@@ -227,12 +310,11 @@ export default class PianoRollView extends Container {
              g.lineTo(width, y);
         }
 
-        // Timeline Background
-        const timelineBg = new Graphics();
-        timelineBg.beginFill(0x2c2c2c);
-        timelineBg.drawRect(0, 0, width, this.TIMELINE_HEIGHT);
-        timelineBg.endFill();
-        this.timelineContainer.addChild(timelineBg);
+        // Loop Area Background
+        this.loopBackground.clear();
+        this.loopBackground.beginFill(0x2c353c);
+        this.loopBackground.drawRect(0, 0, width, this.LOOP_HEIGHT);
+        this.loopBackground.endFill();
 
         // Vertical lines
         const msPerBeat = 60000 / bpm; // Duration of a quarter note
@@ -273,55 +355,57 @@ export default class PianoRollView extends Container {
                 g.moveTo(x, 0);
                 g.lineTo(x, 128 * this.NOTE_HEIGHT);
 
+                // Timeline Bar Line (Full Height)
+                timelineG.lineStyle(2, BAR_LINE_COLOR);
+                timelineG.moveTo(x, 0);
+                timelineG.lineTo(x, this.TIMELINE_HEIGHT);
+
                 // Bar Number in Timeline
                 const barNum = (beatIndex / beatsPerBar) + 1;
-                // Only draw text if it's the exact start of bar (not repeated due to epsilon overlap)
-                // Actually loop increments by snapWidth, so we might hit the same bar line multiple times if snapWidth < epsilon? No, snapWidth usually > 1px.
-                
-                // Check if we already drew text for this bar? 
-                // Simplest: Just draw. If overlap, previous one gets covered or z-fighting. 
-                // But better to check. 
-                // Or just use the fact that we iterate monotonically.
                 
                 const text = new Text(`${barNum}`, { fontFamily: "Arial", fontSize: 12, fill: 0xCCCCCC });
                 text.x = x + 5;
                 text.y = 2; 
                 this.timelineContainer.addChild(text); 
-                
-                // Draw tick on timeline
-                const tick = new Graphics();
-                tick.lineStyle(1, 0xCCCCCC);
-                tick.moveTo(x, this.TIMELINE_HEIGHT - 5);
-                tick.lineTo(x, this.TIMELINE_HEIGHT);
-                this.timelineContainer.addChild(tick);
 
             } else if (isBeat) {
                 // Beat line: Medium visibility
                 g.lineStyle(1, BEAT_LINE_COLOR);
                 g.moveTo(x, 0);
                 g.lineTo(x, 128 * this.NOTE_HEIGHT);
+
+                // Timeline Beat Line (Full Height)
+                timelineG.lineStyle(1, BEAT_LINE_COLOR);
+                timelineG.moveTo(x, 0);
+                timelineG.lineTo(x, this.TIMELINE_HEIGHT);
+
             } else {
                 // Snap sub-division line: Faint
                 // Only draw if snap resolution is finer than beat
                 g.lineStyle(1, SNAP_LINE_COLOR);
                 g.moveTo(x, 0);
                 g.lineTo(x, 128 * this.NOTE_HEIGHT);
+
+                // Timeline Snap Line (Bite in)
+                timelineG.lineStyle(1, SNAP_LINE_COLOR);
+                timelineG.moveTo(x, this.TIMELINE_HEIGHT - 10);
+                timelineG.lineTo(x, this.TIMELINE_HEIGHT);
             }
         }
 
         this.gridContainer.addChildAt(g, 0); // Add graphics behind text
         this.gridContainer.x = this.KEY_WIDTH - this.scrollX;
-        this.gridContainer.y = -this.scrollY + this.TIMELINE_HEIGHT; // Offset grid by header
+        this.gridContainer.y = -this.scrollY + this.HEADER_HEIGHT; // Offset grid by header
         
         // Timeline moves X but fixed Y
         this.timelineContainer.x = this.KEY_WIDTH - this.scrollX;
-        this.timelineContainer.y = 0;
+        this.timelineContainer.y = this.LOOP_HEIGHT;
     }
 
     public drawNotes(track: Track, color: number = this.NOTE_COLOR, selectedNotes: Set<any> | null = null) {
         this.notesContainer.removeChildren();
         this.notesContainer.x = this.KEY_WIDTH - this.scrollX;
-        this.notesContainer.y = -this.scrollY + this.TIMELINE_HEIGHT; // Offset notes by header
+        this.notesContainer.y = -this.scrollY + this.HEADER_HEIGHT; // Offset notes by header
 
         for (const region of track.regions) {
             if (region instanceof MIDIRegion) {
@@ -374,10 +458,51 @@ export default class PianoRollView extends Container {
         }
     }
 
+    public drawLoop(startPx: number, endPx: number, active: boolean) {
+        const color = active ? this.LOOP_COLOR_ACTIVE : this.LOOP_COLOR_INACTIVE;
+        const alpha = 0.2;
+        const height = this.LOOP_HEIGHT;
+        const fullHeight = 128 * this.NOTE_HEIGHT;
+        
+        this.loopBar.clear();
+        this.loopOverlay.clear();
+        this.loopHandleLeft.clear();
+        this.loopHandleRight.clear();
+        
+        // Background on Timeline
+        this.loopBar.beginFill(color, alpha);
+        this.loopBar.drawRect(startPx, 0, endPx - startPx, height);
+        this.loopBar.endFill();
+
+        // Loop Region Overlay (Full Height)
+        if (active) {
+            this.loopOverlay.beginFill(color, alpha * 0.5);
+            this.loopOverlay.drawRect(startPx, 0, endPx - startPx, fullHeight);
+            this.loopOverlay.endFill();
+        }
+        
+        // Handles
+        const handleW = 10;
+        
+        this.loopHandleLeft.beginFill(color, 1);
+        this.loopHandleLeft.drawRect(0, 0, handleW, height);
+        this.loopHandleLeft.endFill();
+        this.loopHandleLeft.x = startPx;
+        // @ts-ignore
+        this.loopHandleLeft.hitArea = new Rectangle(0, 0, handleW, height);
+        
+        this.loopHandleRight.beginFill(color, 1);
+        this.loopHandleRight.drawRect(0, 0, handleW, height);
+        this.loopHandleRight.endFill();
+        this.loopHandleRight.x = endPx - handleW;
+        // @ts-ignore
+        this.loopHandleRight.hitArea = new Rectangle(0, 0, handleW, height);
+    }
+
     public updateScroll(dx: number, dy: number) {
         this.scrollX = Math.max(0, this.scrollX + dx);
         // Clamp scrollY
-        const maxScrollY = 128 * this.NOTE_HEIGHT - this.viewportHeight + this.TIMELINE_HEIGHT;
+        const maxScrollY = 128 * this.NOTE_HEIGHT - this.viewportHeight + this.HEADER_HEIGHT;
         const newScrollY = Math.max(0, Math.min(this.scrollY + dy, maxScrollY));
         
         if (newScrollY !== this.scrollY) {
@@ -386,15 +511,30 @@ export default class PianoRollView extends Container {
         }
         
         this.gridContainer.x = this.KEY_WIDTH - this.scrollX;
-        this.gridContainer.y = -this.scrollY + this.TIMELINE_HEIGHT;
+        this.gridContainer.y = -this.scrollY + this.HEADER_HEIGHT;
         this.notesContainer.x = this.KEY_WIDTH - this.scrollX;
-        this.notesContainer.y = -this.scrollY + this.TIMELINE_HEIGHT;
+        this.notesContainer.y = -this.scrollY + this.HEADER_HEIGHT;
+        
+        this.loopContainer.x = this.KEY_WIDTH - this.scrollX;
+        this.loopContainer.y = 0;
+
+        this.loopBackground.x = this.KEY_WIDTH - this.scrollX;
+        this.loopBackground.y = 0;
+
+        this.loopOverlay.x = this.KEY_WIDTH - this.scrollX;
+        this.loopOverlay.y = -this.scrollY + this.HEADER_HEIGHT;
         
         // Playhead only scrolls in X, not Y (it covers full height)
         this.playheadContainer.x = this.KEY_WIDTH - this.scrollX;
         this.playheadContainer.y = 0; // Playhead covers everything including timeline
         
         this.timelineContainer.x = this.KEY_WIDTH - this.scrollX;
-        this.timelineContainer.y = 0;
+        this.timelineContainer.y = this.LOOP_HEIGHT;
+
+        this.rangeSelectionGraphics.x = this.KEY_WIDTH - this.scrollX;
+        this.timelineRangeGraphics.x = this.KEY_WIDTH - this.scrollX;
+        
+        this.rangeSelectionGraphics.y = -this.scrollY + this.HEADER_HEIGHT;
+        this.timelineRangeGraphics.y = this.LOOP_HEIGHT;
     }
 }

@@ -36,6 +36,15 @@ export default class PlayheadController {
   private _arrowKeyTimer: any = null;
   private _arrowKeyInterval: any = null;
 
+  // Range Selection State
+  private _selectionStart: number | null = null;
+  private _isSelectingRange: boolean = false;
+  private _rangeStart: number | null = null;
+  private _rangeEnd: number | null = null;
+  private _resizeMode: 'LEFT' | 'RIGHT' | null = null;
+  private _isMovingRange: boolean = false;
+  private _dragOffset: number = 0;
+
   constructor(app: App) {
     this._app = app;
     this._view = app.editorView.playhead;
@@ -158,13 +167,124 @@ export default class PlayheadController {
   }
 
   private handlePointerMove(e: FederatedPointerEvent) {
+    if (this._app.pianoRollController.isVisible) return;
+
+    let pos = e.data.global.x + this._app.editorView.viewport.left;
+
+    // 1. Resizing
+    if (this._resizeMode) {
+        document.body.style.cursor = "ew-resize";
+        if (this._app.editorView.snapping && !this.snappingDisabled) {
+             const cellSize = this._app.editorView.cellSize;
+             pos = Math.round(pos / cellSize) * cellSize;
+        }
+        
+        let start = this._rangeStart!;
+        let end = this._rangeEnd!;
+        
+        if (this._resizeMode === 'LEFT') {
+            start = pos;
+            if (start > end) { // Swap
+                 this._resizeMode = 'RIGHT';
+                 start = end;
+                 end = pos;
+            }
+        } else {
+            end = pos;
+            if (end < start) {
+                 this._resizeMode = 'LEFT';
+                 end = start;
+                 start = pos;
+            }
+        }
+        this.setRange(start, end);
+        return;
+    }
+
+    // 1.5 Moving Range
+    if (this._isMovingRange) {
+        document.body.style.cursor = "grabbing";
+        let newStart = pos - this._dragOffset;
+        
+        if (this._app.editorView.snapping && !this.snappingDisabled) {
+             const cellSize = this._app.editorView.cellSize;
+             newStart = Math.round(newStart / cellSize) * cellSize;
+        }
+        
+        const duration = this._rangeEnd! - this._rangeStart!;
+        if (newStart < 0) newStart = 0;
+        this.setRange(newStart, newStart + duration);
+        return;
+    }
+
+    // 2. Moving Playhead (Handle)
     if (this._movingPlayhead) {
       document.body.style.cursor = "grabbing";
-      let pos = e.data.global.x + this._app.editorView.viewport.left;
-
       this.moveTo(pos*RATIO_MILLS_BY_PX, true)
       this.moveAccordingToPlayhead(pos*RATIO_MILLS_BY_PX,false)
+      return;
+    } 
+    
+    // 3. New Selection Drag
+    if (this._pointerIsDown) {
+        if (!this._isSelectingRange && this._selectionStart !== null) {
+            const diff = Math.abs(pos - this._selectionStart);
+            if (diff > 5) {
+                this._isSelectingRange = true;
+            }
+        }
+
+        if (this._isSelectingRange && this._selectionStart !== null) {
+            document.body.style.cursor = "text";
+            let start = Math.min(this._selectionStart, pos);
+            let end = Math.max(this._selectionStart, pos);
+            
+            if (this._app.editorView.snapping && !this.snappingDisabled) {
+                const cellSize = this._app.editorView.cellSize;
+                start = Math.round(start / cellSize) * cellSize;
+                end = Math.round(end / cellSize) * cellSize;
+            }
+            this.setRange(start, end);
+        }
+    } 
+    // 4. Hover State (Cursor)
+    else {
+        const yPos = e.data.global.y;
+        const isOverTimeline = yPos >= EditorView.LOOP_HEIGHT && yPos < (EditorView.LOOP_HEIGHT + EditorView.PLAYHEAD_HEIGHT + 10);
+        
+        if (isOverTimeline && this._rangeStart !== null && this._rangeEnd !== null) {
+            const HIT_ZONE = 5;
+            if (Math.abs(pos - this._rangeStart) < HIT_ZONE || Math.abs(pos - this._rangeEnd) < HIT_ZONE) {
+                document.body.style.cursor = "ew-resize";
+            } else if (pos > this._rangeStart + HIT_ZONE && pos < this._rangeEnd - HIT_ZONE) {
+                document.body.style.cursor = "grab";
+            } else {
+                document.body.style.cursor = "default";
+            }
+        } else {
+             document.body.style.cursor = "default";
+        }
     }
+  }
+
+  public setRange(start: number, end: number, fromSync: boolean = false) {
+      this._rangeStart = start;
+      this._rangeEnd = end;
+      this._app.editorView.drawRangeSelection(start, end - start);
+      
+      if (!fromSync && this._app.pianoRollController) {
+          this._app.pianoRollController.setRange(start, end, true);
+      }
+  }
+
+  public clearRange(fromSync: boolean = false) {
+      this._rangeStart = null;
+      this._rangeEnd = null;
+      this._app.editorView.clearRangeSelection();
+      
+      if (!fromSync && this._app.pianoRollController) {
+          this._app.pianoRollController.clearRange(true);
+      }
   }
   
   /**
@@ -172,34 +292,115 @@ export default class PlayheadController {
    *
    * @param e - Event fired by PIXI.JS that contains all the information needed to handle the event
    */
-  private handlePointerDown(e: FederatedPointerEvent) {
-    this._pointerIsDown = true;
-
-    let pos = e.data.global.x + this._app.editorView.viewport.left;
-    // adjust pos if grid snapping is enabled and if not scrolling
-    this._app.hostController.pauseTimerInterval();
-    this._movingPlayhead = true;
-    this.moveTo(pos*RATIO_MILLS_BY_PX, true);
-  }
-
+      private handlePointerDown(e: FederatedPointerEvent) {
+        if (this._app.pianoRollController.isVisible) return;
+    
+        this._pointerIsDown = true;
+        let pos = e.data.global.x + this._app.editorView.viewport.left;      this._app.hostController.pauseTimerInterval();
+  
+      if (e.currentTarget === this._view.handle) {
+          // Handle Drag - Move immediately
+          this._movingPlayhead = true;
+          this.moveTo(pos*RATIO_MILLS_BY_PX, true);
+          return;
+      }
+  
+      // Check Resize
+            if (this._rangeStart !== null && this._rangeEnd !== null) {
+                 const HIT_ZONE = 5;
+                 if (Math.abs(pos - this._rangeStart) < HIT_ZONE) {
+                     this._resizeMode = 'LEFT';
+                     e.stopPropagation();
+                     return;
+                 } else if (Math.abs(pos - this._rangeEnd) < HIT_ZONE) {
+                     this._resizeMode = 'RIGHT';
+                     e.stopPropagation();
+                     return;
+                 }
+            }
+      
+          // Check Move Body
+          if (this._rangeStart !== null && this._rangeEnd !== null) {
+              if (pos > this._rangeStart && pos < this._rangeEnd) {
+                  this._isMovingRange = true;
+                  this._dragOffset = pos - this._rangeStart;
+                  e.stopPropagation();
+                  return;
+              }
+          }
+          
+          this.clearRange();
+          this._selectionStart = pos;
+          this._isSelectingRange = false;
+          this._movingPlayhead = false;
+          this._resizeMode = null;
+          this._isMovingRange = false;
+        }
   /**
    * Handler for the pointer up event. It declares when the user has stopped moving the playhead.
    * It will then jump to the current value of the playhead.
    *
    * @param e - Event fired by PIXI.JS that contains all the information needed to handle the event
    */
+  private updateRegionsSelection() {
+      if (this._rangeStart === null || this._rangeEnd === null) return;
+      
+      const startMs = this._rangeStart * RATIO_MILLS_BY_PX;
+      const endMs = this._rangeEnd * RATIO_MILLS_BY_PX;
+      
+      this._app.regionsController.selection.set(null);
+      for (const track of this._app.tracksController.tracks) {
+          for (const region of track.regions) {
+              if (region.start < endMs && region.end > startMs) {
+                   this._app.regionsController.selection.add(region as any);
+              }
+          }
+      }
+  }
+
+  public getRangePx(): { start: number, end: number } | null {
+    if (this._rangeStart !== null && this._rangeEnd !== null) {
+      return { start: this._rangeStart, end: this._rangeEnd };
+    }
+    return null;
+  }
+
   private handlePointerUp(e: FederatedPointerEvent) {
     if (this._pointerIsDown) {
-  
       let pos = e.data.global.x + this._app.editorView.viewport.left;
       if (pos < 0){
         pos = 0;
       }
       
       document.body.style.cursor = "grab";
+      
+      if (this._movingPlayhead) {
+          // Finished scrubbing
+          this.moveTo(pos*RATIO_MILLS_BY_PX, true);
+          this._movingPlayhead = false;
+      }
+      else if (this._resizeMode) {
+           this.updateRegionsSelection();
+           this._resizeMode = null;
+      }
+      else if (this._isMovingRange) {
+           this.updateRegionsSelection();
+           this._isMovingRange = false;
+      }
+      else {
+          // Finished Track Click/Drag
+          if (this._isSelectingRange && this._selectionStart !== null) {
+              this.updateRegionsSelection();
+          } else {
+              // Simple Click - Jump Playhead
+              // Use selectionStart (initial click pos) for consistency
+              if (this._selectionStart !== null) {
+                  this.moveTo(this._selectionStart * RATIO_MILLS_BY_PX, true);
+              }
+          }
+      }
 
-      this.moveTo(pos*RATIO_MILLS_BY_PX, true);
-      this._movingPlayhead = false;
+      this._isSelectingRange = false;
       this._app.hostController.resumeTimerInterval();
       if (this._app.host.isPlaying) {
         this._app.automationController.applyAllAutomations();
@@ -281,6 +482,18 @@ export default class PlayheadController {
       }
     }
 
+  }
+
+  public updateRangeAfterZoom(oldRatio: number, newRatio: number) {
+      if (this._rangeStart !== null && this._rangeEnd !== null) {
+          const startMs = this._rangeStart * oldRatio;
+          const endMs = this._rangeEnd * oldRatio;
+          
+          this._rangeStart = startMs / newRatio;
+          this._rangeEnd = endMs / newRatio;
+          
+          this._app.editorView.drawRangeSelection(this._rangeStart, this._rangeEnd - this._rangeStart);
+      }
   }
 
   readonly scrollRight= keepAlive(25, 300, ()=>{

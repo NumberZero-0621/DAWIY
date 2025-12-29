@@ -71,6 +71,7 @@ export default class RegionController {
   // Mode States
   private _isSelecting: boolean = false;
   private _selectionStart: Point = new Point();
+  private _initialSelection: Set<RegionOf<any>> = new Set();
   private _isCreating: boolean = false;
   private _creationStart: number = 0;
   private _newRegion: MIDIRegion | null = null;
@@ -384,6 +385,7 @@ export default class RegionController {
 
                 this._editorView.viewport.on("pointerdown", (e) => {
                     this._app.contextMenuController.hide();
+                    this._app.playheadController.clearRange();
                     const originalEvent = e.originalEvent as unknown as MouseEvent;
                     if (e.data.global.y < EditorView.PLAYHEAD_HEIGHT + 20) return;
 
@@ -392,6 +394,7 @@ export default class RegionController {
                     // Right-click drag selection
                     if (e.button === 2) {
                         this._isSelecting = true;
+                        this._initialSelection = new Set(this.selection.selecteds);
                         this._selectionStart = this._editorView.viewport.toLocal(e.data.global);
                         this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
                         return;
@@ -407,6 +410,7 @@ export default class RegionController {
                         if (e.button === 0 && !originalEvent.ctrlKey && !originalEvent.shiftKey) {
                             this.selection.set(null);
                         }
+                        this._initialSelection = new Set(this.selection.selecteds);
                     } else if (App.TOOL_MODE === "PEN") {
                         const globalY = e.data.global.y + this._editorView.viewport.top;
                         const waveform = this._editorView.getWaveformAtPos(globalY);
@@ -1143,6 +1147,7 @@ export default class RegionController {
   }
 
   private updateSelectionFromBox(x: number, y: number, w: number, h: number) {
+      const newInBox = new Set<RegionOf<any>>();
       this.tracks.forEach(track => {
           const waveform = this._editorView.getWaveFormViewById(track.id);
           if (!waveform) return;
@@ -1154,11 +1159,21 @@ export default class RegionController {
                   if (view) {
                       const rX = view.x; 
                       const rW = view.width;
-                      if (x < rX + rW && x + w > rX) { this.selection.add(region as RegionOf<any>); }
+                      if (x < rX + rW && x + w > rX) { newInBox.add(region as RegionOf<any>); }
                   }
               });
           }
       });
+
+      const finalSelection = new Set([...this._initialSelection, ...newInBox]);
+      const current = new Set(this.selection.selecteds);
+      
+      for (const r of current) {
+          if (!finalSelection.has(r)) this.selection.remove(r);
+      }
+      for (const r of finalSelection) {
+          if (!current.has(r)) this.selection.add(r);
+      }
   }
 
 }

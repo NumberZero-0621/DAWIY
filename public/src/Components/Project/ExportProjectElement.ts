@@ -45,6 +45,17 @@ p {
     margin: 5px;
 }
 
+progress {
+    width: 100%;
+    height: 20px;
+    margin: 5px;
+}
+
+#progress-label {
+    font-size: 0.8em;
+    color: #ddd;
+}
+
 </style>
 
 <div id="main">
@@ -67,6 +78,8 @@ p {
     <div class="form-element">
         <button id="export-btn">Export</button>
     </div>
+    <progress id="export-progress" value="0" max="100" hidden></progress>
+    <span id="progress-label" hidden></span>
 </div>    
 `
 
@@ -99,6 +112,34 @@ export default class ExportProjectElement extends HTMLElement {
             const checkboxes = this.tracksContainer.querySelectorAll("input[type='checkbox']") as NodeListOf<HTMLInputElement>;
             checkboxes.forEach(cb => cb.checked = checked);
         });
+    }
+
+    public showProgress(percent: number, message: string = "") {
+        const progress = this.shadowRoot?.getElementById("export-progress") as HTMLProgressElement;
+        const label = this.shadowRoot?.getElementById("progress-label") as HTMLElement;
+        const btn = this.exportBtn;
+
+        if (progress) {
+            progress.hidden = false;
+            progress.value = percent;
+        }
+        if (label) {
+            label.hidden = false;
+            label.innerText = message || `${Math.round(percent)}%`;
+        }
+        if (btn) {
+            btn.disabled = true;
+        }
+    }
+
+    public hideProgress() {
+        const progress = this.shadowRoot?.getElementById("export-progress") as HTMLProgressElement;
+        const label = this.shadowRoot?.getElementById("progress-label") as HTMLElement;
+        const btn = this.exportBtn;
+
+        if (progress) progress.hidden = true;
+        if (label) label.hidden = true;
+        if (btn) btn.disabled = false;
     }
 
     setTitle(title: string) {

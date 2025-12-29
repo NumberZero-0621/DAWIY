@@ -77,6 +77,8 @@ export default class EditorView extends Application {
     public snapTriplet: boolean = false;
 
     public selectionBox: Graphics;
+    public rangeSelectionGraphics: Graphics;
+    public timelineRangeGraphics: Graphics;
 
     public static readonly PLAYHEAD_HEIGHT = 17;
     public static readonly PLAYHEAD_WIDTH = 10;
@@ -123,6 +125,16 @@ export default class EditorView extends Application {
         this.grid = new GridView(this);
         this.grid.eventMode = "dynamic";
 
+        this.rangeSelectionGraphics = new Graphics();
+        this.rangeSelectionGraphics.zIndex = 90;
+        this.rangeSelectionGraphics.eventMode = 'none';
+        this.viewport.addChild(this.rangeSelectionGraphics);
+
+        this.timelineRangeGraphics = new Graphics();
+        this.timelineRangeGraphics.zIndex = 101;
+        this.timelineRangeGraphics.eventMode = 'none'; // So events pass through to track/grid
+        this.viewport.addChild(this.timelineRangeGraphics);
+
         this.selectionBox = new Graphics();
         this.selectionBox.zIndex = 100; // Above regions
         this.viewport.addChild(this.selectionBox);
@@ -134,6 +146,32 @@ export default class EditorView extends Application {
         this.stage.addChild(this.viewport);
 
         this.resizeCanvas();
+    }
+
+    public drawTimelineSelection(x: number, width: number) {
+        this.timelineRangeGraphics.clear();
+        this.timelineRangeGraphics.beginFill(0xFFFFFF, 0.8);
+        this.timelineRangeGraphics.drawRect(x, EditorView.LOOP_HEIGHT, width, EditorView.PLAYHEAD_HEIGHT);
+        this.timelineRangeGraphics.endFill();
+    }
+
+    public clearTimelineSelection() {
+        this.timelineRangeGraphics.clear();
+    }
+
+    public drawRangeSelection(x: number, width: number) {
+        this.rangeSelectionGraphics.clear();
+        this.rangeSelectionGraphics.beginFill(0xFFFFFF, 0.3);
+        this.rangeSelectionGraphics.drawRect(x, 0, width, this.worldHeight);
+        this.rangeSelectionGraphics.endFill();
+        
+        // Also draw timeline part
+        this.drawTimelineSelection(x, width);
+    }
+
+    public clearRangeSelection() {
+        this.rangeSelectionGraphics.clear();
+        this.clearTimelineSelection();
     }
 
     public drawSelectionBox(x: number, y: number, w: number, h: number) {

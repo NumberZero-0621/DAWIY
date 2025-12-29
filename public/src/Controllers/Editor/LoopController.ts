@@ -474,13 +474,21 @@ export default class LoopController {
     //this.checkIfScrollingNeeded();
   }
 
+  public moveLoopToSelection(startPx: number, endPx: number): void {
+      const newLeftX = startPx;
+      const newRightX = endPx - this._view.rightHandle.width;
+      
+      this._view.updateHandlePosition(newLeftX, newRightX, true);
+      this.setLoopPx([newLeftX, newRightX]);
+  }
+
   /**
    * Updates the loop time in the host
    *
    * @param range - left and right handle position in pixels.
    * @private
    */
-  private setLoopPx(range: [number,number]): void {
+  public setLoopPx(range: [number,number]): void {
     const leftTime = range[0] * RATIO_MILLS_BY_PX;
     const rightTime = (range[1] + this._view.rightHandle.width) * RATIO_MILLS_BY_PX;
     this._app.hostController.setLoop([leftTime, rightTime]);

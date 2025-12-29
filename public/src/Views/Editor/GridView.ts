@@ -4,7 +4,7 @@ import EditorView from "./EditorView";
 
 BitmapFont.from("GridViewFont", {
   fontFamily: "Arial",
-  fontSize: 12,
+  fontSize: 20, // Increased resolution
   strokeThickness: 2,
   fill: "white"
 });
@@ -111,7 +111,7 @@ export default class GridView extends Container {
           
           // Draw Beat Line
           this.grid.beginFill(lineColor, 0.4);
-          this.grid.drawRect(stepX, 17, 1, height);
+          this.grid.drawRect(stepX, 0, 1, height); // Changed from 17 to 0
 
           // Draw Snap Lines (subdivisions)
           if (snapWidth >= 5 && snapWidth < stepWidth * 0.99) { // Avoid drawing if snap ~= step or larger
@@ -119,7 +119,7 @@ export default class GridView extends Container {
                for (let s = 1; s < numSub; s++) {
                    const subX = stepX + s * snapWidth;
                    this.grid.beginFill(lineColor, 0.15); // Fainter
-                   this.grid.drawRect(subX, 17, 1, height);
+                   this.grid.drawRect(subX, 16, 1, height);
                }
           }
         }
@@ -132,12 +132,12 @@ export default class GridView extends Container {
         // draw vertical line for bar separator
         this.grid.beginFill(lineColor, 0.8) // Darker bar line
         // Grid should be as high as the canvas
-        this.grid.drawRect(currentBarNumberXpos * barWidth, 7, 1, height)
+        this.grid.drawRect(currentBarNumberXpos * barWidth, 0, 1, height) // Changed from 7 to 0
 
         // using pixi draw text just after bar separator
         const text = this.addChild(
           new BitmapText((barNumber + 1).toString(), {
-            fontSize: 10,
+            fontSize: 12, // Increased from 10
             fontName: "GridViewFont",
             tint: 0xe3e3e3, //0x858181,
             align: "left",
@@ -145,8 +145,8 @@ export default class GridView extends Container {
         );
         text.anchor.set(0.5)
         text.resolution = 1
-        text.x = currentBarNumberXpos * barWidth + 8
-        text.y = 17
+        text.x = currentBarNumberXpos * barWidth + 12
+        text.y = 14
 
         this.listOfTextElements.push(text)
       } else {

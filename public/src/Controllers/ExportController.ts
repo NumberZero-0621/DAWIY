@@ -1,6 +1,6 @@
 import { initializeWamHost } from "@webaudiomodules/sdk";
 import App from "../App";
-import { bufferToWave, downloadBlob, downloadBlobWithPicker } from "../Audio/Utils/audioBufferToWave";
+import { bufferToWave, downloadBlob, downloadBlobWithPicker, getSaveAudioHandle, writeAudioToHandle, bufferToMp3 } from "../Audio/Utils/audioBufferToWave";
 import { PluginInstance } from "../Models/Plugin";
 import Track from "../Models/Track/Track";
 import { audioCtx } from "../index";
@@ -43,7 +43,7 @@ export default class ExporterController {
             if (track) {
                 // Export single track
                 const midiBytes = exportToMidi([track]);
-                const blob = new Blob([midiBytes], { type: 'audio/midi' });
+                const blob = new Blob([midiBytes] as any, { type: 'audio/midi' });
                 await downloadBlobWithPicker(blob, `${name}_track_${track.element.name}.mid`, midiType);
             }
         }
@@ -52,7 +52,7 @@ export default class ExporterController {
         if (masterTrack) {
             const allTracks = [...this._app.tracksController.tracks];
             const midiBytes = exportToMidi(allTracks);
-            const blob = new Blob([midiBytes], { type: 'audio/midi' });
+            const blob = new Blob([midiBytes] as any, { type: 'audio/midi' });
             await downloadBlobWithPicker(blob, `${name}_master.mid`, midiType);
         }
     }
@@ -72,8 +72,6 @@ export default class ExporterController {
         // Set default name if empty.
         if (name == "") name = "project";
 
-        let buffers = [];
-
         // Check if there's content to export.
         let maxDuration = this._app.regionsController.getMaxDurationRegions(); // in seconds
         if (maxDuration == 0) {
@@ -81,20 +79,47 @@ export default class ExporterController {
             return;
         }
 
-        const { default: initializeWamHost } = await import("@webaudiomodules/sdk/src/initializeWamHost");
-
-        // Process and export individual tracks.
-        for (let track of this._app.tracksController.tracks) {
-            let buffer = await this.processTrack(track, maxDuration, initializeWamHost);
-            if (buffer) buffers.push(buffer);
-            if (tracksIds.includes(track.id)) {
-                await this.exportTrackBuffer(buffer, `${name}_track_${track.element.name}.wav`);
+        // PRE-PICK SAVE LOCATION FOR MASTER TRACK (to avoid User Activation expiry)
+        let masterHandle = null;
+        if (masterTrack && 'showSaveFilePicker' in window) {
+            masterHandle = await getSaveAudioHandle(`${name}_master.wav`);
+            if (!masterHandle) {
+                // User cancelled or error, assume cancel.
+                return;
             }
         }
 
-        // Process and export the master track if requested.
-        if (masterTrack) {
-            await this.exportMasterTrack(buffers, name, maxDuration);
+        const exportElement = this._app.projectView.exportElement;
+        exportElement.showProgress(0, "Starting export...");
+
+        try {
+            let buffers = [];
+
+            const { default: initializeWamHost } = await import("@webaudiomodules/sdk/src/initializeWamHost");
+
+            // Process and export individual tracks.
+            for (let i = 0; i < this._app.tracksController.tracks.length; i++) {
+                let track = this._app.tracksController.tracks.get(i);
+                exportElement.showProgress((i / this._app.tracksController.tracks.length) * 100, `Rendering track ${track.element.name}...`);
+                
+                // Allow UI update
+                await new Promise(r => setTimeout(r, 0));
+
+                let buffer = await this.processTrack(track, maxDuration, initializeWamHost);
+                if (buffer) buffers.push(buffer);
+                if (tracksIds.includes(track.id)) {
+                    exportElement.showProgress(100, `Saving track ${track.element.name}...`);
+                    await this.exportTrackBuffer(buffer, `${name}_track_${track.element.name}.wav`);
+                }
+            }
+
+            // Process and export the master track if requested.
+            if (masterTrack) {
+                exportElement.showProgress(0, "Rendering Master Track...");
+                await this.exportMasterTrack(buffers, name, maxDuration, masterHandle);
+            }
+        } finally {
+            exportElement.hideProgress();
         }
     }
 
@@ -144,10 +169,11 @@ export default class ExporterController {
      * @param buffers - List of buffers to combine.
      * @param name - Name of the project.
      * @param maxDuration - Maximum duration of the track.
+     * @param preSelectedHandle - Optional pre-selected file handle.
      *
      * @returns The audio buffer of the master track.
      */
-    private async exportMasterTrack(buffers: AudioBuffer[], name: string, maxDuration: number): Promise<void> {
+    private async exportMasterTrack(buffers: AudioBuffer[], name: string, maxDuration: number, preSelectedHandle: any): Promise<void> {
         /*console.log("Exporting track master");
 
         let offlineCtx = new OfflineAudioContext(2, audioCtx.sampleRate * maxDuration, audioCtx.sampleRate);
@@ -173,6 +199,7 @@ export default class ExporterController {
         // Create offline audio context.
         let offlineCtx = new OfflineAudioContext(2, audioCtx.sampleRate * maxDuration, audioCtx.sampleRate)
         //let offlineCtx = audioCtx
+        const { default: initializeWamHost } = await import("@webaudiomodules/sdk/src/initializeWamHost");
         const [hostGroupId] = await initializeWamHost(offlineCtx)
 
         // Recreate the graph in the online audio context.
@@ -188,7 +215,17 @@ export default class ExporterController {
         // Clean up everything.
         await graph.dispose()
 
-        await this.exportTrackBuffer(renderedBuffer, `${name}_master.wav`);
+        const exportElement = this._app.projectView.exportElement;
+        
+        if (preSelectedHandle) {
+            exportElement.showProgress(0, `Encoding ${preSelectedHandle.type === 'mp3' ? 'MP3' : 'WAV'}...`);
+            await writeAudioToHandle(preSelectedHandle.handle, renderedBuffer, preSelectedHandle.type, (percent) => {
+                exportElement.showProgress(percent, `Encoding ${preSelectedHandle.type === 'mp3' ? 'MP3' : 'WAV'} (${Math.round(percent)}%)...`);
+            });
+        } else {
+            // Fallback for browsers without File System API or individual track export (if reused)
+            await this.exportTrackBuffer(renderedBuffer, `${name}_master.wav`);
+        }
     }
 
     /**
@@ -199,12 +236,22 @@ export default class ExporterController {
      * @private
      */
     private async exportTrackBuffer(buffer: AudioBuffer, fileName: string): Promise<void> {
-        let blob = bufferToWave(buffer);
-        const wavType = [{
-            description: 'WAV File',
-            accept: { 'audio/wav': ['.wav'] }
-        }];
-        await downloadBlobWithPicker(blob, fileName, wavType);
+        // Fallback for individual tracks or when API not supported
+        const exportElement = this._app.projectView.exportElement;
+        if ('showSaveFilePicker' in window) {
+             const handleObj = await getSaveAudioHandle(fileName);
+             if (handleObj) {
+                 exportElement.showProgress(0, `Encoding ${handleObj.type === 'mp3' ? 'MP3' : 'WAV'}...`);
+                 await writeAudioToHandle(handleObj.handle, buffer, handleObj.type, (percent) => {
+                     exportElement.showProgress(percent, `Encoding ${handleObj.type === 'mp3' ? 'MP3' : 'WAV'} (${Math.round(percent)}%)...`);
+                 });
+             }
+        } else {
+             const blob = bufferToWave(buffer);
+             // downloadBlob imports from audioBufferToWave
+             const { downloadBlob } = await import("../Audio/Utils/audioBufferToWave");
+             downloadBlob(blob, fileName);
+        }
     }
 
 

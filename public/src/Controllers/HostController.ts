@@ -157,11 +157,23 @@ export default class HostController {
 
    /** Handles the loop button. It loops the song or not. */
   public loop(): void {
-    const looping = !this._app.host.loopRange
-    this._view.updateLoopButton(looping)
-    this._app.editorView.loop.updateActive(looping)
-    if(looping)this._app.host.setLoop(this._loopRange)
-    else this._app.host.setLoop(null)
+    const looping = !this._app.host.loopRange;
+    this._view.updateLoopButton(looping);
+    this._app.editorView.loop.updateActive(looping);
+
+    if (looping) {
+        const selectedRange = this._app.playheadController.getRangePx();
+        if (selectedRange) {
+            this._app.loopController.moveLoopToSelection(selectedRange.start, selectedRange.end);
+        }
+        // Activate loop on the host with the current range (updated or default)
+        this._app.host.setLoop(this._loopRange);
+    } else {
+        // Deactivate loop
+        this._app.host.setLoop(null);
+    }
+
+    if (this._app.pianoRollController) this._app.pianoRollController.updateLoop(looping);
   }
 
   /**
@@ -172,6 +184,7 @@ export default class HostController {
   public setLoop(range: [number,number]): void {
     this._loopRange=range
     if(this._app.host.loopRange)this._app.host.setLoop(range)
+    if (this._app.pianoRollController) this._app.pianoRollController.updateLoopRange(range);
   }
   private _loopRange: [number,number] = [0,0]
   get loopRange(): [number,number]{ return this._loopRange }
