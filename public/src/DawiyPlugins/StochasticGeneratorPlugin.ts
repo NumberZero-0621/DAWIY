@@ -3,15 +3,7 @@ import { RATIO_MILLS_BY_PX, TEMPO } from "../Env";
 import MIDIRegion from "../Models/Region/MIDIRegion";
 import { MIDINote } from "../Audio/MIDI/MIDI";
 import { MIDI } from "../Audio/MIDI/MIDI";
-
-export interface IDawiyPlugin {
-    id: string;
-    name: string;
-    description: string;
-    render(container: HTMLElement): void;
-    onActivate?(): void;
-    onDeactivate?(): void;
-}
+import { IDawiyPlugin } from "./IDawiyPlugin";
 
 export default class StochasticGeneratorPlugin implements IDawiyPlugin {
     id = "stochastic-generator";

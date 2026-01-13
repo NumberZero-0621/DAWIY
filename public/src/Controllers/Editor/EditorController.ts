@@ -1,3 +1,4 @@
+import { parseMidiFile } from "../../Audio/MIDI/MIDIImport";
 import App, { crashOnDebug } from "../../App";
 import { MIDI } from "../../Audio/MIDI/MIDI";
 import { parseNoteList } from "../../Audio/MIDI/MIDILoaders";
@@ -328,7 +329,6 @@ export default class EditorController {
         let success=false
         let needNewTrack=false
         for(const item of items){
-            // If need a new track, create a new track
             if(needNewTrack){
                 const tracks=this._app.tracksController.tracks
                 let next_track=tracks.get(tracks.indexOf(target.track)+1)
@@ -338,22 +338,54 @@ export default class EditorController {
                 target.track=next_track
                 needNewTrack=false
             }
-            // Import the file
-            const result=await this.importFile(
-                async () => {
-                    const audioFile = item.file
-                    if(!audioFile)return null
-                    target.track.element.name=audioFile.name
-                    return {buffer:await audioFile.arrayBuffer(), type: item.type}
-                },
-                target.track,
-                target.start
-            )
-            // If the file has been successfully imported, update the start position of the next file
-            // And set the success flag to true, so the track fetch is not cancelled
-            if(result){
-                success=true
-                needNewTrack=true
+            
+            const isMidi = item.type === "audio/midi" || item.type === "audio/x-midi" || (item.file && (item.file.name.endsWith(".mid") || item.file.name.endsWith(".midi")));
+        
+            if (isMidi) {
+                const audioFile = item.file;
+                if (!audioFile) continue;
+        
+                target.track.element.progress(0, 1);
+                const buffer = await audioFile.arrayBuffer();
+                const importedTracks = await parseMidiFile(buffer);
+                target.track.element.progressDone();
+                
+                if (importedTracks.length > 0) {
+                    success = true;
+                    let firstTrack = true;
+                    for (const imported of importedTracks) {
+                        if (!firstTrack) {
+                            const tracks = this._app.tracksController.tracks;
+                            let nextTrackIndex = tracks.indexOf(target.track) + 1;
+                            let nextTrack = tracks.get(nextTrackIndex);
+                            if (!nextTrack) {
+                                nextTrack = await this._app.tracksController.createTrack();
+                            }
+                            target.track = nextTrack;
+                        }
+                        
+                        target.track.element.name = imported.name || audioFile.name;
+                        const region = new MIDIRegion(imported.midi, target.start);
+                        this._app.regionsController.addRegion(target.track, region);
+                        firstTrack = false;
+                    }
+                    needNewTrack = true; // For the next file in `items`
+                }
+            } else {
+                const result=await this.importFile(
+                    async () => {
+                        const audioFile = item.file
+                        if(!audioFile)return null
+                        target.track.element.name=audioFile.name
+                        return {buffer:await audioFile.arrayBuffer(), type: item.type}
+                    },
+                    target.track,
+                    target.start
+                )
+                if(result){
+                    success=true
+                    needNewTrack=true
+                }
             }
         }
         if(!success)target.cancel()

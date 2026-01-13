@@ -1,6 +1,7 @@
 import App from "../App";
 import DawiyPluginView from "../Views/DawiyPluginView";
-import StochasticGeneratorPlugin, { IDawiyPlugin } from "../DawiyPlugins/StochasticGeneratorPlugin";
+import StochasticGeneratorPlugin from "../DawiyPlugins/StochasticGeneratorPlugin";
+import { IDawiyPlugin } from "../DawiyPlugins/IDawiyPlugin";
 
 export default class DawiyPluginController {
     
