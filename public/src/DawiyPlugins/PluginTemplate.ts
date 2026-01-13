@@ -83,8 +83,8 @@ export default class PluginTemplate implements IDawiyPlugin {
         // Example: Accessing DAWIY state
         const track = this.app.tracksController.selectedTrack;
         if (track) {
-            console.log("Selected track:", track.name);
-            alert(`Selected track: ${track.name}`);
+            console.log("Selected track:", track.element.name);
+            alert(`Selected track: ${track.element.name}`);
         } else {
             console.log("No track selected.");
             alert("No track selected. Select a track in the editor first.");

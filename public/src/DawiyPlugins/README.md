@@ -6,18 +6,23 @@ Plugins allow you to extend the functionality of the DAW, add new UI tools, gene
 ## Getting Started
 
 1.  **Create your plugin file:**
-    Copy `PluginTemplate.ts` to a new file, e.g., `MyCoolPlugin.ts`.
+    Create a new `.ts` file in this directory or any subdirectory. 
+    You can copy `PluginTemplate.ts` as a starting point.
+    *Example:* `public/src/DawiyPlugins/MyAwesomePlugin/MyPlugin.ts`
 
 2.  **Implement the interface:**
-    Your class must implement the `IDawiyPlugin` interface.
+    Your class must implement the `IDawiyPlugin` interface and be the **default export** of the file.
+
     ```typescript
-    import { IDawiyPlugin } from "./IDawiyPlugin";
-    // ... imports
+    import { IDawiyPlugin } from "../IDawiyPlugin"; // Adjust path if in subdirectory
+    import App from "../../App"; // Adjust path if in subdirectory
 
     export default class MyCoolPlugin implements IDawiyPlugin {
-        id = "my-cool-plugin"; // Must be unique
+        id = "my-cool-plugin"; // Must be unique across all plugins
         name = "My Cool Plugin";
         description = "Does something cool.";
+
+        private app: App;
 
         constructor(app: App) {
             this.app = app;
@@ -27,39 +32,33 @@ Plugins allow you to extend the functionality of the DAW, add new UI tools, gene
             // Build your UI here using standard DOM APIs
             const btn = document.createElement("button");
             btn.textContent = "Click Me";
+            btn.onclick = () => alert("Hello from MyCoolPlugin!");
             container.appendChild(btn);
         }
     }
     ```
 
-3.  **Register your plugin:**
-    Currently, plugins must be manually registered in the controller.
-    Open `public/src/Controllers/DawiyPluginController.ts` and:
+3.  **Automatic Loading:**
+    **You do NOT need to register existing files.** 
+    The system automatically loads all `.ts` files found in `public/src/DawiyPlugins` and its subdirectories.
     
-    a. Import your plugin:
-       ```typescript
-       import MyCoolPlugin from "../DawiyPlugins/MyCoolPlugin";
-       ```
-    
-    b. Add it to the `installedExtensions` array in the constructor:
-       ```typescript
-       constructor(app: App) {
-           this.app = app;
-           this.installedExtensions = [
-               new StochasticGeneratorPlugin(app),
-               new MyCoolPlugin(app) // <-- Add this line
-           ];
-       }
-       ```
+    *Note: `IDawiyPlugin.ts` and `PluginTemplate.ts` are automatically excluded.*
 
 4.  **Build/Run:**
-    Restart the development server (`npm start` in `public` folder) to see your changes.
+    Restart the development server (`npm start` in `public` folder) if it's not watching for new files, or simply refresh the page if hot-reloading catches the new file.
 
-## File Structure
+## For LLMs (AI Assistants) / Third-Party Developers
 
-- `IDawiyPlugin.ts`: Defines the interface that all plugins must adhere to.
-- `PluginTemplate.ts`: A commented template to help you get started.
-- `StochasticGeneratorPlugin.ts`: An example plugin that generates random melodies.
+If you are an AI assistant or a developer creating a plugin, follow these rules to ensure compatibility:
+
+1.  **File Location:** Place your plugin file in `public/src/DawiyPlugins/<YourPluginName>/<MainFile>.ts`.
+2.  **Default Export:** The plugin class **MUST** be the default export (`export default class ...`).
+3.  **Interface:** The class **MUST** implement `IDawiyPlugin`.
+4.  **Constructor:** The constructor **MUST** accept `app: App` as the first argument.
+5.  **Context:** You have access to the `App` instance to manipulate the DAW state.
+    - `app.tracksController`: access tracks.
+    - `app.host`: access transport (play/pause).
+6.  **No Manual Registration:** Do not attempt to modify `DawiyPluginController.ts`. Just creating the file is enough.
 
 ## API & Tips
 

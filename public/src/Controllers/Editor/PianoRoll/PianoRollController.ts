@@ -11,7 +11,7 @@ import { lightenColor } from "../../../Utils/Color";
 import { isKeyPressed } from "../../../Utils/keys";
 
 export default class PianoRollController {
-    
+
     private _app: App;
     private _view: PianoRollView;
     private _track: Track | null = null;
@@ -20,9 +20,9 @@ export default class PianoRollController {
     private _clipboard: { note: MIDINote, startOffset: number }[] = [];
 
     // Interaction state
-    private _draggedNote: { 
-        initialX: number, 
-        initialY: number, 
+    private _draggedNote: {
+        initialX: number,
+        initialY: number,
         initialScrollX: number,
         originGlobalStart: number,
         notes: { note: MIDINote, region: MIDIRegion, initialStart: number, initialNote: number, graphic: any, duration: number }[],
@@ -33,7 +33,7 @@ export default class PianoRollController {
     private _isDraggingPlayhead: boolean = false;
     private _lastMousePos: Point = new Point();
     private _dragGhosts: any[] = [];
-    
+
     // Audio Preview State
     private _lastPreviewedNote: number | null = null;
 
@@ -59,7 +59,7 @@ export default class PianoRollController {
     private _isSelecting: boolean = false;
     private _selectionStart: Point = new Point();
     private _lastClickedNote: { note: MIDINote, globalStart: number } | null = null;
-    
+
     // Timeline Range Selection
     private _rangeSelectionStart: number | null = null;
     private _isRangeSelecting: boolean = false;
@@ -98,10 +98,10 @@ export default class PianoRollController {
     constructor(app: App) {
         this._app = app;
         this._view = new PianoRollView();
-        
+
         // Hide by default
         this._view.visible = false;
-        
+
         // Add to main stage (overlay)
         this._app.editorView.stage.addChild(this._view);
 
@@ -134,7 +134,7 @@ export default class PianoRollController {
                     // But if we are locked, we set scrollX so that playheadX == viewportCenter.
                     // So next frame previousPlayheadX < viewportCenter (because viewport moved).
                     // So it should sustain itself.
-                    
+
                     // 3. Off-screen Check (Jump if invisible)
                     else if (playheadX > viewportRight || playheadX < viewportLeft) {
                         targetScrollX = playheadX - center;
@@ -218,14 +218,14 @@ export default class PianoRollController {
                 item.graphic.position.x = newGlobalStart / RATIO_MILLS_BY_PX;
             }
         };
-        
+
         stepMove();
 
         this._arrowKeyTimer = setTimeout(() => {
             this._arrowKeyInterval = setInterval(stepMove, 50);
         }, 500);
     }
-        
+
     private stopNoteArrowRepeat() {
         clearTimeout(this._arrowKeyTimer);
         clearInterval(this._arrowKeyInterval);
@@ -249,7 +249,7 @@ export default class PianoRollController {
                 this._selectedNotes = newSelection;
             });
         }
-        
+
         this._arrowMoveState = null;
     }
 
@@ -286,21 +286,21 @@ export default class PianoRollController {
                 const newY = (127 - newNoteVal) * this._view.NOTE_HEIGHT;
                 item.graphic.position.y = newY;
             }
-            
-             if (this._arrowVerticalMoveState.notes.length > 0) {
-                 const leader = this._arrowVerticalMoveState.notes[0];
-                 const newNoteVal = Math.max(0, Math.min(127, leader.initialNote + this._arrowVerticalMoveState.totalShift));
-                 this.previewNote(newNoteVal);
-             }
+
+            if (this._arrowVerticalMoveState.notes.length > 0) {
+                const leader = this._arrowVerticalMoveState.notes[0];
+                const newNoteVal = Math.max(0, Math.min(127, leader.initialNote + this._arrowVerticalMoveState.totalShift));
+                this.previewNote(newNoteVal);
+            }
         };
-        
+
         stepMove();
 
         this._arrowVerticalKeyTimer = setTimeout(() => {
             this._arrowVerticalKeyInterval = setInterval(stepMove, 100);
         }, 500);
     }
-        
+
     private stopNoteVerticalArrowRepeat() {
         this.stopPreview();
         clearTimeout(this._arrowVerticalKeyTimer);
@@ -318,7 +318,7 @@ export default class PianoRollController {
                 for (const item of this._arrowVerticalMoveState!.notes) {
                     const newNoteVal = Math.max(0, Math.min(127, item.initialNote + shift));
                     const globalStart = item.region.start + item.initialStart;
-                    
+
                     this._deleteNoteInternal(item.region, item.note, item.initialStart);
                     const addedNote = this._addNoteInternal(newNoteVal, globalStart, item.note.duration);
                     if (addedNote) newSelection.add(addedNote);
@@ -327,7 +327,7 @@ export default class PianoRollController {
                 this.redraw();
             });
         }
-        
+
         this._arrowVerticalMoveState = null;
     }
 
@@ -357,16 +357,16 @@ export default class PianoRollController {
         this._track = track;
         this._isVisible = true;
         this._view.visible = true;
-        
+
         // Resize to full screen overlay
         this.resize();
-        
+
         // Initial draw
         this.redraw();
 
         // Center view roughly on middle C (60)
         this._view.scrollY = (127 - 60) * this._view.NOTE_HEIGHT - this._view.viewportHeight / 2;
-        
+
         // Scroll to the region start initially
         this._view.scrollX = region.start / RATIO_MILLS_BY_PX;
         this._view.updateScroll(0, 0);
@@ -380,11 +380,15 @@ export default class PianoRollController {
         if (range) {
             this.setRange(range.start, range.end, true);
         }
-        
+
         this.redrawLoop();
     }
 
     public get isVisible(): boolean { return this._isVisible; }
+    public get selectedNotes(): Set<MIDINote> {
+        // console.log("PianoRollController: accessing selectedNotes, count:", this._selectedNotes.size);
+        return this._selectedNotes;
+    }
 
     public resize() {
         if (!this._isVisible) return;
@@ -396,20 +400,20 @@ export default class PianoRollController {
         // We want the piano roll to fill the space "behind" the plugin panel.
         // The plugin panel takes up space in the layout, shrinking the editor view.
         // We calculate how much space it's taking and add it back to the height passed to the view.
-        
+
         const pluginEditor = document.getElementById("plugin-editor");
         if (pluginEditor) {
-             const currentPluginHeight = pluginEditor.clientHeight;
-             const collapsedHeight = 25; // From PluginsView.ts
-             const hiddenHeight = Math.max(0, currentPluginHeight - collapsedHeight);
-             height += hiddenHeight;
+            const currentPluginHeight = pluginEditor.clientHeight;
+            const collapsedHeight = 25; // From PluginsView.ts
+            const hiddenHeight = Math.max(0, currentPluginHeight - collapsedHeight);
+            height += hiddenHeight;
         }
 
         // Check for Audio Loop Browser (Sidebar)
         const browser = this._app.hostView.audioLoopBrowserDiv;
         if (browser && browser.offsetParent !== null) { // Checks if visible
-             // Assuming browser is on the right
-             width -= browser.offsetWidth;
+            // Assuming browser is on the right
+            width -= browser.offsetWidth;
         }
 
         this._view.resize(width, height);
@@ -434,7 +438,7 @@ export default class PianoRollController {
         this._rangeStart = start;
         this._rangeEnd = end;
         this._view.drawRangeSelection(start, end - start);
-        
+
         if (!fromSync && this._app.playheadController) {
             this._app.playheadController.setRange(start, end, true);
         }
@@ -444,37 +448,37 @@ export default class PianoRollController {
         this._rangeStart = null;
         this._rangeEnd = null;
         this._view.clearRangeSelection();
-        
+
         if (!fromSync && this._app.playheadController) {
             this._app.playheadController.clearRange(true);
         }
     }
 
     private updateNoteSelection() {
-         if (this._rangeStart === null || this._rangeEnd === null) return;
-         
-         const startMs = this._rangeStart * RATIO_MILLS_BY_PX;
-         const endMs = this._rangeEnd * RATIO_MILLS_BY_PX;
-         
-         this._selectedNotes.clear();
-         if (this._track) {
-             for (const region of this._track.regions) {
-                 if (region instanceof MIDIRegion) {
-                     region.midi.forEachNote((note, start) => {
-                         const globalStart = region.start + start;
-                         if (globalStart < endMs && globalStart + note.duration > startMs) {
-                             this._selectedNotes.add(note);
-                         }
-                     });
-                 }
-             }
-         }
-         this.redraw();
+        if (this._rangeStart === null || this._rangeEnd === null) return;
+
+        const startMs = this._rangeStart * RATIO_MILLS_BY_PX;
+        const endMs = this._rangeEnd * RATIO_MILLS_BY_PX;
+
+        this._selectedNotes.clear();
+        if (this._track) {
+            for (const region of this._track.regions) {
+                if (region instanceof MIDIRegion) {
+                    region.midi.forEachNote((note, start) => {
+                        const globalStart = region.start + start;
+                        if (globalStart < endMs && globalStart + note.duration > startMs) {
+                            this._selectedNotes.add(note);
+                        }
+                    });
+                }
+            }
+        }
+        this.redraw();
     }
 
     public redraw() {
         if (!this._track) return;
-        
+
         let color = 0xFF0000; // Default red
         if (this._track.color) {
             color = parseInt(this._track.color.replace("#", ""), 16);
@@ -490,15 +494,15 @@ export default class PianoRollController {
 
         // Get Time Signature and Tempo
         const timeSig = this._app.hostView.metronome.timeSignature || [4, 4];
-        
+
         // Draw grid
         this._view.drawGrid(
-            Math.max(trackDuration, 300000), 
-            timeSig, 
-            TEMPO, 
-            this._app.editorView.snapResolution, 
+            Math.max(trackDuration, 300000),
+            timeSig,
+            TEMPO,
+            this._app.editorView.snapResolution,
             this._app.editorView.snapTriplet
-        ); 
+        );
         this._view.drawNotes(this._track, color, this._selectedNotes);
         this.redrawLoop();
     }
@@ -514,96 +518,96 @@ export default class PianoRollController {
         if (!this._isVisible) return;
 
         const isActive = this._isDragging || this._isResizing || this._isSelecting || this._creationState || this._isDraggingPlayhead || this._timelinePointerDown || this._isMovingLoop;
-        
+
         if (!isActive) {
             this.scrollingLeft = false;
             this.scrollingRight = false;
-            return; 
+            return;
         }
 
         if (this.scrollingLeft || this.scrollingRight) {
-             const speed = this.incrementScrollSpeed; 
-             
-             let dx = 0;
-             if (this.scrollingRight) dx = speed;
-             if (this.scrollingLeft) dx = -speed;
-             
-             if (dx !== 0) {
-                 this._view.updateScroll(dx, 0);
-                 
-                 // Reuse _lastMousePos
-                 const globalPos = this._lastMousePos;
-                 
-                 // 1. Selection
-                 if (this._isSelecting) {
-                     const localPos = this._view.contentContainer.toLocal(globalPos);
-                     const x = Math.min(this._selectionStart.x, localPos.x);
-                     const y = Math.min(this._selectionStart.y, localPos.y);
-                     const w = Math.abs(this._selectionStart.x - localPos.x);
-                     const h = Math.abs(this._selectionStart.y - localPos.y);
-                     
-                     this._view.drawSelectionBox(x, y, w, h);
-                     this.updateSelectionFromBox(x, y, w, h);
-                     
-                     let color = 0xFF0000;
-                     if (this._track && this._track.color) color = parseInt(this._track.color.replace("#", ""), 16);
-                     this._view.refreshNoteSelection(this._selectedNotes, color);
-                 }
-                 
-                 // 2. Creation
-                 if (this._creationState) {
-                      const localPos = this._view.notesContainer.toLocal(globalPos);
-                      let targetX = localPos.x;
-                      targetX = this.snap(targetX);
-                      
-                      const targetTime = Math.max(0, targetX * RATIO_MILLS_BY_PX);
-                      const anchorTime = this._creationState.start;
-                      const startTime = Math.min(anchorTime, targetTime);
-                      const endTime = Math.max(anchorTime, targetTime);
-                      const duration = Math.max(0, endTime - startTime);
-                      
-                      const x = startTime / RATIO_MILLS_BY_PX;
-                      const w = Math.max(1, duration / RATIO_MILLS_BY_PX);
-                      
-                      this._creationState.ghost.clear();
-                      let color = 0xFF0000;
-                      if (this._track && this._track.color) color = parseInt(this._track.color.replace("#", ""), 16);
-                      this._creationState.ghost.beginFill(color, 0.5);
-                      this._creationState.ghost.lineStyle(1, 0xFFFFFF);
-                      this._creationState.ghost.drawRect(0, 0, w, this._view.NOTE_HEIGHT);
-                      this._creationState.ghost.endFill();
-                      this._creationState.ghost.position.set(x, (127 - this._creationState.note) * this._view.NOTE_HEIGHT);
-                 }
-                 
-                 // 3. Dragging
-                 if (this._isDragging && this._draggedNote) {
-                      const scrollDelta = (this._view.scrollX - this._draggedNote.initialScrollX) * RATIO_MILLS_BY_PX;
-                      const dx = globalPos.x - this._draggedNote.initialX;
-                      const rawDt = dx * RATIO_MILLS_BY_PX + scrollDelta;
-                      
-                      const originCurrent = this._draggedNote.originGlobalStart + rawDt;
-                      let originSnappedX = Math.max(0, originCurrent) / RATIO_MILLS_BY_PX;
-                      originSnappedX = this.snap(originSnappedX);
-                      const originSnappedGlobalStart = originSnappedX * RATIO_MILLS_BY_PX;
-                      const effectiveDt = originSnappedGlobalStart - this._draggedNote.originGlobalStart;
+            const speed = this.incrementScrollSpeed;
 
-                      const dy = globalPos.y - this._draggedNote.initialY;
-                      const dNote = -Math.round(dy / this._view.NOTE_HEIGHT);
+            let dx = 0;
+            if (this.scrollingRight) dx = speed;
+            if (this.scrollingLeft) dx = -speed;
 
-                      for (const item of this._draggedNote.notes) {
-                          const globalStart = item.region.start + item.initialStart + effectiveDt;
-                          let newGlobalStart = Math.max(0, globalStart);
-                          let newX = newGlobalStart / RATIO_MILLS_BY_PX;
-                          
-                          const newNoteVal = Math.max(0, Math.min(127, item.initialNote + dNote));
-                          const newY = (127 - newNoteVal) * this._view.NOTE_HEIGHT;
-                          
-                          item.graphic.position.set(newX, newY);
-                      }
-                 }
-                 
-                 // 4. Resizing
-                 if (this._isResizing && this._resizeState) {
+            if (dx !== 0) {
+                this._view.updateScroll(dx, 0);
+
+                // Reuse _lastMousePos
+                const globalPos = this._lastMousePos;
+
+                // 1. Selection
+                if (this._isSelecting) {
+                    const localPos = this._view.contentContainer.toLocal(globalPos);
+                    const x = Math.min(this._selectionStart.x, localPos.x);
+                    const y = Math.min(this._selectionStart.y, localPos.y);
+                    const w = Math.abs(this._selectionStart.x - localPos.x);
+                    const h = Math.abs(this._selectionStart.y - localPos.y);
+
+                    this._view.drawSelectionBox(x, y, w, h);
+                    this.updateSelectionFromBox(x, y, w, h);
+
+                    let color = 0xFF0000;
+                    if (this._track && this._track.color) color = parseInt(this._track.color.replace("#", ""), 16);
+                    this._view.refreshNoteSelection(this._selectedNotes, color);
+                }
+
+                // 2. Creation
+                if (this._creationState) {
+                    const localPos = this._view.notesContainer.toLocal(globalPos);
+                    let targetX = localPos.x;
+                    targetX = this.snap(targetX);
+
+                    const targetTime = Math.max(0, targetX * RATIO_MILLS_BY_PX);
+                    const anchorTime = this._creationState.start;
+                    const startTime = Math.min(anchorTime, targetTime);
+                    const endTime = Math.max(anchorTime, targetTime);
+                    const duration = Math.max(0, endTime - startTime);
+
+                    const x = startTime / RATIO_MILLS_BY_PX;
+                    const w = Math.max(1, duration / RATIO_MILLS_BY_PX);
+
+                    this._creationState.ghost.clear();
+                    let color = 0xFF0000;
+                    if (this._track && this._track.color) color = parseInt(this._track.color.replace("#", ""), 16);
+                    this._creationState.ghost.beginFill(color, 0.5);
+                    this._creationState.ghost.lineStyle(1, 0xFFFFFF);
+                    this._creationState.ghost.drawRect(0, 0, w, this._view.NOTE_HEIGHT);
+                    this._creationState.ghost.endFill();
+                    this._creationState.ghost.position.set(x, (127 - this._creationState.note) * this._view.NOTE_HEIGHT);
+                }
+
+                // 3. Dragging
+                if (this._isDragging && this._draggedNote) {
+                    const scrollDelta = (this._view.scrollX - this._draggedNote.initialScrollX) * RATIO_MILLS_BY_PX;
+                    const dx = globalPos.x - this._draggedNote.initialX;
+                    const rawDt = dx * RATIO_MILLS_BY_PX + scrollDelta;
+
+                    const originCurrent = this._draggedNote.originGlobalStart + rawDt;
+                    let originSnappedX = Math.max(0, originCurrent) / RATIO_MILLS_BY_PX;
+                    originSnappedX = this.snap(originSnappedX);
+                    const originSnappedGlobalStart = originSnappedX * RATIO_MILLS_BY_PX;
+                    const effectiveDt = originSnappedGlobalStart - this._draggedNote.originGlobalStart;
+
+                    const dy = globalPos.y - this._draggedNote.initialY;
+                    const dNote = -Math.round(dy / this._view.NOTE_HEIGHT);
+
+                    for (const item of this._draggedNote.notes) {
+                        const globalStart = item.region.start + item.initialStart + effectiveDt;
+                        let newGlobalStart = Math.max(0, globalStart);
+                        let newX = newGlobalStart / RATIO_MILLS_BY_PX;
+
+                        const newNoteVal = Math.max(0, Math.min(127, item.initialNote + dNote));
+                        const newY = (127 - newNoteVal) * this._view.NOTE_HEIGHT;
+
+                        item.graphic.position.set(newX, newY);
+                    }
+                }
+
+                // 4. Resizing
+                if (this._isResizing && this._resizeState) {
                     const scrollDelta = (this._view.scrollX - this._resizeState.initialScrollX) * RATIO_MILLS_BY_PX;
                     const dx = globalPos.x - this._resizeState.initialX;
                     const rawDt = dx * RATIO_MILLS_BY_PX + scrollDelta;
@@ -625,69 +629,69 @@ export default class PianoRollController {
                             let newSnappedStartX = newRawStart / RATIO_MILLS_BY_PX;
                             newSnappedStartX = this.snap(newSnappedStartX);
                             const newSnappedStart = Math.max(0, newSnappedStartX * RATIO_MILLS_BY_PX);
-                            
+
                             let newDuration = Math.max(RATIO_MILLS_BY_PX * 2, originalGlobalEnd - newSnappedStart);
                             const effectiveStart = originalGlobalEnd - newDuration;
-                            
+
                             const newX = effectiveStart / RATIO_MILLS_BY_PX;
                             const newW = newDuration / RATIO_MILLS_BY_PX;
                             item.graphic.x = newX;
                             item.graphic.width = newW;
                         }
                     }
-                 }
+                }
 
-                 // 5. Loop Moving
-                 if (this._isMovingLoop && this._loopHandleType) {
-                     const localPos = this._view.loopContainer.toLocal(globalPos);
-                     let targetX = localPos.x;
-                     if (!isKeyPressed("Shift")) {
+                // 5. Loop Moving
+                if (this._isMovingLoop && this._loopHandleType) {
+                    const localPos = this._view.loopContainer.toLocal(globalPos);
+                    let targetX = localPos.x;
+                    if (!isKeyPressed("Shift")) {
                         targetX = this.snap(targetX);
-                     }
+                    }
 
-                     const currentLoop = this._app.host.loopRange || [0, 0];
-                     let start = currentLoop[0] / RATIO_MILLS_BY_PX;
-                     let end = currentLoop[1] / RATIO_MILLS_BY_PX;
-                     
-                     if (this._loopHandleType === 'LEFT') {
-                         start = targetX;
-                         if (start > end) start = end;
-                         start = Math.max(0, start);
-                     } else if (this._loopHandleType === 'RIGHT') {
-                         end = targetX;
-                         if (end < start) end = start;
-                     } else if (this._loopHandleType === 'BODY') {
-                         const duration = end - start;
-                         start = targetX - this._loopDragOffset;
-                         if (start < 0) start = 0;
-                         end = start + duration;
-                     }
-                     
-                     this._app.hostController.setLoop([start * RATIO_MILLS_BY_PX, end * RATIO_MILLS_BY_PX]);
-                     this.redrawLoop();
-                 }
-             }
+                    const currentLoop = this._app.host.loopRange || [0, 0];
+                    let start = currentLoop[0] / RATIO_MILLS_BY_PX;
+                    let end = currentLoop[1] / RATIO_MILLS_BY_PX;
+
+                    if (this._loopHandleType === 'LEFT') {
+                        start = targetX;
+                        if (start > end) start = end;
+                        start = Math.max(0, start);
+                    } else if (this._loopHandleType === 'RIGHT') {
+                        end = targetX;
+                        if (end < start) end = start;
+                    } else if (this._loopHandleType === 'BODY') {
+                        const duration = end - start;
+                        start = targetX - this._loopDragOffset;
+                        if (start < 0) start = 0;
+                        end = start + duration;
+                    }
+
+                    this._app.hostController.setLoop([start * RATIO_MILLS_BY_PX, end * RATIO_MILLS_BY_PX]);
+                    this.redrawLoop();
+                }
+            }
         }
-        
+
         this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
     }
 
     private checkIfScrollingNeeded(globalX: number) {
         if (!this._view || !this._view.visible) return;
-        
+
         const viewportWidth = this._view.viewportWidth;
         const localPos = this._view.toLocal(new Point(globalX, 0));
         const SCROLL_ZONE = 50;
-        
+
         this.scrollingRight = localPos.x >= viewportWidth - SCROLL_ZONE;
         this.scrollingLeft = localPos.x <= SCROLL_ZONE;
-        
+
         if (this.scrollingRight) {
-             const dist = localPos.x - (viewportWidth - SCROLL_ZONE);
-             this.incrementScrollSpeed = Math.min(20, Math.max(2, dist / 2));
+            const dist = localPos.x - (viewportWidth - SCROLL_ZONE);
+            this.incrementScrollSpeed = Math.min(20, Math.max(2, dist / 2));
         } else if (this.scrollingLeft) {
-             const dist = SCROLL_ZONE - localPos.x;
-             this.incrementScrollSpeed = Math.min(20, Math.max(2, dist / 2));
+            const dist = SCROLL_ZONE - localPos.x;
+            this.incrementScrollSpeed = Math.min(20, Math.max(2, dist / 2));
         }
     }
 
@@ -713,7 +717,7 @@ export default class PianoRollController {
         this._app.hostView.soundLoopBtn.addEventListener("click", () => {
             setTimeout(() => {
                 if (this._isVisible) this.resize();
-            }, 50); 
+            }, 50);
         });
 
         window.addEventListener("keyup", (e) => {
@@ -865,27 +869,27 @@ export default class PianoRollController {
         bindLoopHandle(this._view.loopHandleRight, 'RIGHT');
 
         this._view.loopBar.on("pointerdown", (e: FederatedPointerEvent) => {
-             if (this._isMovingLoop) return; 
-             const localPos = e.getLocalPosition(this._view.loopContainer);
-             
-             const px = localPos.x;
-             // Use hostController.loopRange to allow dragging even if inactive
-             const loopRange = this._app.hostController.loopRange || [0, 0];
-             const startPx = loopRange[0] / RATIO_MILLS_BY_PX;
-             const endPx = loopRange[1] / RATIO_MILLS_BY_PX;
-             
-             // Check if clicking on the bar
-             // Use loopRange from controller to validate hit
-             if (px >= startPx && px <= endPx) {
-                 this._isMovingLoop = true;
-                 this._loopHandleType = 'BODY';
-                 this._loopDragOffset = px - startPx;
-                 this._lastMousePos.copyFrom(e.global);
-                 e.stopPropagation();
-                 this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
-             }
+            if (this._isMovingLoop) return;
+            const localPos = e.getLocalPosition(this._view.loopContainer);
+
+            const px = localPos.x;
+            // Use hostController.loopRange to allow dragging even if inactive
+            const loopRange = this._app.hostController.loopRange || [0, 0];
+            const startPx = loopRange[0] / RATIO_MILLS_BY_PX;
+            const endPx = loopRange[1] / RATIO_MILLS_BY_PX;
+
+            // Check if clicking on the bar
+            // Use loopRange from controller to validate hit
+            if (px >= startPx && px <= endPx) {
+                this._isMovingLoop = true;
+                this._loopHandleType = 'BODY';
+                this._loopDragOffset = px - startPx;
+                this._lastMousePos.copyFrom(e.global);
+                e.stopPropagation();
+                this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
+            }
         });
-        
+
         // Prevent background clicks in the loop area from triggering tool actions (e.g. creating notes)
         this._view.loopBackground.on("pointerdown", (e: FederatedPointerEvent) => {
             e.stopPropagation();
@@ -894,7 +898,7 @@ export default class PianoRollController {
         // Background click to add note or start selection
         this._view.background.interactive = true;
         this._view.contentContainer.interactive = true;
-        this._view.contentContainer.hitArea = new Rectangle(0, 0, 100000, 100000); 
+        this._view.contentContainer.hitArea = new Rectangle(0, 0, 100000, 100000);
 
         const handleBackgroundClick = (e: FederatedPointerEvent) => {
             this._app.contextMenuController.hide();
@@ -910,16 +914,16 @@ export default class PianoRollController {
                 this._isSelecting = true;
                 this._selectionStart.copyFrom(localPos);
                 this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
-                return; 
+                return;
             }
 
             if (e.button !== 0) return; // After this point, only handle left click
 
             if (App.TOOL_MODE === "SELECT") {
-                 // Deselect all on left-click
+                // Deselect all on left-click
                 this._selectedNotes.clear();
                 this.redraw();
-                
+
                 // Start Selection Rectangle
                 this._isSelecting = true;
                 this._selectionStart.copyFrom(localPos);
@@ -931,7 +935,7 @@ export default class PianoRollController {
                 // Deselect all
                 this._selectedNotes.clear();
                 this.redraw();
-                
+
                 // Adjust for scrolling and key width
                 const yInGrid = localPos.y + this._view.scrollY - this._view.HEADER_HEIGHT;
                 let xInGrid = localPos.x - this._view.KEY_WIDTH + this._view.scrollX;
@@ -939,7 +943,7 @@ export default class PianoRollController {
 
                 const midiNote = 127 - Math.floor(yInGrid / this._view.NOTE_HEIGHT);
                 const globalStart = xInGrid * RATIO_MILLS_BY_PX;
-                
+
                 if (midiNote >= 0 && midiNote <= 127 && globalStart >= 0) {
                     // Start Creation
                     const ghost = new Graphics();
@@ -947,7 +951,7 @@ export default class PianoRollController {
                     if (this._track && this._track.color) {
                         color = parseInt(this._track.color.replace("#", ""), 16);
                     }
-                    
+
                     const x = globalStart / RATIO_MILLS_BY_PX;
                     const y = (127 - midiNote) * this._view.NOTE_HEIGHT;
                     const w = 0; // Start with 0 width, grows with drag
@@ -967,9 +971,9 @@ export default class PianoRollController {
                         initialX: e.global.x,
                         ghost: ghost
                     };
-                    
+
                     this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
-                    
+
                     this.previewNote(midiNote);
                 }
             }
@@ -993,24 +997,24 @@ export default class PianoRollController {
 
             // Check Resize
             if (this._rangeStart !== null && this._rangeEnd !== null) {
-                 const HIT_ZONE = 5;
-                 if (Math.abs(targetX - this._rangeStart) < HIT_ZONE) {
-                     this._resizeMode = 'LEFT';
-                     this._timelinePointerDown = true;
-                     e.stopPropagation();
-                     return;
-                 } else if (Math.abs(targetX - this._rangeEnd) < HIT_ZONE) {
-                     this._resizeMode = 'RIGHT';
-                     this._timelinePointerDown = true;
-                     e.stopPropagation();
-                     return;
-                 } else if (targetX > this._rangeStart && targetX < this._rangeEnd) {
-                     this._isMovingRange = true;
-                     this._dragOffset = targetX - this._rangeStart;
-                     this._timelinePointerDown = true;
-                     e.stopPropagation();
-                     return;
-                 }
+                const HIT_ZONE = 5;
+                if (Math.abs(targetX - this._rangeStart) < HIT_ZONE) {
+                    this._resizeMode = 'LEFT';
+                    this._timelinePointerDown = true;
+                    e.stopPropagation();
+                    return;
+                } else if (Math.abs(targetX - this._rangeEnd) < HIT_ZONE) {
+                    this._resizeMode = 'RIGHT';
+                    this._timelinePointerDown = true;
+                    e.stopPropagation();
+                    return;
+                } else if (targetX > this._rangeStart && targetX < this._rangeEnd) {
+                    this._isMovingRange = true;
+                    this._dragOffset = targetX - this._rangeStart;
+                    this._timelinePointerDown = true;
+                    e.stopPropagation();
+                    return;
+                }
             }
 
             this.clearRange();
@@ -1019,7 +1023,7 @@ export default class PianoRollController {
             this._timelinePointerDown = true;
             this._resizeMode = null;
             this._isMovingRange = false;
-            
+
             e.stopPropagation();
         });
 
@@ -1091,14 +1095,14 @@ export default class PianoRollController {
                     const note1 = this._lastClickedNote.note.note;
                     const start2 = clickedGlobalStart;
                     const note2 = clickedNote.note;
-                    
+
                     const minStart = Math.min(start1, start2);
                     const maxStart = Math.max(start1, start2);
                     const minNote = Math.min(note1, note2);
                     const maxNote = Math.max(note1, note2);
-                    
+
                     this._selectedNotes.clear();
-                    
+
                     for (const region of this._track.regions) {
                         if (region instanceof MIDIRegion) {
                             region.midi.forEachNote((note, start) => {
@@ -1129,7 +1133,7 @@ export default class PianoRollController {
                     }
                     this._lastClickedNote = { note: clickedNote, globalStart: clickedGlobalStart };
                 }
-                
+
                 if (e.button !== 0) return; // Only start drag on Left Click
 
                 // Collect all selected notes and their new graphics after redraw
@@ -1154,7 +1158,7 @@ export default class PianoRollController {
                 const isClickedNoteSelected = draggedNotes.some(n => n.note === clickedNote);
                 if (!isClickedNoteSelected) {
                     // Fallback: If clicked note was deselected (e.g. Ctrl+Click), pick the first one
-                     originGlobalStart = draggedNotes[0].region.start + draggedNotes[0].initialStart;
+                    originGlobalStart = draggedNotes[0].region.start + draggedNotes[0].initialStart;
                 }
 
                 // Start drag
@@ -1168,9 +1172,9 @@ export default class PianoRollController {
                     noteToDeselect: noteToDeselect,
                     clickedInitialNote: clickedNote.note
                 };
-                
+
                 this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
-                
+
                 this.previewNote(clickedNote.note);
 
                 // Create Ghosts for copy mode
@@ -1192,12 +1196,12 @@ export default class PianoRollController {
                     rect.drawRect(0, 0, w, h);
                     rect.endFill();
                     rect.position.set(x, y);
-                    
+
                     rect.visible = false; // Hidden by default
                     this._view.notesContainer.addChild(rect);
                     this._dragGhosts.push(rect);
                 }
-                
+
                 // Double click check
                 if (e.originalEvent.detail === 2) {
                     // Treat as delete selected (single note selected above)
@@ -1210,24 +1214,24 @@ export default class PianoRollController {
 
         this._view.on("pointermove", (e: FederatedPointerEvent) => {
             if (!this._isVisible || !this._track) return;
-            
+
             this._lastMousePos.copyFrom(e.global);
             this.checkIfScrollingNeeded(e.global.x);
 
             // Update Cursor Style if hovering over notes
             if (!this._isDragging && !this._isResizing && !this._isSelecting && !this._isDraggingPlayhead && !this._creationState) {
-                 const target = e.target as any;
-                 if (target && target.noteData) {
-                     const localPos = target.toLocal(e.global);
-                     const width = target.width;
-                     if (localPos.x < this.RESIZE_ZONE) {
-                         target.cursor = "w-resize";
-                     } else if (localPos.x > width - this.RESIZE_ZONE) {
-                         target.cursor = "e-resize";
-                     } else {
-                         target.cursor = "pointer";
-                     }
-                 }
+                const target = e.target as any;
+                if (target && target.noteData) {
+                    const localPos = target.toLocal(e.global);
+                    const width = target.width;
+                    if (localPos.x < this.RESIZE_ZONE) {
+                        target.cursor = "w-resize";
+                    } else if (localPos.x > width - this.RESIZE_ZONE) {
+                        target.cursor = "e-resize";
+                    } else {
+                        target.cursor = "pointer";
+                    }
+                }
             }
 
             if (this._creationState) {
@@ -1237,23 +1241,23 @@ export default class PianoRollController {
                 if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
                     targetX = this.snap(targetX);
                 }
-                
+
                 const targetTime = Math.max(0, targetX * RATIO_MILLS_BY_PX);
                 const anchorTime = this._creationState.start;
-                
+
                 const startTime = Math.min(anchorTime, targetTime);
                 const endTime = Math.max(anchorTime, targetTime);
-                
+
                 const duration = Math.max(0, endTime - startTime);
-                
+
                 // Update Ghost
                 const x = startTime / RATIO_MILLS_BY_PX;
                 const w = Math.max(1, duration / RATIO_MILLS_BY_PX); // At least 1px
                 const h = this._view.NOTE_HEIGHT;
-                
+
                 this._creationState.ghost.clear();
                 this._creationState.ghost.position.x = x;
-                
+
                 let color = 0xFF0000;
                 if (this._track && this._track.color) {
                     color = parseInt(this._track.color.replace("#", ""), 16);
@@ -1281,20 +1285,20 @@ export default class PianoRollController {
                     this._view.timelineContainer.cursor = "ew-resize";
                     let start = this._rangeStart!;
                     let end = this._rangeEnd!;
-                    
+
                     if (this._resizeMode === 'LEFT') {
                         start = targetX;
                         if (start > end) {
-                             this._resizeMode = 'RIGHT';
-                             start = end;
-                             end = targetX;
+                            this._resizeMode = 'RIGHT';
+                            start = end;
+                            end = targetX;
                         }
                     } else {
                         end = targetX;
                         if (end < start) {
-                             this._resizeMode = 'LEFT';
-                             end = start;
-                             start = targetX;
+                            this._resizeMode = 'LEFT';
+                            end = start;
+                            start = targetX;
                         }
                     }
                     this.setRange(start, end);
@@ -1305,11 +1309,11 @@ export default class PianoRollController {
                 if (this._isMovingRange) {
                     this._view.timelineContainer.cursor = "grabbing";
                     let newStart = targetX - this._dragOffset;
-                    
+
                     if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
                         newStart = this.snap(newStart);
                     }
-                    
+
                     const duration = this._rangeEnd! - this._rangeStart!;
                     if (newStart < 0) newStart = 0;
                     this.setRange(newStart, newStart + duration);
@@ -1324,13 +1328,13 @@ export default class PianoRollController {
                 }
 
                 if (this._isRangeSelecting && this._rangeSelectionStart !== null) {
-                     this._view.timelineContainer.cursor = "text";
-                     let start = Math.min(this._rangeSelectionStart, targetX);
-                     let end = Math.max(this._rangeSelectionStart, targetX);
-                     this.setRange(start, end);
+                    this._view.timelineContainer.cursor = "text";
+                    let start = Math.min(this._rangeSelectionStart, targetX);
+                    let end = Math.max(this._rangeSelectionStart, targetX);
+                    this.setRange(start, end);
                 }
                 return;
-            } 
+            }
             else if (isOverTimeline) {
                 // Hover logic
                 if (this._rangeStart !== null && this._rangeEnd !== null) {
@@ -1344,7 +1348,7 @@ export default class PianoRollController {
                         this._view.timelineContainer.cursor = "default";
                     }
                 } else {
-                     this._view.timelineContainer.cursor = "default";
+                    this._view.timelineContainer.cursor = "default";
                 }
             } else {
                 // If not over timeline, but was previously interacting, reset cursor.
@@ -1363,7 +1367,7 @@ export default class PianoRollController {
 
                 // Calculate intersections
                 this.updateSelectionFromBox(x, y, w, h);
-                
+
                 // Optimized redraw: only update colors of existing graphics
                 let color = 0xFF0000; // Default red
                 if (this._track && this._track.color) {
@@ -1391,13 +1395,13 @@ export default class PianoRollController {
                             newSnappedEndX = this.snap(newSnappedEndX);
                         }
                         const newSnappedEnd = newSnappedEndX * RATIO_MILLS_BY_PX;
-                        
+
                         let newDuration = Math.max(RATIO_MILLS_BY_PX * 2, newSnappedEnd - originalGlobalStart); // Min width 2px
 
                         // Update Graphic
                         const newW = newDuration / RATIO_MILLS_BY_PX;
                         item.graphic.width = newW;
-                        
+
                         // Temporarily store the intended duration on the graphic for pointerup to read?
                         // Or just recalculate in pointerup. 
                         // Better to update graphic effectively.
@@ -1409,7 +1413,7 @@ export default class PianoRollController {
                             newSnappedStartX = this.snap(newSnappedStartX);
                         }
                         const newSnappedStart = Math.max(0, newSnappedStartX * RATIO_MILLS_BY_PX);
-                        
+
                         // Ensure we don't cross the end
                         // Minimum duration check
                         if (originalGlobalEnd - newSnappedStart < RATIO_MILLS_BY_PX * 2) {
@@ -1420,11 +1424,11 @@ export default class PianoRollController {
 
                         let newDuration = Math.max(RATIO_MILLS_BY_PX * 2, originalGlobalEnd - newSnappedStart);
                         const effectiveStart = originalGlobalEnd - newDuration;
-                        
+
                         // Update Graphic
                         const newX = effectiveStart / RATIO_MILLS_BY_PX;
                         const newW = newDuration / RATIO_MILLS_BY_PX;
-                        
+
                         item.graphic.x = newX;
                         item.graphic.width = newW;
                     }
@@ -1444,7 +1448,7 @@ export default class PianoRollController {
 
                 // Pitch Delta
                 const dNote = -Math.round(dy / this._view.NOTE_HEIGHT);
-                
+
                 // Preview note logic
                 const currentNote = this._draggedNote.clickedInitialNote + dNote;
                 const clampedNote = Math.max(0, Math.min(127, currentNote));
@@ -1454,15 +1458,15 @@ export default class PianoRollController {
                 const scrollDelta = (this._view.scrollX - this._draggedNote.initialScrollX) * RATIO_MILLS_BY_PX;
                 const rawDt = dx * RATIO_MILLS_BY_PX + scrollDelta;
                 const originCurrent = this._draggedNote.originGlobalStart + rawDt;
-                
+
                 // Calculate where the origin note WOULD be snapped
                 let originSnappedX = Math.max(0, originCurrent) / RATIO_MILLS_BY_PX;
                 if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
                     originSnappedX = this.snap(originSnappedX);
                 }
-                
+
                 const originSnappedGlobalStart = originSnappedX * RATIO_MILLS_BY_PX;
-                
+
                 // The effective delta applied to ALL notes
                 const effectiveDt = originSnappedGlobalStart - this._draggedNote.originGlobalStart;
 
@@ -1472,104 +1476,104 @@ export default class PianoRollController {
 
                     // No individual snapping here
                     let newX = newGlobalStart / RATIO_MILLS_BY_PX;
-                    
+
                     const newNoteVal = Math.max(0, Math.min(127, item.initialNote + dNote));
                     const newY = (127 - newNoteVal) * this._view.NOTE_HEIGHT;
-                    
+
                     item.graphic.position.set(newX, newY);
                 }
             }
 
             // Loop Moving Logic
             if (this._isMovingLoop && this._loopHandleType) {
-                 const localPos = this._view.loopContainer.toLocal(e.global);
-                 let targetX = localPos.x;
-                 const shift = (e.originalEvent as unknown as MouseEvent).shiftKey;
+                const localPos = this._view.loopContainer.toLocal(e.global);
+                let targetX = localPos.x;
+                const shift = (e.originalEvent as unknown as MouseEvent).shiftKey;
 
-                 // Use hostController.loopRange to get the stored range even if loop is inactive (off)
-                 const currentLoop = this._app.hostController.loopRange || [0, 0];
-                 let start = currentLoop[0] / RATIO_MILLS_BY_PX;
-                 let end = currentLoop[1] / RATIO_MILLS_BY_PX;
-                 
-                 if (this._loopHandleType === 'LEFT') {
-                     if (!shift) targetX = this.snap(targetX);
-                     start = targetX;
-                     if (start > end) start = end;
-                     start = Math.max(0, start);
-                 } else if (this._loopHandleType === 'RIGHT') {
-                     if (!shift) targetX = this.snap(targetX);
-                     end = targetX;
-                     if (end < start) end = start;
-                 } else if (this._loopHandleType === 'BODY') {
-                     const duration = end - start;
-                     let newStart = targetX - this._loopDragOffset;
-                     
-                     if (!shift) {
-                         newStart = this.snap(newStart);
-                     }
-                     
-                     start = newStart;
-                     if (start < 0) start = 0;
-                     end = start + duration;
-                 }
-                 
-                 this._app.hostController.setLoop([start * RATIO_MILLS_BY_PX, end * RATIO_MILLS_BY_PX]);
-                 this.redrawLoop();
+                // Use hostController.loopRange to get the stored range even if loop is inactive (off)
+                const currentLoop = this._app.hostController.loopRange || [0, 0];
+                let start = currentLoop[0] / RATIO_MILLS_BY_PX;
+                let end = currentLoop[1] / RATIO_MILLS_BY_PX;
+
+                if (this._loopHandleType === 'LEFT') {
+                    if (!shift) targetX = this.snap(targetX);
+                    start = targetX;
+                    if (start > end) start = end;
+                    start = Math.max(0, start);
+                } else if (this._loopHandleType === 'RIGHT') {
+                    if (!shift) targetX = this.snap(targetX);
+                    end = targetX;
+                    if (end < start) end = start;
+                } else if (this._loopHandleType === 'BODY') {
+                    const duration = end - start;
+                    let newStart = targetX - this._loopDragOffset;
+
+                    if (!shift) {
+                        newStart = this.snap(newStart);
+                    }
+
+                    start = newStart;
+                    if (start < 0) start = 0;
+                    end = start + duration;
+                }
+
+                this._app.hostController.setLoop([start * RATIO_MILLS_BY_PX, end * RATIO_MILLS_BY_PX]);
+                this.redrawLoop();
             }
         });
 
         const handlePointerUp = (e: FederatedPointerEvent) => {
-             this.stopPreview();
-             cancelAnimationFrame(this.viewportAnimationLoopId);
+            this.stopPreview();
+            cancelAnimationFrame(this.viewportAnimationLoopId);
 
-             if (this._isMovingLoop) {
-                 this._isMovingLoop = false;
-                 this._loopHandleType = null;
-                 return;
-             }
+            if (this._isMovingLoop) {
+                this._isMovingLoop = false;
+                this._loopHandleType = null;
+                return;
+            }
 
-             if (this._timelinePointerDown) {
-                 const localPos = this._view.timelineContainer.toLocal(e.global);
-                 let targetX = localPos.x;
-                 if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
+            if (this._timelinePointerDown) {
+                const localPos = this._view.timelineContainer.toLocal(e.global);
+                let targetX = localPos.x;
+                if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
                     targetX = this.snap(targetX);
-                 }
+                }
 
-                 if (this._resizeMode) {
-                     this.updateNoteSelection();
-                     this._resizeMode = null;
-                 }
-                 else if (this._isMovingRange) {
-                     this.updateNoteSelection();
-                     this._isMovingRange = false;
-                 }
-                 else if (this._isRangeSelecting && this._rangeSelectionStart !== null) {
-                     this.updateNoteSelection();
-                 } else {
-                     // Click -> Move Playhead
-                     if (this._rangeSelectionStart !== null) {
-                         const newPosMs = this._rangeSelectionStart * RATIO_MILLS_BY_PX;
-                         this._app.host.playhead = Math.max(0, newPosMs);
-                     }
-                 }
-                 
-                 this._timelinePointerDown = false;
-                 this._isRangeSelecting = false;
-                 this._view.timelineContainer.cursor = "default";
-                 return;
-             }
+                if (this._resizeMode) {
+                    this.updateNoteSelection();
+                    this._resizeMode = null;
+                }
+                else if (this._isMovingRange) {
+                    this.updateNoteSelection();
+                    this._isMovingRange = false;
+                }
+                else if (this._isRangeSelecting && this._rangeSelectionStart !== null) {
+                    this.updateNoteSelection();
+                } else {
+                    // Click -> Move Playhead
+                    if (this._rangeSelectionStart !== null) {
+                        const newPosMs = this._rangeSelectionStart * RATIO_MILLS_BY_PX;
+                        this._app.host.playhead = Math.max(0, newPosMs);
+                    }
+                }
 
-             if (this._creationState) {
+                this._timelinePointerDown = false;
+                this._isRangeSelecting = false;
+                this._view.timelineContainer.cursor = "default";
+                return;
+            }
+
+            if (this._creationState) {
                 const localPos = this._view.notesContainer.toLocal(e.global);
                 let targetX = localPos.x;
 
                 if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
                     targetX = this.snap(targetX);
                 }
-                
+
                 const targetTime = Math.max(0, targetX * RATIO_MILLS_BY_PX);
                 const anchorTime = this._creationState.start;
-                
+
                 let startTime = Math.min(anchorTime, targetTime);
                 let endTime = Math.max(anchorTime, targetTime);
                 let duration = endTime - startTime;
@@ -1582,56 +1586,56 @@ export default class PianoRollController {
                 }
 
                 this.addNote(this._creationState.note, startTime, duration);
-                
+
                 this._creationState.ghost.destroy();
                 this._creationState = null;
                 return;
-             }
+            }
 
-             if (this._isSelecting) {
-                 this._isSelecting = false;
-                 this._view.clearSelectionBox();
-                 return;
-             }
+            if (this._isSelecting) {
+                this._isSelecting = false;
+                this._view.clearSelectionBox();
+                return;
+            }
 
-             if (this._isResizing && this._resizeState) {
+            if (this._isResizing && this._resizeState) {
                 const scrollDelta = (this._view.scrollX - this._resizeState.initialScrollX) * RATIO_MILLS_BY_PX;
                 const dx = e.global.x - this._resizeState.initialX;
                 const rawDt = dx * RATIO_MILLS_BY_PX + scrollDelta;
 
                 this.executeWithUndo(() => {
                     const newSelection = new Set<MIDINote>();
-                    
+
                     for (const item of this._resizeState!.notes) {
-                         const originalGlobalStart = item.region.start + item.initialStart;
-                         const originalGlobalEnd = originalGlobalStart + item.initialDuration;
-                         
-                         let newStart = originalGlobalStart;
-                         let newDuration = item.initialDuration;
+                        const originalGlobalStart = item.region.start + item.initialStart;
+                        const originalGlobalEnd = originalGlobalStart + item.initialDuration;
 
-                         if (this._resizeState!.mode === 'RIGHT') {
-                             const newRawEnd = originalGlobalEnd + rawDt;
-                             let newSnappedEndX = newRawEnd / RATIO_MILLS_BY_PX;
-                             if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
-                                 newSnappedEndX = this.snap(newSnappedEndX);
-                             }
-                             const newSnappedEnd = newSnappedEndX * RATIO_MILLS_BY_PX;
-                             newDuration = Math.max(RATIO_MILLS_BY_PX * 2, newSnappedEnd - originalGlobalStart);
-                         } else {
-                             const newRawStart = originalGlobalStart + rawDt;
-                             let newSnappedStartX = newRawStart / RATIO_MILLS_BY_PX;
-                             if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
-                                 newSnappedStartX = this.snap(newSnappedStartX);
-                             }
-                             newStart = Math.max(0, newSnappedStartX * RATIO_MILLS_BY_PX);
-                             newDuration = Math.max(RATIO_MILLS_BY_PX * 2, originalGlobalEnd - newStart);
-                             newStart = originalGlobalEnd - newDuration;
-                         }
+                        let newStart = originalGlobalStart;
+                        let newDuration = item.initialDuration;
 
-                         // Apply change
-                         this._deleteNoteInternal(item.region, item.note, item.initialStart);
-                         const added = this._addNoteInternal(item.note.note, newStart, newDuration);
-                         if (added) newSelection.add(added);
+                        if (this._resizeState!.mode === 'RIGHT') {
+                            const newRawEnd = originalGlobalEnd + rawDt;
+                            let newSnappedEndX = newRawEnd / RATIO_MILLS_BY_PX;
+                            if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
+                                newSnappedEndX = this.snap(newSnappedEndX);
+                            }
+                            const newSnappedEnd = newSnappedEndX * RATIO_MILLS_BY_PX;
+                            newDuration = Math.max(RATIO_MILLS_BY_PX * 2, newSnappedEnd - originalGlobalStart);
+                        } else {
+                            const newRawStart = originalGlobalStart + rawDt;
+                            let newSnappedStartX = newRawStart / RATIO_MILLS_BY_PX;
+                            if (!(e.originalEvent as unknown as MouseEvent).shiftKey) {
+                                newSnappedStartX = this.snap(newSnappedStartX);
+                            }
+                            newStart = Math.max(0, newSnappedStartX * RATIO_MILLS_BY_PX);
+                            newDuration = Math.max(RATIO_MILLS_BY_PX * 2, originalGlobalEnd - newStart);
+                            newStart = originalGlobalEnd - newDuration;
+                        }
+
+                        // Apply change
+                        this._deleteNoteInternal(item.region, item.note, item.initialStart);
+                        const added = this._addNoteInternal(item.note.note, newStart, newDuration);
+                        if (added) newSelection.add(added);
                     }
                     this._selectedNotes = newSelection;
                     this.redraw();
@@ -1640,9 +1644,9 @@ export default class PianoRollController {
                 this._isResizing = false;
                 this._resizeState = null;
                 return;
-             }
+            }
 
-             if (this._isDragging && this._draggedNote && this._track) {
+            if (this._isDragging && this._draggedNote && this._track) {
                 // Clear Ghosts
                 for (const ghost of this._dragGhosts) {
                     ghost.destroy();
@@ -1653,7 +1657,7 @@ export default class PianoRollController {
                 const dy = e.global.y - this._draggedNote.initialY;
                 const isCopy = e.ctrlKey || e.metaKey;
                 const scrollDelta = (this._view.scrollX - this._draggedNote.initialScrollX) * RATIO_MILLS_BY_PX;
-                
+
                 if (Math.abs(dx) > 5 || Math.abs(dy) > 5 || Math.abs(scrollDelta) > 5) {
                     // Calculate effective delta (same as pointermove)
                     const rawDt = dx * RATIO_MILLS_BY_PX + scrollDelta;
@@ -1671,11 +1675,11 @@ export default class PianoRollController {
                         const newSelection = new Set<MIDINote>();
                         for (const item of this._draggedNote!.notes) {
                             const oldLocalStart = item.initialStart;
-                            
+
                             // Apply effectiveDt
                             let globalStart = item.region.start + item.initialStart + effectiveDt;
                             let newGlobalStart = Math.max(0, globalStart);
-                            
+
                             const newNoteVal = Math.max(0, Math.min(127, item.initialNote + dNote));
 
                             if (!isCopy) {
@@ -1695,9 +1699,9 @@ export default class PianoRollController {
                     }
                     this.redraw();
                 }
-             }
-             this._isDragging = false;
-             this._draggedNote = null;
+            }
+            this._isDragging = false;
+            this._draggedNote = null;
         };
 
         this._view.on("pointerup", handlePointerUp);
@@ -1716,19 +1720,19 @@ export default class PianoRollController {
         // selectionBox is inside contentContainer.
         // We need to map selectionBox coordinates (contentContainer space) to notesContainer space, OR compare global coords.
         // Or simpler: Map selectionBox to grid time/pitch.
-        
+
         // Rect in Grid/Note space:
         // x_grid = x - notesContainer.x
         // y_grid = y - notesContainer.y
         const ncX = this._view.notesContainer.x;
         const ncY = this._view.notesContainer.y;
-        
+
         const rectX = x - ncX;
         const rectY = y - ncY;
         // rectW, rectH same
-        
+
         this._selectedNotes.clear();
-        
+
         for (const region of this._track!.regions) {
             if (region instanceof MIDIRegion) {
                 region.midi.forEachNote((note, start) => {
@@ -1737,7 +1741,7 @@ export default class PianoRollController {
                     const noteY = (127 - note.note) * this._view.NOTE_HEIGHT;
                     const noteW = Math.max(5, note.duration / RATIO_MILLS_BY_PX);
                     const noteH = this._view.NOTE_HEIGHT;
-                    
+
                     // AABB Check
                     if (rectX < noteX + noteW &&
                         rectX + w > noteX &&
@@ -1763,7 +1767,7 @@ export default class PianoRollController {
         }
         track.regions = [];
         regions.forEach(r => {
-            const clone = r.clone(); 
+            const clone = r.clone();
             this._app.regionsController.addRegion(track, clone as RegionOf<any>, waveform);
         });
         track.update(audioCtx);
@@ -1808,12 +1812,12 @@ export default class PianoRollController {
         const trackId = this._track.id;
         const beforeRegions = this.snapshotRegions();
         const beforeSignatures = this.getSelectedNoteSignatures();
-        
+
         action();
-        
+
         const afterRegions = this.snapshotRegions();
         const afterSignatures = this.getSelectedNoteSignatures();
-        
+
         const redo = () => {
             const track = this._app.tracksController.getTrackById(trackId);
             if (!track) return;
@@ -1832,7 +1836,7 @@ export default class PianoRollController {
                 this.redraw();
             }
         };
-        
+
         this._app.doIt(true, redo, undo);
     }
 
@@ -1855,17 +1859,17 @@ export default class PianoRollController {
 
     public deleteSelectedNotes() {
         if (!this._track || this._selectedNotes.size === 0) return;
-        
+
         this.executeWithUndo(() => {
             for (const region of this._track!.regions) {
                 if (region instanceof MIDIRegion) {
-                    const notesToDelete: {note: MIDINote, start: number}[] = [];
+                    const notesToDelete: { note: MIDINote, start: number }[] = [];
                     region.midi.forEachNote((note, start) => {
                         if (this._selectedNotes.has(note)) {
-                            notesToDelete.push({note, start});
+                            notesToDelete.push({ note, start });
                         }
                     });
-                    
+
                     notesToDelete.forEach(item => {
                         this._deleteNoteInternal(region, item.note, item.start);
                     });
@@ -1878,7 +1882,7 @@ export default class PianoRollController {
     public selectAllNotes() {
         if (!this._track) return;
         this._selectedNotes.clear();
-        
+
         for (const region of this._track.regions) {
             if (region instanceof MIDIRegion) {
                 region.midi.forEachNote((note, start) => {
@@ -1886,13 +1890,13 @@ export default class PianoRollController {
                 });
             }
         }
-        
+
         this.redraw();
     }
 
     public pasteNotes() {
         if (this._clipboard.length === 0 || !this._track) return;
-        
+
         this.executeWithUndo(() => {
             const currentPlayhead = this._app.host.playhead;
             this._selectedNotes.clear();
@@ -1907,7 +1911,7 @@ export default class PianoRollController {
     public copySelectedNotes() {
         this._clipboard = [];
         let minStart = Infinity;
-        
+
         for (const region of this._track!.regions) {
             if (region instanceof MIDIRegion) {
                 region.midi.forEachNote((note, start) => {
@@ -1944,7 +1948,7 @@ export default class PianoRollController {
     // Internal methods that modify state without Undo (Undo handled by wrapper)
     private _addNoteInternal(noteVal: number, globalStart: number, duration: number): MIDINote | null {
         if (!this._track) return null;
-        
+
         let targetRegion: MIDIRegion | null = null;
         for (const region of this._track.regions) {
             if (region instanceof MIDIRegion && globalStart >= region.start && globalStart < region.end) {
@@ -1983,7 +1987,7 @@ export default class PianoRollController {
                 }
             }
         }
-        
+
         const localStart = targetRegion ? globalStart - targetRegion.start : 0;
         let createdNote: MIDINote | null = null;
 
@@ -1995,7 +1999,7 @@ export default class PianoRollController {
             targetRegion.midi.putNote(createdNote, localStart);
             this.checkAndMergeOverlaps(targetRegion);
         }
-        
+
         if (createdNote) {
             // Select logic handled by caller usually, but internal ensures creation
         }
@@ -2011,10 +2015,10 @@ export default class PianoRollController {
         const instantIndex = Math.floor(start / region.midi.instant_duration);
         const instant = region.midi.instantAt(instantIndex);
         if (instant) {
-             const index = instant.findIndex(n => n.note === note && Math.abs(n.offset + instantIndex * region.midi.instant_duration - start) < 1);
-             if (index !== -1) {
-                 instant.splice(index, 1);
-             }
+            const index = instant.findIndex(n => n.note === note && Math.abs(n.offset + instantIndex * region.midi.instant_duration - start) < 1);
+            if (index !== -1) {
+                instant.splice(index, 1);
+            }
         }
         this.updateTrack();
         this._track?.regions.forEach(r => this._app.regionsController.updateRegionView(r as RegionOf<any>));
@@ -2022,15 +2026,15 @@ export default class PianoRollController {
     }
 
     private checkAndMergeOverlaps(mainRegion: MIDIRegion) {
-        const overlaps = this._track!.regions.filter(r => 
+        const overlaps = this._track!.regions.filter(r =>
             r !== mainRegion && r instanceof MIDIRegion &&
             (
-                (r.start >= mainRegion.start && r.start < mainRegion.end) || 
-                (r.end > mainRegion.start && r.end <= mainRegion.end) ||   
-                (r.start <= mainRegion.start && r.end >= mainRegion.end)   
+                (r.start >= mainRegion.start && r.start < mainRegion.end) ||
+                (r.end > mainRegion.start && r.end <= mainRegion.end) ||
+                (r.start <= mainRegion.start && r.end >= mainRegion.end)
             )
         ) as MIDIRegion[];
-        
+
         if (overlaps.length > 0) {
             overlaps.forEach(other => {
                 this._app.regionsController.mergeRegionWith(mainRegion, other as MIDIRegion);
@@ -2041,36 +2045,36 @@ export default class PianoRollController {
 
     private previewNote(noteVal: number) {
         if (!this._track) return;
-        
+
         const currentTime = audioCtx.currentTime;
-        
+
         // Stop previous note if exists and different
         if (this._lastPreviewedNote !== null && this._lastPreviewedNote !== noteVal) {
-             this._track.audioInputNode.scheduleEvents({
-                 type: 'wam-midi',
-                 time: currentTime,
-                 data: { bytes: [0x80, this._lastPreviewedNote, 100] }
-             });
+            this._track.audioInputNode.scheduleEvents({
+                type: 'wam-midi',
+                time: currentTime,
+                data: { bytes: [0x80, this._lastPreviewedNote, 100] }
+            });
         }
-        
+
         // Play new note if different
         if (this._lastPreviewedNote !== noteVal) {
-             this._track.audioInputNode.scheduleEvents({
-                 type: 'wam-midi',
-                 time: currentTime,
-                 data: { bytes: [0x90, noteVal, 100] }
-             });
-             this._lastPreviewedNote = noteVal;
+            this._track.audioInputNode.scheduleEvents({
+                type: 'wam-midi',
+                time: currentTime,
+                data: { bytes: [0x90, noteVal, 100] }
+            });
+            this._lastPreviewedNote = noteVal;
         }
     }
-    
+
     private stopPreview() {
         if (!this._track || this._lastPreviewedNote === null) return;
         const currentTime = audioCtx.currentTime;
         this._track.audioInputNode.scheduleEvents({
-             type: 'wam-midi',
-             time: currentTime,
-             data: { bytes: [0x80, this._lastPreviewedNote, 100] }
+            type: 'wam-midi',
+            time: currentTime,
+            data: { bytes: [0x80, this._lastPreviewedNote, 100] }
         });
         this._lastPreviewedNote = null;
     }
@@ -2079,10 +2083,10 @@ export default class PianoRollController {
         if (this._rangeStart !== null && this._rangeEnd !== null) {
             const startMs = this._rangeStart * oldRatio;
             const endMs = this._rangeEnd * oldRatio;
-            
+
             this._rangeStart = startMs / newRatio;
             this._rangeEnd = endMs / newRatio;
-            
+
             this._view.drawRangeSelection(this._rangeStart, this._rangeEnd - this._rangeStart);
         }
         this.redrawLoop();
@@ -2095,19 +2099,19 @@ export default class PianoRollController {
     public updateLoopRange(range: [number, number]) {
         this.redrawLoop();
     }
-    
+
     public redrawLoop() {
         const active = !!this._app.host.loopRange;
         const range = this._app.hostController.loopRange; // Always returns [start, end] even if inactive
-        
+
         if (range) {
-             const startPx = range[0] / RATIO_MILLS_BY_PX;
-             const endPx = range[1] / RATIO_MILLS_BY_PX;
-             this._view.drawLoop(startPx, endPx, active);
-             this._view.loopContainer.visible = true;
+            const startPx = range[0] / RATIO_MILLS_BY_PX;
+            const endPx = range[1] / RATIO_MILLS_BY_PX;
+            this._view.drawLoop(startPx, endPx, active);
+            this._view.loopContainer.visible = true;
         } else {
-             // Default if undefined? HostController always initializes it.
-             this._view.loopContainer.visible = false;
+            // Default if undefined? HostController always initializes it.
+            this._view.loopContainer.visible = false;
         }
     }
 }
