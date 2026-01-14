@@ -1,24 +1,24 @@
 # DAWIY Plugin Development Guide
 
-This directory (`public/src/DawiyPlugins`) is the home for custom extensions and plugins for DAWIY.
+This directory (`public/src/DawiyPlugins`) is the home for custom extensions and plugins for DAWIY.  
 Plugins allow you to extend the functionality of the DAW, add new UI tools, generators, or modify the state of the application.
 
 ## Getting Started
 
 1. **Create your plugin file:**
-    Copy `PluginTemplate.ts` to a new file, e.g., `MyCoolPlugin.ts`.
+    Create a new `.ts` file in this directory or any subdirectory.  
+    You can copy `PluginTemplate.ts` as a starting point.  
+    *Example:* `public/src/DawiyPlugins/MyAwesomePlugin/MyPlugin.ts`
 
 2. **Implement the interface:**
-    Your class must implement the `IDawiyPlugin` interface.
-    Below is a more comprehensive implementation example based on `PluginTemplate.ts`.
+   Your class must implement the `IDawiyPlugin` interface and be the **default export** of the file.
 
     ```typescript
-    import App from "../App";
-    import { IDawiyPlugin } from "./IDawiyPlugin";
+    import App from "../../App"; // Adjust path if in subdirectory
+    import { IDawiyPlugin } from "../IDawiyPlugin";  // Adjust path if in subdirectory
 
     export default class MyCoolPlugin implements IDawiyPlugin {
-        // Unique ID for the plugin (lowercase and hyphens recommended).
-        id = "my-cool-plugin";
+        id = "my-cool-plugin";  // Must be unique across all plugins
         
         // Display name shown in the UI.
         name = "My Cool Plugin";
@@ -55,6 +55,7 @@ Plugins allow you to extend the functionality of the DAW, add new UI tools, gene
             button.textContent = "Click Me";
             // Action on button click
             button.onclick = () => this.doSomething();
+            btn.onclick = () => alert("Hello from MyCoolPlugin!");
             container.appendChild(button);
         }
 
@@ -104,25 +105,28 @@ Plugins allow you to extend the functionality of the DAW, add new UI tools, gene
     }
     ```
 
-3. **Done:**
+3. **Automatic Loading:**  
+    **You do NOT need to register existing files.**  
+    The system automatically loads all `.ts` files found in `public/src/DawiyPlugins` and its subdirectories.
 
-    Once you save the file, it will be automatically loaded into DAWIY.
-
-    (`DawiyPluginController` automatically scans for `.ts` files in this directory.)
-
-    *Note: `PluginTemplate.ts` and `IDawiyPlugin.ts` are automatically excluded.*
+    *Note: `IDawiyPlugin.ts` and `PluginTemplate.ts` are automatically excluded.*
 
 4. **Build/Run:**
 
-    Restart the development server (`npm start` in `public` folder) to see your changes.
+    Restart the development server (`npm start` in `public` folder) if it's not watching for new files, or simply refresh the page if hot-reloading catches the new file.
 
-    (If already running, it should reload automatically.)
+## For LLMs (AI Assistants) / Third-Party Developers
 
-## File Structure
+If you are an AI assistant or a developer creating a plugin, follow these rules to ensure compatibility:
 
-- `IDawiyPlugin.ts`: Defines the interface that all plugins must adhere to.
-- `PluginTemplate.ts`: A commented template to help you get started.
-- `StochasticGeneratorPlugin.ts`: An example plugin that generates random melodies.
+1. **File Location:** Place your plugin file in `public/src/DawiyPlugins/<YourPluginName>/<MainFile>.ts`.
+2. **Default Export:** The plugin class **MUST** be the default export (`export default class ...`).
+3. **Interface:** The class **MUST** implement `IDawiyPlugin`.
+4. **Constructor:** The constructor **MUST** accept `app: App` as the first argument.
+5. **Context:** You have access to the `App` instance to manipulate the DAW state.
+    - `app.tracksController`: access tracks.
+    - `app.host`: access transport (play/pause).
+6. **No Manual Registration:** Do not attempt to modify `DawiyPluginController.ts`. Just creating the file is enough.
 
 ## API & Tips
 
@@ -132,3 +136,5 @@ Plugins allow you to extend the functionality of the DAW, add new UI tools, gene
   - `app.host`: Transport control (play/pause, playhead position).
 - When modifying state (adding notes, regions, etc.), try to use `app.doIt(undoable, redo, undo)` to support Undo/Redo functionality.
 - Keep your UI contained within the `container` passed to `render()`.
+
+[Return to README at the top](../../../README.md)

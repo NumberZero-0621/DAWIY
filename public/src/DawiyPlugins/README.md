@@ -6,32 +6,21 @@
 ## はじめに
 
 1. **プラグインファイルを作成する:**
-`PluginTemplate.ts` を新しいファイル (例: `MyCoolPlugin.ts`) にコピーします。
+    このディレクトリまたはサブディレクトリ内に新しい `.ts` ファイルを作成してください。  
+    `PluginTemplate.ts` をコピーして開始することをお勧めします。  
+    *例:* `public/src/DawiyPlugins/MyAwesomePlugin/MyPlugin.ts`
 
-1.  **Create your plugin file:**
-    Create a new `.ts` file in this directory or any subdirectory. 
-    You can copy `PluginTemplate.ts` as a starting point.
-    *Example:* `public/src/DawiyPlugins/MyAwesomePlugin/MyPlugin.ts`
 2. **インターフェースを実装する:**
-    クラスは `IDawiyPlugin` インターフェースを実装する必要があります。  
-    以下は `PluginTemplate.ts` に基づいた、より包括的な実装例です。
-
-2.  **Implement the interface:**
-    Your class must implement the `IDawiyPlugin` interface and be the **default export** of the file.
+    クラスは `IDawiyPlugin` インターフェースを実装し、**デフォルトエクスポート (default export)** である必要があります。
 
     ```typescript
-    import App from "../App";
-    import { IDawiyPlugin } from "./IDawiyPlugin";
+    import App from "../../App"; // サブディレクトリにいる場合はパスを調整してください
+    import { IDawiyPlugin } from "../IDawiyPlugin"; // サブディレクトリにいる場合はパスを調整してください
 
     export default class MyCoolPlugin implements IDawiyPlugin {
-        // プラグインの一意なID（小文字とハイフン推奨）
-        id = "my-cool-plugin";
-        
-        // UIに表示される名前
-        name = "My Cool Plugin";
-        
-        // プラグインの説明
-        description = "何かクールなことをします。";
+        id = "my-cool-plugin"; // すべてのプラグインで一意である必要があります
+        name = "My Cool Plugin"; // UIに表示される名前
+        description = "何かクールなことをします。"; // プラグインの説明
 
         private app: App;
         private container: HTMLElement | null = null;
@@ -62,6 +51,7 @@
             button.textContent = "Click Me";
             // ボタンクリック時の動作
             button.onclick = () => this.doSomething();
+            btn.onclick = () => alert("Hello from MyCoolPlugin!");
             container.appendChild(button);
         }
 
@@ -112,20 +102,26 @@
     ```
 
 3. **完了:**
-    ファイルを保存すると、自動的にDAWIYに読み込まれます。
-    （`DawiyPluginController` がこのフォルダ内の `.ts` ファイルを自動的にスキャンします）
+    **手動での登録は不要です。**  
+    システムは `public/src/DawiyPlugins` およびそのサブディレクトリ内にあるすべての `.ts` ファイルを自動的に検出して読み込みます。
 
     ※ `PluginTemplate.ts` や `IDawiyPlugin.ts` は自動的に除外されます。
 
 4. **ビルド/実行:**
-    開発サーバーを再起動し (`public` フォルダー内の `npm start` を実行)、変更内容を確認します。
-    （既に起動している場合は、自動的にリロードされるはずです）
+    開発サーバー (`npm start`) を再起動するか（新しいファイルが認識されない場合）、ページをリロードして変更を確認します。
 
-## ファイル構造
+## LLM (AIアシスタント) / サードパーティ開発者向け
 
-- `IDawiyPlugin.ts`: すべてのプラグインが準拠する必要があるインターフェースを定義します。
-- `PluginTemplate.ts`: 開始を支援するコメント付きテンプレートです。
-- `StochasticGeneratorPlugin.ts`: ランダムなメロディーを生成するサンプルプラグインです。
+AIアシスタントや開発者がプラグインを作成する場合、互換性を保つために以下のルールに従ってください：
+
+1. **ファイルの場所:** プラグインファイルは `public/src/DawiyPlugins/<プラグイン名>/<メインファイル>.ts` に配置してください。
+2. **デフォルトエクスポート:** プラグインクラスは必ず **デフォルトエクスポート** (`export default class ...`) してください。
+3. **インターフェース:** クラスは必ず `IDawiyPlugin` を実装してください。
+4. **コンストラクタ:** コンストラクタは必ず `app: App` を第一引数として受け取ってください。
+5. **コンテキスト:** `App` インスタンスを通じて DAW の状態を操作できます。
+    - `app.tracksController`: トラックへのアクセス。
+    - `app.host`: トランスポート（再生/停止）へのアクセス。
+6. **手動登録不要:** `DawiyPluginController.ts` を編集する必要はありません。ファイルを作成するだけで認識されます。
 
 ## API とヒント
 
@@ -136,4 +132,4 @@
 - 状態の変更（ノートやリージョンの追加など）は、`app.doIt(undoable, redo, undo)` を使用して、Undo/Redo 機能をサポートするようにしてください。
 - UI は、`render()` に渡される `container` 内に収めてください。
 
-[トップREADMEに戻る](../../../README.md)
+[トップのREADMEに戻る](../../../README.md)
