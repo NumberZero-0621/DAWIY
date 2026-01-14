@@ -24,30 +24,25 @@ DAWIYそのものの説明は下のほうにあるよ
 
 ### 1. セットアップ
 
-`public`と`bank`アプリの依存関係をインストールします  
+`public`と`bank`の依存関係をインストールします  
 
-**Windows**  
-`setup.bat`をダブルクリックするか、コマンドプロンプトで`setup.bat`を実行
-
-**Mac / Linux**  
-シェルで`./setup.sh`を実行  
+- **Windows**
+  - `setup.bat`をダブルクリックするか、コマンドプロンプトで`setup.bat`を実行
+- **Mac / Linux**  
+  - シェルで`./setup.sh`を実行  
 ※ `sudo`を使用しているため、パスワードの入力を求められる場合があります。
-
-***
 
 ### 2. 実行
 
 両方のアプリケーションを別々のコマンドプロンプトウィンドウで起動します  
-**Windows**  
-`run_dev.bat`をダブルクリックするか、コマンドプロンプトで`run_dev.bat`を実行
 
-**Mac / Linux**  
-シェルで`./run_dev.sh`を実行
+- **Windows**  
+  - `run_dev.bat`をダブルクリックするか、コマンドプロンプトで`run_dev.bat`を実行
+- **Mac / Linux**  
+  - シェルで`./run_dev.sh`を実行
 
-***
-
-以上でアプリケーションが実行されるはず  
-ブラウザで`http://localhost:5002`にてフロントエンドにアクセスできる
+  以上でアプリケーションが実行されるはず  
+  ブラウザで`http://localhost:5002`にてフロントエンドにアクセスできる
 
 ※ [README_auto.md](README_auto.md) を参考にしています  
 ※ 手動でセットアップ/実行する場合や、`.env`ファイルについて詳しく知りたい方は [README_manual.md](README_manual.md) を参照してください
