@@ -1,4 +1,3 @@
-2025年12月28日更新  
 ※元来の「Wam-Studio」のREADMEはフォーク元の[リポジトリ](https://github.com/Brotherta/wam-studio)を参照してください  
 DAWIYそのものの説明は下のほうにあるよ  
 ***
