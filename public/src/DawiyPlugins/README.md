@@ -1,6 +1,6 @@
 # DAWIYプラグイン開発ガイド
 
-このディレクトリ (`public/src/DawiyPlugins`) は、DAWIY のカスタム拡張機能とプラグインのホームディレクトリです。
+このディレクトリ (`public/src/DawiyPlugins`) は、DAWIY のカスタム拡張機能とプラグインのホームディレクトリです。  
 プラグインを使用すると、DAW の機能を拡張したり、新しいUIツールやジェネレーターを追加したり、アプリケーションの状態を変更したりできます。
 
 ## はじめに
@@ -9,8 +9,9 @@
 `PluginTemplate.ts` を新しいファイル (例: `MyCoolPlugin.ts`) にコピーします。
 
 2. **インターフェースを実装する:**
-    クラスは `IDawiyPlugin` インターフェースを実装する必要があります。
+    クラスは `IDawiyPlugin` インターフェースを実装する必要があります。  
     以下は `PluginTemplate.ts` に基づいた、より包括的な実装例です。
+
     ```typescript
     import App from "../App";
     import { IDawiyPlugin } from "./IDawiyPlugin";
@@ -108,7 +109,7 @@
     （`DawiyPluginController` がこのフォルダ内の `.ts` ファイルを自動的にスキャンします）
 
     ※ `PluginTemplate.ts` や `IDawiyPlugin.ts` は自動的に除外されます。
-    
+
 4. **ビルド/実行:**
     開発サーバーを再起動し (`public` フォルダー内の `npm start` を実行)、変更内容を確認します。
     （既に起動している場合は、自動的にリロードされるはずです）

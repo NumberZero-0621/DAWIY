@@ -5,12 +5,13 @@ Plugins allow you to extend the functionality of the DAW, add new UI tools, gene
 
 ## Getting Started
 
-1.  **Create your plugin file:**
+1. **Create your plugin file:**
     Copy `PluginTemplate.ts` to a new file, e.g., `MyCoolPlugin.ts`.
 
-2.  **Implement the interface:**
+2. **Implement the interface:**
     Your class must implement the `IDawiyPlugin` interface.
     Below is a more comprehensive implementation example based on `PluginTemplate.ts`.
+
     ```typescript
     import App from "../App";
     import { IDawiyPlugin } from "./IDawiyPlugin";
@@ -109,11 +110,7 @@ Plugins allow you to extend the functionality of the DAW, add new UI tools, gene
 
     (`DawiyPluginController` automatically scans for `.ts` files in this directory.)
 
-    
-
     *Note: `PluginTemplate.ts` and `IDawiyPlugin.ts` are automatically excluded.*
-
-
 
 4. **Build/Run:**
 

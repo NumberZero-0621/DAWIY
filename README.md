@@ -1,9 +1,12 @@
 ※元来の「Wam-Studio」のREADMEはフォーク元の[リポジトリ](https://github.com/Brotherta/wam-studio)を参照してください  
 DAWIYそのものの説明は下のほうにあるよ  
 ***
+
 ### 使用上の注意（フォーク元のリポジトリより）
+
 論文等でこのリポジトリを使用する場合は、参考文献（`.bib`ファイル想定？）に以下の文献を引用してください、とのこと：
-```
+
+```bib
 @inproceedings{buffa2023wam,
   title={WAM-studio, a Digital Audio Workstation (DAW) for the Web},
   author={Buffa, Michel and Vidal-Mazuy, Antoine},
@@ -12,77 +15,74 @@ DAWIYそのものの説明は下のほうにあるよ
   year={2023}
 }
 ```
-***
-# スタートガイド
-## ローカルで実行
-### 1. セットアップ
-`public`と`bank`アプリの依存関係をインストールします  
-**Windows**  
-`setup.bat`をダブルクリックするか、コマンドプロンプトで以下を実行：
 
-```cmd
-setup.bat
-```
+***
+
+# スタートガイド
+
+## ローカルで実行
+
+### 1. セットアップ
+
+`public`と`bank`アプリの依存関係をインストールします  
+
+**Windows**  
+`setup.bat`をダブルクリックするか、コマンドプロンプトで`setup.bat`を実行
+
 **Mac / Linux**  
-```bash
-./setup.sh
-```
-*注意: `sudo`を使用しているため、パスワードの入力を求められる場合があります。*
+シェルで`./setup.sh`を実行  
+※ `sudo`を使用しているため、パスワードの入力を求められる場合があります。
+
+***
 
 ### 2. 実行
+
 両方のアプリケーションを別々のコマンドプロンプトウィンドウで起動します  
 **Windows**  
-`run_dev.bat`をダブルクリックするか、コマンドプロンプトで以下を実行：
+`run_dev.bat`をダブルクリックするか、コマンドプロンプトで`run_dev.bat`を実行
 
-```cmd
-run_dev.bat
-```
 **Mac / Linux**  
-```bash
-./run_dev.sh
-```
+シェルで`./run_dev.sh`を実行
+
+***
+
+以上でアプリケーションが実行されるはず  
+ブラウザで`http://localhost:5002`にてフロントエンドにアクセスできる
 
 ※ [README_auto.md](README_auto.md) を参考にしています  
 ※ 手動でセットアップ/実行する場合や、`.env`ファイルについて詳しく知りたい方は [README_manual.md](README_manual.md) を参照してください
 
 ## Dockerで実行
-1. まだインストールしてない場合はマシンにDockerをインストール
-2. リポジトリをローカルに複製
-3. ルートディレクトリに移動
-4. `docker-compose up`を実行してDockerで起動
-5. Dockerは`docker-compose.yml`を読み取ってコンテナを構築＆実行する
-6. `docker-compose.yml`内で次の変数を設定
-   - `HTTPS`･･･ HTTPSを有効にする場合はこれを`true`に設定
-     - `true`の場合は証明書を作成し変数`SSL_CRT_FILE`と`SSL_KEY_FILE`を設定する必要あり
-   - `BACKEND_URL`･･･ バックエンドのURL（例：`http://localhost:6002`）
-   - `BANK_PLUGIN_URL`･･･ バンクプラグインのURL（例：`http://localhost:7002`）
-   - `STORAGE_DIR`･･･ バックエンドがデータを保存するディレクトリ（ボリューム内）（例：`/data/storage`） 
-   - `ADMIN_PASSWORD`･･･ 管理者のパスワード
-   - `JWT_SECRET`･･･ JSON Web Token (JWT) のシークレット
 
-（※サーバーとプラグインバンクは他の場所でホストできる その場合`public`フォルダの`.env`か`docker-compose.yml`でURLの提供が必要）
+→ [README_docker.md](README_docker.md) を参照してください
 
-以上でアプリケーションが実行されるはず ブラウザで`http://localhost:5002`にてフロントエンドにアクセスできる
+# DAWIYプラグインの導入方法
 
-## DAWIYプラグインの導入方法
-導入は簡単！
-* DAWの画面内に対応するTypeScript(`.ts`)ファイルをドラッグアンドドロップする
+### 導入は簡単！
 
-DAWIYプラグイン開発ガイド（開発者さん向け）：[/public/src/DawiyPlugins/README.md](/public/src/DawiyPlugins/README.md)
+- DAWの画面内に対応するTypeScript(`.ts`)ファイルをドラッグアンドドロップする
+- 「DAWIYプラグイン」ウィンドウ → 手動でインストール → エクスプローラーを開いて対応する`.ts`ファイルを選択
 
-***
+### [DAWIYプラグイン開発ガイド](/public/src/DawiyPlugins/README.md)（開発者さん向け）
+
 # DAWIY
 
-### DAW(Digital Audio Workstation) + DIY(Do It Yourself) = DAWIY
+## DAW(Digital Audio Workstation) + DIY(Do It Yourself) = DAWIY
 
 「**自分好みのDAW環境をDIYする共通プラットフォーム**」…を目指している
-<img width="1919" height="1030" alt="2025-12-28時点のDAWIY" src="https://github.com/user-attachments/assets/4e275fc2-b5f3-4795-b554-5ea1f6a50a06" />
+
+<img alt="2025-12-28時点のDAWIY" src="https://github.com/user-attachments/assets/4e275fc2-b5f3-4795-b554-5ea1f6a50a06" />
+
 ※画像は2025年12月28日時点
 
-WAM-Studioをベースに、改造を施し、自分なりに模索しています
+[WAM-Studio](https://github.com/Brotherta/wam-studio) をベースに、改造を施し、自分なりに模索しています
+
 # 今までに自分で実装してきたこと
+
 だいぶ大まかやけど･･･
+
 ## DAW的な機能の部分
+
 - ピアノロール
   - ノートの追加・削除
   - 再生バー
@@ -91,13 +91,19 @@ WAM-Studioをベースに、改造を施し、自分なりに模索していま�
   - ショートカットキー
   - etc.
     - まだまだ改良の余地あり
-    <img width="50%" alt="ピアノロール画面" src="https://github.com/user-attachments/assets/6c42081a-fe5c-4da3-86cb-cbced9aa7ad9" />
+
+  <img width="50%" alt="ピアノロール画面" src="https://github.com/user-attachments/assets/6c42081a-fe5c-4da3-86cb-cbced9aa7ad9" />
+
 - dawprojectファイルの入出力機能の追加
   - dawprojectを読み込み、プロジェクトとして展開
   - DAW上のイベント等を読み取り、`.dawproject`に出力
-    <img width="100%" alt="dawproject読み込みの様子" src="https://github.com/user-attachments/assets/b0224dee-3983-44a5-bb12-9050a6d8358c" />
+
+  <img width="100%" alt="dawproject読み込みの様子" src="https://github.com/user-attachments/assets/b0224dee-3983-44a5-bb12-9050a6d8358c" />
+
 ## DIY的な機能の部分
+
 いきなり「**機能の自由な追加・削除**」･･･ は難しいので
+
 - 第1弾として、確率的メロディ生成機能を実装
 
    <img width="75%" alt="Stochastic Note Generator" src="https://github.com/user-attachments/assets/b2da422e-fc52-42f2-b166-5ee1c0600f01" />
@@ -107,25 +113,34 @@ WAM-Studioをベースに、改造を施し、自分なりに模索していま�
 
 - 機能の自由な追加・削除には程遠い
   - サーバとの連携・インストール等々･･･ 課題は山積み
+
 ***
+
 # 自作の関連文献
+
 - [ProjectDAWIY - GriCo: Excel VBAを用いた確率的自動作曲システム(EC2025)](https://ipsj.ixsq.nii.ac.jp/records/2003653)
 - [ProjectDAWIY - GriCo: 自分好みのDAW環境をDIYする共通プラットフォームの構築に向けて(MUS144-夏25)](https://ipsj.ixsq.nii.ac.jp/records/2003750)
+
 ***
 以下、2025年10月27日時点での背景、目的、理想等のメモ書き  
+
 ## 背景 / 現状 / 課題（何が不満なの？）
+
 私は趣味でDTMをやっているのですが、DAWを使っているうちに、いくつか課題点や問題点を考えるようになりました。  
 まず、DAWごとに操作感や拡張子やフォーマットなどの環境が異なるため、共同で音楽制作を行うのが難しい、と思いました。  
 そして、DAWによってはサービスを終了してしまうので、それによって今まで使い慣れてきたDAWを手放すことになり、新しい環境で1から制作をやるのは中々面倒です。  
 次に、機能やUIなどで、「もっとこうだったらいいのに...」という不満を感じることがあります。  
+
 - DAWによってはある程度設定を変更することで操作感や見た目を変えることが出来ますが、機能単位で、自分好みにカスタマイズ出来ると尚嬉しいな、と思いました。  
 - もちろん、VSTプラグイン等のエフェクターやインストゥルメント系のプラグインは豊富にあり、多くのDAWではそれらが使えるようになっているので、音色や効果についてはユーザーはかなり自由に操作することができるのですが、もっと、制作フローというか、ワークステーションそのものを思い通りにカスタマイズ出来るといいな、ということです。
 
 ## その背景を経ての目的（だから、どうしたい？）
+
 これらの課題を解決するために、私は、「**自分好みのDAW環境をDIYする、共通プラットフォームの構築**」という研究テーマを掲げました。  
 このプラットフォームを私はDAWとDIYの造語で「DAWIY」と名付けました。  
 ユーザーそれぞれが自分好みの音楽制作環境を自ら構築出来るようにしたい、ということです。  
 要は音楽版のAviUtlを作りてぇなぁってことですよ
+
 - DAWでもユーザ主導の設計・展開を！
 - 誰もが機能を追加・改良できる「DAWツールキット」を開発したい
 - もっと思い通りに、もっと手早く、もっとわかりやすくやりたい
@@ -134,7 +149,9 @@ WAM-Studioをベースに、改造を施し、自分なりに模索していま�
 - クリエイターが理想の環境を自力で手に入れ、音楽の可能性をさらに探究できる未来を目指す
 
 ## その目的を達成するための要件 / 理想（何が出来れば満足？）
+
 やや具体化して要件をいくつか挙げるとするなら、
+
 - 試したい新しい機能の自由な取捨選択が可能であること
   - AviUtlのプラグインのノリ。機能の開発も自分たちで出来ちゃう！
   - パッケージマネージャーがあると嬉しい
@@ -147,7 +164,9 @@ WAM-Studioをベースに、改造を施し、自分なりに模索していま�
 理想形としては、「2人のDTMerがいた時に、それぞれ全く違う見た目・制作環境に見えるのに、実は内部的には同じフォーマットのプロジェクトファイルで動作しており、容易にファイルの共有や共同編集が出来てしまう」というイメージです。
 
 ## 実際に欲しい「試したい新しい機能」一覧
+
 モチベアップのためにも具体的に書き出してみよう（出来そうか出来なさそうか既にありそうかどうかに関わらず）
+
 - UTAU-歌声合成ツール、NEUTRINOなど、音声合成ソフトウェアでのマルチトラック化
   - というかDAWの中で直接いじりたいよね（スタンドアロンのものが割とあるため）
     - ピアノロールに音素を打ち込めるようにできないかしら
