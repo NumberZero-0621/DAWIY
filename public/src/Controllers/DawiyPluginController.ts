@@ -11,7 +11,7 @@ declare const require: {
 };
 
 export default class DawiyPluginController {
-    
+
     private app: App;
     private view: DawiyPluginView;
 
@@ -31,22 +31,16 @@ export default class DawiyPluginController {
      */
     private loadPlugins() {
         try {
-            // Create a context for the DawiyPlugins directory
-            // false = do not look in subdirectories
-            // /\.ts$/ = only look for .ts files
-            const context = require.context('../DawiyPlugins', false, /\.ts$/);
+            // Automatically load all .ts files in ../DawiyPlugins (including subdirectories)
+            // @ts-ignore
+            const context = require.context('../DawiyPlugins', true, /\.ts$/);
 
             context.keys().forEach((key: string) => {
                 // Ignore non-plugin files
                 if (key.includes('IDawiyPlugin') || 
                     key.includes('README') || 
-                    key.includes('.d.ts')) {
-                    return;
-                }
-
-                // Optional: You might want to ignore the template itself so it doesn't show up in the list,
-                // or keep it for debugging purposes. Here we exclude it to keep the list clean.
-                if (key.includes('PluginTemplate')) {
+                    key.includes('.d.ts') ||
+                    key.includes('PluginTemplate')) {
                     return;
                 }
 
@@ -77,7 +71,7 @@ export default class DawiyPluginController {
             console.error("Error loading plugins automatically:", e);
         }
     }
-    
+
     public setView(view: DawiyPluginView) {
         this.view = view;
         this.bindEvents();
@@ -87,10 +81,10 @@ export default class DawiyPluginController {
     public openWindow() {
         this.view.show();
     }
-    
+
     private bindEvents() {
         this.view.closeBtn.onclick = () => this.view.hide();
-        
+
         this.view.filterAllBtn.onclick = () => this.filterPlugins('all');
         this.view.filterInstalledBtn.onclick = () => this.filterPlugins('installed');
         this.view.filterNotInstalledBtn.onclick = () => this.filterPlugins('not-installed');
@@ -144,17 +138,17 @@ export default class DawiyPluginController {
         };
         reader.readAsText(file);
     }
-    
+
     private filterPlugins(filter: 'all' | 'installed' | 'not-installed') {
         // UI update
         this.view.filterAllBtn.classList.remove('active');
         this.view.filterInstalledBtn.classList.remove('active');
         this.view.filterNotInstalledBtn.classList.remove('active');
-        
+
         if (filter === 'all') this.view.filterAllBtn.classList.add('active');
         else if (filter === 'installed') this.view.filterInstalledBtn.classList.add('active');
         else if (filter === 'not-installed') this.view.filterNotInstalledBtn.classList.add('active');
-        
+
         // Logic to filter list (TODO)
         console.log("Filter selected:", filter);
     }
@@ -165,16 +159,16 @@ export default class DawiyPluginController {
         if (!listContainer) return;
 
         listContainer.innerHTML = '';
-        
+
         this.installedExtensions.forEach(ext => {
             const item = document.createElement('div');
             item.className = 'dawiy-ext-item';
             if (this.activeExtensionId === ext.id) item.classList.add('active');
             item.textContent = ext.name; // Use full name
             item.title = ext.name;
-            
+
             item.onclick = () => this.selectExtension(ext.id);
-            
+
             listContainer.appendChild(item);
         });
     }

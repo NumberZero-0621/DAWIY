@@ -8,9 +8,16 @@
 1. **プラグインファイルを作成する:**
 `PluginTemplate.ts` を新しいファイル (例: `MyCoolPlugin.ts`) にコピーします。
 
+1.  **Create your plugin file:**
+    Create a new `.ts` file in this directory or any subdirectory. 
+    You can copy `PluginTemplate.ts` as a starting point.
+    *Example:* `public/src/DawiyPlugins/MyAwesomePlugin/MyPlugin.ts`
 2. **インターフェースを実装する:**
     クラスは `IDawiyPlugin` インターフェースを実装する必要があります。  
     以下は `PluginTemplate.ts` に基づいた、より包括的な実装例です。
+
+2.  **Implement the interface:**
+    Your class must implement the `IDawiyPlugin` interface and be the **default export** of the file.
 
     ```typescript
     import App from "../App";
