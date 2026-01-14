@@ -1,7 +1,14 @@
 import App from "../App";
 import DawiyPluginView from "../Views/DawiyPluginView";
-import StochasticGeneratorPlugin from "../DawiyPlugins/StochasticGeneratorPlugin";
 import { IDawiyPlugin } from "../DawiyPlugins/IDawiyPlugin";
+
+// Declaration for Webpack's require.context
+declare const require: {
+    context(directory: string, useSubdirectories: boolean, regExp: RegExp): {
+        keys(): string[];
+        (id: string): any;
+    };
+};
 
 export default class DawiyPluginController {
     
@@ -15,9 +22,60 @@ export default class DawiyPluginController {
 
     constructor(app: App) {
         this.app = app;
-        this.installedExtensions = [
-            new StochasticGeneratorPlugin(app)
-        ];
+        this.installedExtensions = [];
+        this.loadPlugins();
+    }
+
+    /**
+     * Automatically loads plugins from the ../DawiyPlugins directory.
+     */
+    private loadPlugins() {
+        try {
+            // Create a context for the DawiyPlugins directory
+            // false = do not look in subdirectories
+            // /\.ts$/ = only look for .ts files
+            const context = require.context('../DawiyPlugins', false, /\.ts$/);
+
+            context.keys().forEach((key: string) => {
+                // Ignore non-plugin files
+                if (key.includes('IDawiyPlugin') || 
+                    key.includes('README') || 
+                    key.includes('.d.ts')) {
+                    return;
+                }
+
+                // Optional: You might want to ignore the template itself so it doesn't show up in the list,
+                // or keep it for debugging purposes. Here we exclude it to keep the list clean.
+                if (key.includes('PluginTemplate')) {
+                    return;
+                }
+
+                try {
+                    const module = context(key);
+                    // We expect "export default class ..."
+                    const PluginClass = module.default;
+
+                    if (PluginClass && typeof PluginClass === 'function') {
+                        const instance = new PluginClass(this.app);
+                        
+                        // Basic duck-typing validation to ensure it's a valid plugin
+                        if (instance.id && instance.name && typeof instance.render === 'function') {
+                            // Check for duplicates
+                            if (!this.installedExtensions.find(ext => ext.id === instance.id)) {
+                                this.installedExtensions.push(instance);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`Failed to load plugin from ${key}:`, err);
+                }
+            });
+            
+            console.log(`Loaded ${this.installedExtensions.length} DAWIY plugins.`);
+
+        } catch (e) {
+            console.error("Error loading plugins automatically:", e);
+        }
     }
     
     public setView(view: DawiyPluginView) {
@@ -77,6 +135,12 @@ export default class DawiyPluginController {
             // Toggle off? - Maybe not for the plugin view, keep it active
             // this.activeExtensionId = null;
         } else {
+            // Deactivate previous
+            if (this.activeExtensionId) {
+                const prev = this.installedExtensions.find(e => e.id === this.activeExtensionId);
+                if (prev && prev.onDeactivate) prev.onDeactivate();
+            }
+
             this.activeExtensionId = id;
             const ext = this.installedExtensions.find(e => e.id === id);
             if (ext && ext.onActivate) ext.onActivate();
@@ -98,7 +162,12 @@ export default class DawiyPluginController {
 
         const ext = this.installedExtensions.find(e => e.id === this.activeExtensionId);
         if (ext) {
-            ext.render(viewContainer);
+            try {
+                ext.render(viewContainer);
+            } catch (e) {
+                console.error(`Error rendering plugin ${ext.name}:`, e);
+                viewContainer.innerHTML = `<div style="color:red">Error rendering plugin: ${e}</div>`;
+            }
         }
     }
 }
