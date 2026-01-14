@@ -1,3 +1,4 @@
+const fs = require('fs');
 const webpack = require('webpack');
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
@@ -36,7 +37,48 @@ module.exports = (env, argv) => {
                 progress: true,
             },
             port: 5002, host: '0.0.0.0',
-            https: false
+            https: false,
+            setupMiddlewares: (middlewares, devServer) => {
+                if (!devServer) {
+                    throw new Error('webpack-dev-server is not defined');
+                }
+
+                devServer.app.post('/upload-plugin', (req, res) => {
+                    const filename = req.headers['x-filename'];
+                    if (!filename) {
+                        res.status(400).send('Missing x-filename header');
+                        return;
+                    }
+
+                    // Basic body parsing for raw text
+                    let data = '';
+                    req.setEncoding('utf8');
+                    req.on('data', function(chunk) { 
+                        data += chunk;
+                    });
+                    req.on('end', function() {
+                        const targetPath = path.join(__dirname, 'src', 'DawiyPlugins', filename);
+                        
+                        // Security check: prevent directory traversal
+                        if (!targetPath.startsWith(path.join(__dirname, 'src', 'DawiyPlugins'))) {
+                            res.status(403).send('Invalid file path');
+                            return;
+                        }
+
+                        fs.writeFile(targetPath, data, (err) => {
+                            if (err) {
+                                console.error('Error writing plugin file:', err);
+                                res.status(500).send('Error saving plugin file');
+                            } else {
+                                console.log(`Plugin saved: ${targetPath}`);
+                                res.status(200).send('Plugin saved successfully');
+                            }
+                        });
+                    });
+                });
+
+                return middlewares;
+            }
         },
 
         // Web games are bigger than pages, disable the warnings that our game is too big.

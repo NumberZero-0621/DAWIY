@@ -94,6 +94,55 @@ export default class DawiyPluginController {
         this.view.filterAllBtn.onclick = () => this.filterPlugins('all');
         this.view.filterInstalledBtn.onclick = () => this.filterPlugins('installed');
         this.view.filterNotInstalledBtn.onclick = () => this.filterPlugins('not-installed');
+
+        this.view.addManualBtn.onclick = () => {
+            this.view.addManualInput.click();
+        }
+
+        this.view.addManualInput.onchange = () => {
+            const files = this.view.addManualInput.files;
+            if (!files || files.length === 0) return;
+            const file = files[0];
+            this.handleFileUpload(file);
+            this.view.addManualInput.value = ''; // Reset
+        }
+    }
+
+    private handleFileUpload(file: File) {
+        if (!file.name.endsWith('.ts')) {
+            this.app.showToast("Only .ts files are supported.", true);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const content = event.target?.result as string;
+            if (!content) return;
+
+            if (content.includes('IDawiyPlugin') || content.includes('implements IDawiyPlugin')) {
+                fetch('/upload-plugin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain',
+                        'x-filename': file.name
+                    },
+                    body: content
+                })
+                .then(response => {
+                    if (response.ok) {
+                        this.app.showToast(`Plugin "${file.name}" installed! App will reload shortly.`);
+                    } else {
+                        this.app.showToast(`Failed to install plugin: ${response.statusText}`, true);
+                    }
+                })
+                .catch(err => {
+                    this.app.showToast(`Error uploading plugin: ${err}`, true);
+                });
+            } else {
+                this.app.showToast("Invalid plugin file. Must implement IDawiyPlugin.", true);
+            }
+        };
+        reader.readAsText(file);
     }
     
     private filterPlugins(filter: 'all' | 'installed' | 'not-installed') {

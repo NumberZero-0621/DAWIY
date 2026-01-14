@@ -12,6 +12,9 @@ export default class DawiyPluginView extends DraggableWindow {
     
     listContainer = document.getElementById("pm-list") as HTMLDivElement;
 
+    addManualBtn = document.getElementById("pm-add-manual-btn") as HTMLButtonElement;
+    addManualInput = document.getElementById("pm-add-manual-input") as HTMLInputElement;
+
     constructor() {
         super(document.getElementById("dawiy-plugin-header") as HTMLDivElement, document.getElementById("dawiy-plugin-window") as HTMLDivElement);
     }

@@ -141,6 +141,97 @@ export default class App {
         //@ts-ignore
         window.pipe=pipe
 
+        this.setupPluginDragAndDrop();
+    }
+
+    /**
+     * Sets up global drag and drop for DAWIY Plugins (.ts files).
+     */
+    private setupPluginDragAndDrop() {
+        window.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Show copy cursor
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = "copy";
+            }
+        });
+
+        window.addEventListener("drop", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+
+            const files = Array.from(e.dataTransfer.files);
+            
+            files.forEach(file => {
+                if (!file.name.endsWith('.ts')) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const content = event.target?.result as string;
+                    if (!content) return;
+
+                    // Simple check for IDawiyPlugin import or implementation
+                    // Matches: import ... IDawiyPlugin ... or implements IDawiyPlugin
+                    if (content.includes('IDawiyPlugin') || content.includes('implements IDawiyPlugin')) {
+                        // Upload
+                        fetch('/upload-plugin', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'text/plain',
+                                'x-filename': file.name
+                            },
+                            body: content
+                        })
+                        .then(response => {
+                            if (response.ok) {
+                                this.showToast(`Plugin "${file.name}" installed! App will reload shortly.`);
+                            } else {
+                                this.showToast(`Failed to install plugin: ${response.statusText}`, true);
+                            }
+                        })
+                        .catch(err => {
+                            this.showToast(`Error uploading plugin: ${err}`, true);
+                        });
+                    }
+                };
+                reader.readAsText(file);
+            });
+        });
+    }
+
+    public showToast(message: string, isError: boolean = false) {
+        let toast = document.getElementById("dawiy-toast");
+        if (!toast) {
+            toast = document.createElement("div");
+            toast.id = "dawiy-toast";
+            toast.style.position = "fixed";
+            toast.style.bottom = "20px";
+            toast.style.right = "20px";
+            toast.style.padding = "15px 25px";
+            toast.style.borderRadius = "5px";
+            toast.style.color = "white";
+            toast.style.fontWeight = "bold";
+            toast.style.zIndex = "9999";
+            toast.style.transition = "opacity 0.5s ease-in-out";
+            document.body.appendChild(toast);
+        }
+
+        toast.textContent = message;
+        toast.style.backgroundColor = isError ? "#d9534f" : "#5cb85c"; // Red or Green
+        toast.style.opacity = "1";
+        toast.style.display = "block";
+
+        setTimeout(() => {
+            if (toast) {
+                toast.style.opacity = "0";
+                setTimeout(() => { 
+                    if (toast) toast.style.display = "none"; 
+                }, 500);
+            }
+        }, 3000);
     }
 
     /**
