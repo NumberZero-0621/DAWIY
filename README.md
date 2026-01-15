@@ -28,13 +28,21 @@ DAWIYそのものの説明は下のほうにあるよ
 }
 ```
 
+## ライセンス
+
+このプロジェクトは、[WAM-studio](https://github.com/Brotherta/wam-studio) (Copyright (c) 2023 Antoine-Vidal-Mazuy) をベースにしています  
+元のコード部分には MIT License が適用されます（詳細は[`LICENSE.orig`](LICENSE.orig)を参照してください）
+
+ただし、私（No.0）が追加・変更した部分については **MIT No Attribution (MIT-0)** を適用します  
+したがって、私の著作権を表示する義務はありませんが、責任は負いかねます（詳細は[`LICENSE`](LICENSE)を参照してください）
+
 ***
 
 ## スタートガイド（ローカル）
 
 ### Windows
 
-`run_dev.cmd`をダブルクリックするか、ターミナルで`.\run_dev.cmd`を実行
+[`run_dev.cmd`](run_dev.cmd)をダブルクリックするか、ターミナルで`.\run_dev.cmd`を実行
 
 ### Mac / Linux  
 
