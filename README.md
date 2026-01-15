@@ -24,24 +24,23 @@ DAWIYそのものの説明は下のほうにあるよ
 
 ### Windows
 
-`run_dev.bat`をダブルクリックするか、コマンドプロンプトで`.\run_dev.bat`を実行
+`run_dev.cmd`をダブルクリックするか、ターミナルで`.\run_dev.cmd`を実行
 
 ### Mac / Linux  
 
-シェルで`./run_dev.sh`を実行  
-※ `sudo`を使用しているため、パスワードの入力を求められる場合があります
+シェルで`sh run_dev.cmd`または`bash run_dev.cmd`を実行
 
 ***
 
 以上でアプリケーションが実行されるはず  
-ブラウザで`http://localhost:5002`にてフロントエンドにアクセスできる
+ブラウザで [http://localhost:5002](http://localhost:5002) にてフロントエンドにアクセスできる  
+(自分で`public`の[`.env`](/public/.env)ファイルを変更した場合は、`http://localhost:[任意のPORT]`になるので注意)
 
-※ [README_auto.md](README_auto.md) を参考にしています  
-※ 手動でセットアップ/実行する場合や、`.env`ファイルについて詳しく知りたい方は [README_manual.md](README_manual.md) を参照してください
+変数を変更する必要がありましたら [env.md](env.md) を参照のうえ、適宜書き換えて下さい
 
 ## Dockerで実行
 
-→ [README_docker.md](README_docker.md) を参照してください
+→ [docker.md](docker.md) を参照してください
 
 # DAWIYプラグインの導入方法
 

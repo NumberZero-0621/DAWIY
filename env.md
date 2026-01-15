@@ -1,0 +1,38 @@
+# `.env`ファイルについて
+
+## [public](/public/.env)
+
+- `PORT`･･･ フロントエンドが実行されるポート番号（例：`5002`）
+- `HTTPS`･･･ HTTPSを有効にする場合はこれを`true`に設定
+  - `true`の場合は証明書を作成し変数`SSL_CRT_FILE`と`SSL_KEY_FILE`を設定する必要あり
+- `BACKEND_URL`･･･ バックエンドのURL（例：`http://localhost:6002`）
+- `BANK_PLUGIN_URL`･･･ バンクプラグインのURL（例：`http://localhost:6002`）
+- 記述例（元々あった[`.env.example`](/public/.env.example)参考 とりあえずこれで動くはず）：
+
+     ```env
+     PORT=5002
+     HTTPS=false
+     BACKEND_URL=http://localhost:6002
+     BANK_PLUGIN_URL=http://localhost:6002
+     SONGS_FILE_URL=http://localhost:6002
+     HTTPS_DEV=false
+     ```
+
+## [bank](/bank/.env)
+
+- `PORT`･･･ バックエンドが実行されるポート番号（例：`6002`）
+- `STORAGE_DIR`･･･ バックエンドがデータを保存するディレクトリ（例：`storage`）
+- `ADMIN_PASSWORD`･･･ 管理者のパスワード
+- `JWT_SECRET`･･･ JSON Web Token (JWT) のシークレット
+- `NODE_ENV`･･･ バックエンドが実行されている環境（例：`development`）
+- 記述例（元々あった[`.env.example`](/bank/.env.example)参考 とりあえずこれで動くはず）：
+
+    ```env
+    PORT=6002
+    STORAGE_DIR=storage
+    ADMIN_PASSWORD=123456
+    JWT_SECRET=123456
+    NODE_ENV=development
+    HTTPS=false
+    BANKURL=http://localhost:6002
+    ```

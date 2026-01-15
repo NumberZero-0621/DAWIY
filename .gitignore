@@ -12,3 +12,7 @@ storage/*
 /bank/loops
 
 /pedalboard2/bin/
+
+# Environment files (local configuration)
+public/.env
+bank/.env
