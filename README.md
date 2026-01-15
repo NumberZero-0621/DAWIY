@@ -1,3 +1,15 @@
+# DAWIY
+
+## DAW(Digital Audio Workstation) + DIY(Do It Yourself) = DAWIY
+
+「**自分好みのDAW環境をDIYする共通プラットフォーム**」…を目指している
+
+![2025-12-28時点のDAWIY](https://github.com/user-attachments/assets/4e275fc2-b5f3-4795-b554-5ea1f6a50a06)
+
+※画像は2025年12月28日時点
+
+[WAM-Studio](https://github.com/Brotherta/wam-studio) をベースに、改造を施し、自分なりに模索しています
+
 ※元来の「Wam-Studio」のREADMEはフォーク元の[リポジトリ](https://github.com/Brotherta/wam-studio)を参照してください  
 DAWIYそのものの説明は下のほうにあるよ  
 ***
@@ -18,9 +30,7 @@ DAWIYそのものの説明は下のほうにあるよ
 
 ***
 
-# スタートガイド
-
-## ローカルで実行
+## スタートガイド（ローカル）
 
 ### Windows
 
@@ -38,36 +48,22 @@ DAWIYそのものの説明は下のほうにあるよ
 
 変数を変更する必要がありましたら [env.md](env.md) を参照のうえ、適宜書き換えて下さい
 
-## Dockerで実行
+## スタートガイド（Docker）
 
 → [docker.md](docker.md) を参照してください
 
-# DAWIYプラグインの導入方法
-
-### 導入は簡単！
+## DAWIYプラグインの導入方法
 
 - DAWの画面内に対応するTypeScript(`.ts`)ファイルをドラッグアンドドロップする
 - 「DAWIYプラグイン」ウィンドウ → 手動でインストール → エクスプローラーを開いて対応する`.ts`ファイルを選択
 
 ### [DAWIYプラグイン開発ガイド](/public/src/DawiyPlugins/README.md)（開発者さん向け）
 
-# DAWIY
-
-## DAW(Digital Audio Workstation) + DIY(Do It Yourself) = DAWIY
-
-「**自分好みのDAW環境をDIYする共通プラットフォーム**」…を目指している
-
-<img alt="2025-12-28時点のDAWIY" src="https://github.com/user-attachments/assets/4e275fc2-b5f3-4795-b554-5ea1f6a50a06" />
-
-※画像は2025年12月28日時点
-
-[WAM-Studio](https://github.com/Brotherta/wam-studio) をベースに、改造を施し、自分なりに模索しています
-
-# 今までに自分で実装してきたこと
+## 今までに自分で実装してきたこと
 
 だいぶ大まかやけど･･･
 
-## DAW的な機能の部分
+### DAW的な機能の部分
 
 - ピアノロール
   - ノートの追加・削除
@@ -78,31 +74,31 @@ DAWIYそのものの説明は下のほうにあるよ
   - etc.
     - まだまだ改良の余地あり
 
-  <img width="50%" alt="ピアノロール画面" src="https://github.com/user-attachments/assets/6c42081a-fe5c-4da3-86cb-cbced9aa7ad9" />
+  ![ピアノロール画面](https://github.com/user-attachments/assets/6c42081a-fe5c-4da3-86cb-cbced9aa7ad9)
 
 - dawprojectファイルの入出力機能の追加
   - dawprojectを読み込み、プロジェクトとして展開
   - DAW上のイベント等を読み取り、`.dawproject`に出力
 
-  <img width="100%" alt="dawproject読み込みの様子" src="https://github.com/user-attachments/assets/b0224dee-3983-44a5-bb12-9050a6d8358c" />
+  ![dawproject読み込みの様子](https://github.com/user-attachments/assets/b0224dee-3983-44a5-bb12-9050a6d8358c)
 
-## DIY的な機能の部分
+### DIY的な機能の部分
 
 いきなり「**機能の自由な追加・削除**」･･･ は難しいので
 
 - 第1弾として、確率的メロディ生成機能を実装
 
-   <img width="75%" alt="Stochastic Note Generator" src="https://github.com/user-attachments/assets/b2da422e-fc52-42f2-b166-5ee1c0600f01" />
+   ![Stochastic Note Generator](https://github.com/user-attachments/assets/b2da422e-fc52-42f2-b166-5ee1c0600f01)
 - プラグインのパッケージマネージャーのプロトタイプも実装
 
-   <img width="50%" alt="パッケージマネージャー" src="https://github.com/user-attachments/assets/26e19b7e-673c-49b8-8a91-de243f38f251" />
+   ![パッケージマネージャー](https://github.com/user-attachments/assets/26e19b7e-673c-49b8-8a91-de243f38f251)
 
 - 機能の自由な追加・削除には程遠い
   - サーバとの連携・インストール等々･･･ 課題は山積み
 
 ***
 
-# 自作の関連文献
+### 自作の関連文献
 
 - [ProjectDAWIY - GriCo: Excel VBAを用いた確率的自動作曲システム(EC2025)](https://ipsj.ixsq.nii.ac.jp/records/2003653)
 - [ProjectDAWIY - GriCo: 自分好みのDAW環境をDIYする共通プラットフォームの構築に向けて(MUS144-夏25)](https://ipsj.ixsq.nii.ac.jp/records/2003750)
