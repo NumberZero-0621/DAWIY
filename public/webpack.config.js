@@ -6,6 +6,9 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 const Dotenv = require('dotenv-webpack');
 
+// Load env vars for the config file itself
+require('dotenv').config();
+
 module.exports = (env, argv) => {
     return ({
         stats: 'minimal', // Keep console output easy to read.
@@ -36,8 +39,10 @@ module.exports = (env, argv) => {
                 },
                 progress: true,
             },
-            port: 5002, host: '0.0.0.0',
-            https: false,
+            port: process.env.PORT || 5002, 
+            host: process.env.HOST || '0.0.0.0',
+            https: process.env.HTTPS === 'true',
+            open: true,
             setupMiddlewares: (middlewares, devServer) => {
                 if (!devServer) {
                     throw new Error('webpack-dev-server is not defined');
@@ -139,7 +144,26 @@ module.exports = (env, argv) => {
             // Load environment variables from .env
             new Dotenv({
                 path: './.env',
-            })
+            }),
+
+            // Custom plugin to display the URL after build
+            {
+                apply: (compiler) => {
+                    compiler.hooks.done.tap('PrintUrlPlugin', (stats) => {
+                        const port = process.env.PORT || 5002;
+                        const https = process.env.HTTPS === 'true' ? 's' : '';
+                        const host = process.env.HOST || 'localhost';
+                        const url = `http${https}://${host}:${port}`;
+                        
+                        setTimeout(() => {
+                            console.log('===========================================================');
+                            console.log('  DAWIY Frontend is running!');
+                            console.log(`  Access it here: \x1b[36m${url}\x1b[0m`);
+                            console.log('===========================================================');
+                        }, 500);
+                    });
+                }
+            }
         ]
     });
 }

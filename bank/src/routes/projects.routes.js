@@ -9,12 +9,12 @@ const utils = require('../utils');
 const allowedOrigins = ['https://wam-studio.i3s.univ-cotedazur.fr', 'http://localhost:5002'];
 
 const cors= (req,res,next)=>{
-    console.log("### projectRoutes",req.method, req.url)
+    if (config.debug) console.log("### projectRoutes",req.method, req.url)
     //res.set('Access-Control-Allow-Origin',['*'])
     // MB
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
-      console.log("adding Access-Control-Allow-Origin header " + origin);
+      if (config.debug) console.log("adding Access-Control-Allow-Origin header " + origin);
       res.header('Access-Control-Allow-Origin', origin);
     }
     res.header('Access-Control-Allow-Credentials', 'true');
@@ -22,7 +22,7 @@ const cors= (req,res,next)=>{
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
-        console.log("OPTIONS preflight request received!")
+        if (config.debug) console.log("OPTIONS preflight request received!")
         return res.sendStatus(200); // Preflight request is successful.
     }
   next();
@@ -42,7 +42,7 @@ const storage = multer.diskStorage({
 
         if (project) {
             let baseDir = path.dirname(project.path);
-            console.log(baseDir)
+            if (config.debug) console.log(baseDir)
             const projectAudioDir = path.join(baseDir, 'audio');
             if (!fs.existsSync(projectAudioDir)) {
                 fs.mkdirSync(projectAudioDir, { recursive: true });
@@ -121,7 +121,7 @@ router.get('/projects/:id/audio/:filename', (req, res) => {
 
 // Add a new route for uploading audio files
 router.post('/projects/:id/audio', upload.single('audio'), (req, res) => {
-    console.log(req.file)
+    if (config.debug) console.log(req.file)
     if (req.file) {
         res.status(200).json({ message: 'Audio uploaded', filename: req.file.filename });
     } else {

@@ -1,6 +1,7 @@
 import 'bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import App from './App';
+import { BACKEND_URL } from './Env';
 import BPF from './Components/BPF';
 import ExportProjectElement from "./Components/Project/ExportProjectElement";
 import LoadProjectElement from "./Components/Project/LoadProjectElement";
@@ -88,6 +89,42 @@ const app = new App();
         });
     }, 100);
 
+
+    // --- Heartbeat Client ---
+    const HEARTBEAT_INTERVAL_MS = 2000;
+    setInterval(() => {
+        fetch(`${BACKEND_URL}/heartbeat`)
+            .then(res => {
+                if (!res.ok) throw new Error("Heartbeat error");
+            })
+            .catch(() => {
+                // Server is down
+                console.warn("Server connection lost. Attempting to close...");
+                
+                // Try to close window (may be blocked by browser)
+                window.close();
+
+                // Show disconnected screen
+                document.body.innerHTML = `
+                    <div style="
+                        display: flex; 
+                        justify-content: center; 
+                        align-items: center; 
+                        height: 100vh; 
+                        background: #222; 
+                        color: #ccc; 
+                        font-family: sans-serif;
+                        flex-direction: column;
+                        text-align: center;
+                    ">
+                        <h1>Disconnected</h1>
+                        <p>The server process has ended.</p>
+                        <p>You can safely close this tab.</p>
+                    </div>
+                `;
+            });
+    }, HEARTBEAT_INTERVAL_MS);
+    // ------------------------
 
 })();
 

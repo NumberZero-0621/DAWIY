@@ -48,7 +48,7 @@ function generateFolderStructure(rootFolder) {
 router.get('/api/audioloops', (req, res) => {
     // get path of current directory
     const currentPath = path.resolve('./');
-    console.log("Current path in audioloops.routes.js: " + currentPath);
+    if (config.debug) console.log("Current path in audioloops.routes.js: " + currentPath);
 
     const rootFolder = './loops'; // Replace with your root folder path
   

@@ -8,7 +8,7 @@
     "pedalboard2": "bin/main.js"
   },
   "scripts": {
-    "watch": "cd server && npx tsc --project .. -w",
+    "watch": "cd server && npx tsc --project .. -w --preserveWatchOutput",
     "start": "npm run watch",
     "build": "cd server && npx tsc --project ..",
     "generate_schema": "cd server && npx ts-json-schema-generator --path \"../src/Pedalboard2Library.ts\" --type \"Pedalboard2LibraryDescriptor\" --no-type-check --tsconfig \"../tsconfig.json\" > \"../static/library_schema.json\"",

@@ -28,4 +28,14 @@ module.exports = {
     HTTPS: process.env.HTTPS === "true",
     port: process.env.PORT || 6002,
     corsOptions: CORS_OPTIONS,
+    debug: process.env.DEBUG === 'true',
+    SongTagEnum: {
+        "POP": "Pop",
+        "ROCK": "Rock",
+        "JAZZ": "Jazz",
+        "HIPHOP": "Hip-Hop",
+        "CLASSICAL": "Classical",
+        "ELECTRONIC": "Electronic",
+        "OTHER": "Other"
+    }
 };

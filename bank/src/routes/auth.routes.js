@@ -7,19 +7,19 @@ const utils = require('../utils');
 const allowedOrigins = ['https://wam-studio.i3s.univ-cotedazur.fr', 'http://localhost:5002'];
 
 const cors= (req,res,next)=>{
-    console.log("### authroutes",req.method, req.url)
+    if (config.debug) console.log("### authroutes",req.method, req.url)
     //res.set('Access-Control-Allow-Origin',['*'])
     // MB
     const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
-    console.log("adding Access-Control-Allow-Origin header " + origin);
+    if (config.debug) console.log("adding Access-Control-Allow-Origin header " + origin);
     res.header('Access-Control-Allow-Origin', origin);
   }
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
-    console.log("OPTIONS preflight request received!")
+    if (config.debug) console.log("OPTIONS preflight request received!")
     return res.sendStatus(200); // Preflight request is successful.
   }
   next();

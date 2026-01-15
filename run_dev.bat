@@ -1,9 +1,27 @@
 @echo off
+echo Starting DAWIY Development Environment...
 
-echo Starting 'public' application...
-start "Public App" cmd /k "cd public && npm start"
+rem Check if concurrently is installed (look for the binary)
+if not exist "node_modules\.bin\concurrently.cmd" (
+    echo Installing root dependencies...
+    call npm install
+)
 
-echo Starting 'bank' application...
-start "Bank App" cmd /k "cd bank && npm start"
+rem Check public dependencies
+if not exist "public\node_modules" (
+    echo Installing public dependencies...
+    cd public
+    call npm install
+    cd ..
+)
 
-echo Both applications have been launched in separate windows.
+rem Check bank dependencies
+if not exist "bank\node_modules" (
+    echo Installing bank dependencies...
+    cd bank
+    call npm install
+    cd ..
+)
+
+rem Run the integrated dev command
+call npm run dev

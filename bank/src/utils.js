@@ -36,7 +36,12 @@ function checkEnvVars() {
 function createDirectories() {
     if (!fs.existsSync(config.storageDir)) {
         fs.mkdirSync(config.storageDir);
-    }}
+    }
+    const loopsDir = path.join(__dirname, '../loops');
+    if (!fs.existsSync(loopsDir)) {
+        fs.mkdirSync(loopsDir);
+    }
+}
 
 function createFiles() {
     // Create projects.json file if it doesn't exist

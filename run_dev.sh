@@ -1,12 +1,28 @@
 #!/bin/bash
 
-# Get the absolute path of the current directory
-BASE_DIR=$(pwd)
+echo "Starting DAWIY Development Environment..."
 
-echo "Starting 'public' application..."
-osascript -e "tell application \"Terminal\" to do script \"cd '$BASE_DIR/public' && npm start\""
+# Install root dependencies if concurrently is missing
+if [ ! -f "node_modules/.bin/concurrently" ]; then
+    echo "Installing root dependencies..."
+    sudo npm install
+fi
 
-echo "Starting 'bank' application..."
-osascript -e "tell application \"Terminal\" to do script \"cd '$BASE_DIR/bank' && npm start\""
+# Install public dependencies if missing
+if [ ! -d "public/node_modules" ]; then
+    echo "Installing public dependencies..."
+    cd public
+    sudo npm install
+    cd ..
+fi
 
-echo "Both applications have been launched in separate terminal windows."
+# Install bank dependencies if missing
+if [ ! -d "bank/node_modules" ]; then
+    echo "Installing bank dependencies..."
+    cd bank
+    sudo npm install
+    cd ..
+fi
+
+# Run the integrated dev command
+npm run dev
