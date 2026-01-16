@@ -42,7 +42,10 @@ module.exports = (env, argv) => {
             port: process.env.PORT || 5002, 
             host: process.env.HOST || '0.0.0.0',
             https: process.env.HTTPS === 'true',
-            open: true,
+            open: {
+                target: [`http${process.env.HTTPS === 'true' ? 's' : ''}://localhost:${process.env.PORT || 5002}`],
+                app: process.env.BROWSER ? { name: process.env.BROWSER } : undefined,
+            },
             setupMiddlewares: (middlewares, devServer) => {
                 if (!devServer) {
                     throw new Error('webpack-dev-server is not defined');

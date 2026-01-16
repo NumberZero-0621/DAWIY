@@ -7,6 +7,8 @@
   - `true`の場合は証明書を作成し変数`SSL_CRT_FILE`と`SSL_KEY_FILE`を設定する必要あり
 - `BACKEND_URL`･･･ バックエンドのURL（例：`http://localhost:6002`）
 - `BANK_PLUGIN_URL`･･･ バンクプラグインのURL（例：`http://localhost:6002`）
+- （オプション）`BROWSER`･･･ 起動時、自動的に開くブラウザ（例：`Google Chrome` or `firefox`）
+  - MacOSにて、デフォルトに設定しているブラウザで開かない問題が発生したため、念の為実装 書かなければ基本的にデフォルトのブラウザが使用される
 - 記述例（元々あった[`.env.example`](/public/.env.example)参考 とりあえずこれで動くはず）：
 
      ```env

@@ -6,6 +6,9 @@ GOTO :WINDOWS
 # -----------------------------------------------------------------------------
 # LINUX / MAC / UNIX-LIKE (BASH) IMPLEMENTATION
 # -----------------------------------------------------------------------------
+# Change to the directory where the script is located
+cd "$(dirname "$0")" || exit 1
+
 echo "Starting DAWIY Development Environment (Unix-like)..."
 
 # Function to check and copy .env files
