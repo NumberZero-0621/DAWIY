@@ -24,14 +24,14 @@
 export default abstract class OperableAudioBuffer implements AudioBuffer {
 
     /** FACTORIES */
-    protected constructor(){}
+    protected constructor() { }
 
     /**
      * Create a new OperableBuffer with its audio buffer.
      * @param options The options to create the buffer.
      * @returns The new OperableBuffer.
      */
-    static create(options: ConstructorParameters<typeof AudioBuffer>[0]){
+    static create(options: ConstructorParameters<typeof AudioBuffer>[0]) {
         return new BufferOperableAudioBuffer(new AudioBuffer(options))
     }
 
@@ -53,7 +53,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * @returns The new OperableBuffer.
      * @throws {RangeError} If the subpart is out of bound.
      */
-    static view(audio: AudioBuffer, start: number, length?: number){
+    static view(audio: AudioBuffer, start: number, length?: number) {
         return new SubOperableAudioBuffer(audio, start, length)
     }
 
@@ -69,7 +69,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
     abstract get numberOfChannels(): number
 
     /** Get the data of a channel. */
-    abstract getChannelData(channel: number): Float32Array
+    abstract getChannelData(channel: number): any
 
     /**
      * Copy data from a channel of the buffer.
@@ -77,12 +77,12 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * @param channelNumber The channel number to copy from.
      * @param bufferOffset The optional offset of the channel source buffer to start copying from.
      */
-    copyFromChannel(destination: Float32Array, channelNumber: number, bufferOffset: number | undefined=0): void{
-        if(channelNumber>=this.numberOfChannels)throw new Error("Invalid channel number")
-        if(bufferOffset>this.length)throw new Error("Invalid buffer offset")
+    copyFromChannel(destination: Float32Array, channelNumber: number, bufferOffset: number | undefined = 0): void {
+        if (channelNumber >= this.numberOfChannels) throw new Error("Invalid channel number")
+        if (bufferOffset > this.length) throw new Error("Invalid buffer offset")
         const from = this.getChannelData(channelNumber)
-        const length = Math.min(destination.length, from.length-bufferOffset)
-        for(let i=0; i<length; i++) destination[i] = from[i+bufferOffset]
+        const length = Math.min(destination.length, from.length - bufferOffset)
+        for (let i = 0; i < length; i++) destination[i] = from[i + bufferOffset]
     }
 
     /**
@@ -91,16 +91,16 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * @param channelNumber The channel number to copy to.
      * @param bufferOffset An optional offset in the buffer.
      */
-    copyToChannel(source: Float32Array, channelNumber: number, bufferOffset: number | undefined=0): void{
-        if(channelNumber>=this.numberOfChannels)throw new Error("Invalid channel number")
-        if(bufferOffset>this.length)throw new Error("Invalid buffer offset")
+    copyToChannel(source: Float32Array, channelNumber: number, bufferOffset: number | undefined = 0): void {
+        if (channelNumber >= this.numberOfChannels) throw new Error("Invalid channel number")
+        if (bufferOffset > this.length) throw new Error("Invalid buffer offset")
         const target = this.getChannelData(channelNumber)
-        const length = Math.min(source.length, target.length-bufferOffset)
-        for(let i=0; i<length; i++) target[i+bufferOffset] = source[i]
+        const length = Math.min(source.length, target.length - bufferOffset)
+        for (let i = 0; i < length; i++) target[i + bufferOffset] = source[i]
     }
-    
+
     /** Get the duration of the audio buffer in milliseconds */
-    get duration(){ return this.length/this.sampleRate*1000 }
+    get duration() { return this.length / this.sampleRate * 1000 }
 
 
     /** ESSENTIALS OPERATIONS */
@@ -127,16 +127,16 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * @param length  The length of the subpart.
      * @returns 
      */
-    view(start: number, length?: number){ return OperableAudioBuffer.view(this, start, length) }
+    view(start: number, length?: number) { return OperableAudioBuffer.view(this, start, length) }
 
     /**
      * Modify this buffer by applying a map function to each sample.
      * @param map The function to apply to each sample.
      */
     apply(map: (value: number, index: number, channel: number) => number) {
-        for(let channel=0; channel<this.numberOfChannels; channel++){
+        for (let channel = 0; channel < this.numberOfChannels; channel++) {
             const data = this.getChannelData(channel);
-            for(let i=0; i<this.length; i++) data[i] = map(data[i], i, channel);
+            for (let i = 0; i < this.length; i++) data[i] = map(data[i], i, channel);
         }
     }
 
@@ -147,7 +147,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * Clone this buffer.
      * @returns 
      */
-    clone(){
+    clone() {
         const newBuffer = OperableAudioBuffer.create(this);
         newBuffer.mix(this);
         return newBuffer;
@@ -159,14 +159,14 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * @param {AudioBuffer} that The buffer to merge with.
      * @param {number} start_offset The offset between the start of this buffer and the start of that buffer. It can be negative.
      */
-    merge(that: AudioBuffer, start_offset: number = 0){
+    merge(that: AudioBuffer, start_offset: number = 0) {
         let before
         let after
-        if(start_offset>=0){
+        if (start_offset >= 0) {
             before = this
             after = that
         }
-        else{
+        else {
             before = that
             after = this
             start_offset = -start_offset
@@ -175,7 +175,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
         const length = Math.max(before.length, after.length + start_offset);
         const numberOfChannels = Math.max(before.numberOfChannels, after.numberOfChannels);
 
-        const buffer = OperableAudioBuffer.create({numberOfChannels, length, sampleRate});
+        const buffer = OperableAudioBuffer.create({ numberOfChannels, length, sampleRate });
         buffer.mix(before);
         buffer.view(start_offset).mix(after);
         return buffer;
@@ -188,11 +188,11 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * @param {number} [numberOfChannels]
      */
     concat(that: AudioBuffer) {
-        const {sampleRate} = this;
+        const { sampleRate } = this;
         const length = this.length + that.length;
         const numberOfChannels = Math.max(this.numberOfChannels, that.numberOfChannels);
 
-        const buffer = OperableAudioBuffer.create({numberOfChannels, length, sampleRate});
+        const buffer = OperableAudioBuffer.create({ numberOfChannels, length, sampleRate });
         buffer.mix(this);
         buffer.view(this.length).mix(that);
         return buffer;
@@ -219,14 +219,14 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
             }
         }
     }
-    
+
 
     /**
      * Split the buffer into two buffer at a given index.
      * @param {number} position in sample
      */
     split(position: number) {
-        if (position <= 0 || position >=this.length) throw new RangeError("Split point is out of bound");
+        if (position <= 0 || position >= this.length) throw new RangeError("Split point is out of bound");
         return [this.view(0, position).clone(), this.view(position).clone()];
     }
 
@@ -250,7 +250,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
         const supportSAB = typeof SharedArrayBuffer !== "undefined";
         /** @type {Float32Array[]} */
         const channelData = [];
-        const {numberOfChannels, length} = this;
+        const { numberOfChannels, length } = this;
         for (let i = 0; i < numberOfChannels; i++) {
             if (shared && supportSAB) {
                 channelData[i] = new Float32Array(new SharedArrayBuffer(length * Float32Array.BYTES_PER_ELEMENT));
@@ -271,7 +271,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
     makeStereo() {
         if (this.numberOfChannels > 1) return this;  // Already stereo or more.
 
-        let newBuffer = OperableAudioBuffer.create({numberOfChannels: 2, length: this.length, sampleRate: this.sampleRate});
+        let newBuffer = OperableAudioBuffer.create({ numberOfChannels: 2, length: this.length, sampleRate: this.sampleRate });
         newBuffer.copyToChannel(this.getChannelData(0), 0);
         newBuffer.copyToChannel(this.getChannelData(0), 1);
 
@@ -298,13 +298,13 @@ class SubOperableAudioBuffer extends OperableAudioBuffer {
 
     constructor(private buffer: AudioBuffer, private new_start: number, new_length?: number) {
         super();
-        if(new_length==undefined) this.new_length = buffer.length - new_start;
+        if (new_length == undefined) this.new_length = buffer.length - new_start;
         else this.new_length = new_length;
-        if(new_start+this.new_length>buffer.length) throw new RangeError("Subpart is out of bound");
+        if (new_start + this.new_length > buffer.length) throw new RangeError("Subpart is out of bound");
     }
 
     override get length() { return this.new_length }
     override get sampleRate() { return this.buffer.sampleRate }
     override get numberOfChannels() { return this.buffer.numberOfChannels }
-    override getChannelData(channel: number) { return this.buffer.getChannelData(channel).subarray(this.new_start, this.new_start + this.new_length)}
+    override getChannelData(channel: number) { return this.buffer.getChannelData(channel).subarray(this.new_start, this.new_start + this.new_length) }
 }

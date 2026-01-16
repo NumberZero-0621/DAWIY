@@ -33,28 +33,14 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
         density: 1
     };
 
-    private scaleTypes: {[key: string]: number[]} = {
-        "major": [0, 2, 4, 5, 7, 9, 11],
-        "minor": [0, 2, 3, 5, 7, 8, 10],
-        "harmonic_minor": [0, 2, 3, 5, 7, 8, 11],
-        "pentatonic_major": [0, 2, 4, 7, 9],
-        "pentatonic_minor": [0, 3, 5, 7, 10],
-        "chromatic": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-    };
 
     private durationOptions = [
-        { label: "1/16", value: 1/16 },
-        { label: "1/8", value: 1/8 },
-        { label: "1/4", value: 1/4 },
-        { label: "1/2", value: 1/2 },
+        { label: "1/16", value: 1 / 16 },
+        { label: "1/8", value: 1 / 8 },
+        { label: "1/4", value: 1 / 4 },
+        { label: "1/2", value: 1 / 2 },
     ];
-    
-    private getPitchLabel(midi: number): string {
-        const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-        const octave = Math.floor(midi / 12) - 1;
-        const note = notes[midi % 12];
-        return `${note}${octave}`;
-    }
+
 
     constructor(app: App) {
         this.app = app;
@@ -115,7 +101,7 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
             return input;
         };
 
-        const createSelect = (options: {label: string, value: any}[], selected: any, onChange: (val: any) => void) => {
+        const createSelect = (options: { label: string, value: any }[], selected: any, onChange: (val: any) => void) => {
             const select = document.createElement("select");
             select.style.background = "#444";
             select.style.color = "#fff";
@@ -149,12 +135,12 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
         createRow("Time Range:", rangeContainer);
 
         // Scale
-        const scaleOptions = Object.keys(this.scaleTypes).map(k => ({label: k, value: k}));
+        const scaleOptions = Object.keys(MIDI.scaleTypes).map(k => ({ label: k, value: k }));
         createRow("Scale Type:", createSelect(scaleOptions, this.params.scaleType, v => this.params.scaleType = v));
 
         // Pitch Range
         const pitchOptions = [];
-        for (let i = 0; i <= 127; i++) pitchOptions.push({ label: this.getPitchLabel(i), value: i });
+        for (let i = 0; i <= 127; i++) pitchOptions.push({ label: MIDI.getPitchLabel(i), value: i });
         const pitchContainer = document.createElement("div");
         pitchContainer.style.display = "flex";
         pitchContainer.style.gap = "5px";
@@ -164,7 +150,7 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
         createRow("Pitch Range:", pitchContainer);
 
         // Grid/Duration
-        createRow("Note Duration:", createSelect(this.durationOptions.map(o => ({...o, value: o.label})), this.params.duration, v => this.params.duration = v));
+        createRow("Note Duration:", createSelect(this.durationOptions.map(o => ({ ...o, value: o.label })), this.params.duration, v => this.params.duration = v));
 
         // Rest Probability
         createRow("Rest Probability (%):", createNumberInput(this.params.restProbability, 0, v => this.params.restProbability = Math.max(0, Math.min(100, v))));
@@ -177,46 +163,27 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
         const lastKey = this.key;
         this.key++;
         if (this.key > this.maxKey) this.key = 0;
-        
+
         let diff = lastKey ^ this.key;
         let i = 0;
         while ((diff & 1) === 0) {
             diff >>= 1;
             i++;
         }
-        
+
         // Update the i-th generator
         this.whiteValues[i] = Math.random() - 0.5;
-        
+
         // Sum all generators
         let total = 0;
         for (let j = 0; j < this.whiteValues.length; j++) {
             total += this.whiteValues[j];
         }
-        
+
         // Scale down roughly to -1 to 1 range (max sum could be 3, min -3 with 6 generators)
-        return total / 3; 
+        return total / 3;
     }
 
-    private getScaleNotes(min: number, max: number, root: number, scaleName: string): number[] {
-        const scaleIntervals = this.scaleTypes[scaleName] || this.scaleTypes["major"];
-        const notes: number[] = [];
-        
-        // Normalize root to 0-11
-        const rootClass = root % 12;
-
-        for (let midi = min; midi <= max; midi++) {
-            const noteClass = (midi % 12);
-            // Check if noteClass matches any interval from root
-            // noteClass = (rootClass + interval) % 12
-            // => interval = (noteClass - rootClass + 12) % 12
-            const interval = (noteClass - rootClass + 12) % 12;
-            if (scaleIntervals.includes(interval)) {
-                notes.push(midi);
-            }
-        }
-        return notes;
-    }
 
     private generate() {
         const track = this.app.tracksController.selectedTrack;
@@ -228,13 +195,13 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
         const timeSig = this.app.hostView.metronome.timeSignature || [4, 4];
         const num = timeSig[0];
         const den = timeSig[1];
-        
+
         const quarterNoteMs = (60 / TEMPO) * 1000;
         const quartersPerBar = num * (4 / den);
-        
+
         const startTotalQuarters = (this.params.startBar - 1) * quartersPerBar + (this.params.startBeat - 1);
         const endTotalQuarters = (this.params.endBar - 1) * quartersPerBar + (this.params.endBeat - 1);
-        
+
         const startMs = startTotalQuarters * quarterNoteMs;
         const endMs = endTotalQuarters * quarterNoteMs;
 
@@ -245,21 +212,21 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
 
         const parseDuration = (d: string): number => {
             const [n, dmr] = d.split('/').map(Number);
-            return (n / dmr) * 4; 
+            return (n / dmr) * 4;
         };
         const durMult = parseDuration(this.params.duration);
         const stepMs = durMult * quarterNoteMs;
 
         // Prepare Scale Notes
-        const validNotes = this.getScaleNotes(this.params.minPitch, this.params.maxPitch, this.params.rootNote, this.params.scaleType);
+        const validNotes = MIDI.getScaleNotes(this.params.minPitch, this.params.maxPitch, this.params.rootNote, this.params.scaleType);
         if (validNotes.length === 0) {
             alert("No valid notes in range for this scale.");
             return;
         }
 
-        const newNotes: {note: number, start: number, duration: number}[] = [];
+        const newNotes: { note: number, start: number, duration: number }[] = [];
         let currentMs = startMs;
-        
+
         // Seed randomness for this run could be nice, currently using Math.random inside pinkNoise
         // Reset generator state somewhat to avoid correlation with previous run?
         this.whiteValues = new Array(6).fill(0).map(() => Math.random() - 0.5);
@@ -269,16 +236,16 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
             if (Math.random() * 100 >= this.params.restProbability) {
                 // Generate Pink Noise (-1 to 1)
                 const noise = this.getPinkNoise();
-                
+
                 // Map noise to valid notes index
                 // Normalize noise: -1..1 -> 0..1
                 const normalized = (noise + 1) / 2;
                 // Map to index
                 let index = Math.floor(normalized * validNotes.length);
                 index = Math.max(0, Math.min(validNotes.length - 1, index));
-                
+
                 const pitch = validNotes[index];
-                
+
                 if (currentMs + stepMs <= endMs) {
                     newNotes.push({
                         note: pitch,
@@ -287,7 +254,7 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
                     });
                 }
             }
-            
+
             currentMs += stepMs;
         }
 
@@ -295,14 +262,14 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
 
         const regionDuration = endMs - startMs;
         const midi = new MIDI(500, regionDuration);
-        
+
         newNotes.forEach(n => {
             const localStart = n.start - startMs;
             midi.putNote(new MIDINote(n.note, 100, 0, n.duration), localStart);
         });
 
         const newRegion = new MIDIRegion(midi, startMs);
-        
+
         const redo = () => {
             this.app.regionsController.addRegion(track, newRegion);
             if (this.app.pianoRollController.isVisible) {

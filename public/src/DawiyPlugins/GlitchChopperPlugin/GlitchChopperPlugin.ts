@@ -162,7 +162,7 @@ export default class GlitchChopperPlugin implements IDawiyPlugin {
                 if (relativeEnd <= relativeStart) return; // Should not happen given overlap check
 
                 // Process MIDI
-                const processed = this.processMIDI(newMidi, relativeStart, relativeEnd, stepMs);
+                const processed = newMidi.glitch(stepMs, this.params.deleteChance, this.params.mergeChance, relativeStart, relativeEnd);
 
                 affectedRegions.push({
                     region: region,
@@ -181,7 +181,7 @@ export default class GlitchChopperPlugin implements IDawiyPlugin {
                 if (relativeEnd <= relativeStart) return;
 
                 // Process Audio
-                this.processAudio(newBuffer, relativeStart, relativeEnd, stepMs);
+                region.silenceSteps(stepMs, this.params.deleteChance);
 
                 affectedRegions.push({
                     region: region,
@@ -327,10 +327,9 @@ export default class GlitchChopperPlugin implements IDawiyPlugin {
 
                         // Replace match in next step to allow chain merging
                         const matchIdx = nextStepNotes.indexOf(match);
-                        nextStepNotes[matchIdx] = newItem;
-
-                        // Don't add to finalNotes yet, handled in next step (or if last step, will be added then) 
-                        // Wait, if we replace it in nextStepNotes, the loop for nextStep will pick it up.
+                        if (matchIdx !== -1) {
+                            nextStepNotes[matchIdx] = newItem;
+                        }
                     } else {
                         finalNotes.push(item);
                     }
@@ -339,19 +338,6 @@ export default class GlitchChopperPlugin implements IDawiyPlugin {
                 }
             });
         });
-
-        // Handle case where last step has notes that were result of merge (and thus not in original stepNotes iterator?)
-        // Actually, since we modified `nextStepNotes` IN PLACE, when the loop reaches `nextStep`, it iterates the NEW list.
-        // JS forEach on arrays: 
-        // "The range of elements processed by forEach() is set before the first invocation of callbackFn."
-        // Mutation might not work as expected with forEach if we rely on it seeing new elements.
-
-        // Fix: Use filtered list or simple iteration?
-        // Since `notesByStep` values are arrays, we can mutate them at index.
-        // But `forEach` might have cached the length or reference?
-        // Actually, `forEach` iterates 0..length. If we replace element at index, it sees the new element.
-        // IF we add elements, it might not see them if beyond initial length. Here we replace one-for-one.
-        // So it should be fine.
 
         return MIDI.fromNotes(finalNotes, midi.instant_duration);
     }
@@ -363,8 +349,10 @@ export default class GlitchChopperPlugin implements IDawiyPlugin {
         // We need to write silence to deleted steps.
 
         const sampleRate = buffer.sampleRate;
-        const startSample = Math.floor(startMs * sampleRate / 1000);
-        const endSample = Math.floor(endMs * sampleRate / 1000);
+        // Convert milliseconds to samples, relative to the start of the buffer
+        const bufferStartMs = 0; // The buffer passed here is already relative to the region start
+        const startSample = Math.floor((startMs - bufferStartMs) * sampleRate / 1000);
+        const endSample = Math.floor((endMs - bufferStartMs) * sampleRate / 1000);
         const stepSamples = Math.floor(stepMs * sampleRate / 1000);
 
         // Iterate steps
@@ -380,7 +368,9 @@ export default class GlitchChopperPlugin implements IDawiyPlugin {
                     const data = buffer.getChannelData(c);
                     // Fill with 0
                     for (let i = 0; i < length; i++) {
-                        data[pos + i] = 0;
+                        if (pos + i < data.length) { // Ensure we don't write out of bounds
+                            data[pos + i] = 0;
+                        }
                     }
                 }
             }

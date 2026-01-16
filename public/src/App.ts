@@ -43,7 +43,7 @@ import ContextMenuController from "./Controllers/ContextMenuController";
  * Main class for the host. Start all controllers, views and models. All controllers and views are accessible frome this app.
  */
 export default class App {
-    
+
     hostController: HostController;
     tracksController: TracksController;
     pluginsController: PluginsController;
@@ -80,7 +80,7 @@ export default class App {
     host: Host;
     loader: Loader;
 
-    undoManager:UndoManager;
+    undoManager: UndoManager;
     audioLoopBrowser: any;
 
     public static TOOL_MODE: "SELECT" | "PEN" = "SELECT";
@@ -122,24 +122,24 @@ export default class App {
         this.pianoRollController = new PianoRollController(this);
         this.autoSaveController = new AutoSaveController(this);
         this.contextMenuController = new ContextMenuController(this);
-        
-        this.hostController.addDraggableWindow(this.pluginsView, this.latencyView, this.settingsView, 
+
+        this.hostController.addDraggableWindow(this.pluginsView, this.latencyView, this.settingsView,
             this.projectView, this.aboutView, this.keyboardShortcutsView, this.dawiyPluginView);
 
         this.undoManager = new UndoManager();
-        const old=this.undoManager.add.bind(this.undoManager)
-        
+        const old = this.undoManager.add.bind(this.undoManager)
+
         //@ts-ignore
         /*this.undoManager.add=(...args)=>{
             old(...args)
             console.trace()
         }*/
 
-        const buffer=new ArrayBuffer(256)
-        const array=new Float32Array(4)
-        const pipe=RingBuffer.make(buffer,Float32Array)
+        const buffer = new ArrayBuffer(256)
+        const array = new Float32Array(4)
+        const pipe = RingBuffer.make(buffer, Float32Array)
         //@ts-ignore
-        window.pipe=pipe
+        window.pipe = pipe
 
         this.setupPluginDragAndDrop();
     }
@@ -157,37 +157,67 @@ export default class App {
             }
         });
 
-        window.addEventListener("drop", (e) => {
+        window.addEventListener("drop", async (e) => {
             e.preventDefault();
             e.stopPropagation();
 
-            if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+            if (!e.dataTransfer || !e.dataTransfer.items) return;
 
-            const files = Array.from(e.dataTransfer.files);
-            
-            files.forEach(file => {
-                if (!file.name.endsWith('.ts')) return;
+            const items = Array.from(e.dataTransfer.items);
 
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const content = event.target?.result as string;
-                    if (!content) return;
+            for (const item of items) {
+                const entry = item.webkitGetAsEntry();
+                if (entry) {
+                    await this.traverseFileTree(entry);
+                }
+            }
+        });
+    }
 
-                    // Simple check for IDawiyPlugin import or implementation
-                    // Matches: import ... IDawiyPlugin ... or implements IDawiyPlugin
-                    if (content.includes('IDawiyPlugin') || content.includes('implements IDawiyPlugin')) {
-                        // Upload
-                        fetch('/upload-plugin', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'text/plain',
-                                'x-filename': file.name
-                            },
-                            body: content
-                        })
+    private async traverseFileTree(entry: any, path: string = "") {
+        if (entry.isFile) {
+            if (entry.name.endsWith('.ts')) {
+                this.uploadFile(entry, path);
+            }
+        } else if (entry.isDirectory) {
+            const dirReader = entry.createReader();
+            dirReader.readEntries(async (entries: any[]) => {
+                for (const childEntry of entries) {
+                    await this.traverseFileTree(childEntry, path + entry.name + "/");
+                }
+            });
+        }
+    }
+
+    private uploadFile(fileEntry: any, path: string) {
+        fileEntry.file((file: File) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const content = event.target?.result as string;
+                if (!content) return;
+
+                // Simple check for IDawiyPlugin import or implementation
+                // Matches: import ... IDawiyPlugin ... or implements IDawiyPlugin
+                // Allow "export default class ..." too for simpler plugins
+                if (content.includes('IDawiyPlugin') || content.includes('implements IDawiyPlugin') || content.includes('export default class')) {
+                    // Upload
+                    // Combine folder path and filename
+                    const fullPath = path + file.name;
+
+                    fetch('/upload-plugin', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'text/plain',
+                            // Encode the path to handle special characters if needed, but usually raw path is fine for headers if simple ascii
+                            'x-filename': fullPath
+                        },
+                        body: content
+                    })
                         .then(response => {
                             if (response.ok) {
-                                this.showToast(`Plugin "${file.name}" installed! App will reload shortly.`);
+                                this.showToast(`Plugin "${file.name}" installed to ${path || 'root'}! App will reload shortly.`);
+                            } else if (response.status === 409) {
+                                this.showToast(`同名のプラグイン/フォルダが既にインストールされています: "${fullPath}"`, true);
                             } else {
                                 this.showToast(`Failed to install plugin: ${response.statusText}`, true);
                             }
@@ -195,10 +225,9 @@ export default class App {
                         .catch(err => {
                             this.showToast(`Error uploading plugin: ${err}`, true);
                         });
-                    }
-                };
-                reader.readAsText(file);
-            });
+                }
+            };
+            reader.readAsText(file);
         });
     }
 
@@ -227,8 +256,8 @@ export default class App {
         setTimeout(() => {
             if (toast) {
                 toast.style.opacity = "0";
-                setTimeout(() => { 
-                    if (toast) toast.style.display = "none"; 
+                setTimeout(() => {
+                    if (toast) toast.style.display = "none";
                 }, 500);
             }
         }, 3000);
@@ -257,9 +286,9 @@ export default class App {
    * @param todo The todo and redo function, called once and then saved as a redo function if undoable is true
    * @param undo The undo function, it should cancel what do did, it is save in the undo manager if undoable is true
    */
-    doIt(undoable: boolean, todo: ()=>void, undo: ()=>void){
+    doIt(undoable: boolean, todo: () => void, undo: () => void) {
         todo()
-        if(undoable) this.addRedoUndo(todo, undo)
+        if (undoable) this.addRedoUndo(todo, undo)
     }
 
     /**
@@ -267,9 +296,9 @@ export default class App {
      * @param redo The redo function
      * @param undo The undo function
      */
-    addRedoUndo(redo: ()=>void, undo: ()=>void){
+    addRedoUndo(redo: () => void, undo: () => void) {
         // to disable/enable undo/redo buttons if undo/redo is available
-        const refreshButtons= ()=>{
+        const refreshButtons = () => {
             this.hostView.setUndoButtonState(this.undoManager.hasUndo())
             this.hostView.setRedoButtonState(this.undoManager.hasRedo())
         }
@@ -284,12 +313,12 @@ export default class App {
         };
 
         this.undoManager.add({
-            undo: ()=>{
+            undo: () => {
                 undo()
                 genericRedraw()
                 refreshButtons()
             },
-            redo: ()=>{
+            redo: () => {
                 redo()
                 genericRedraw()
                 refreshButtons()
@@ -306,7 +335,7 @@ export default class App {
  */
 export const DEBUG_MODE = true;
 
-export function crashOnDebug(...msgs: any[]){
+export function crashOnDebug(...msgs: any[]) {
     console.error(...msgs)
-    if(DEBUG_MODE) throw new Error(msgs.map(m=>m.toString()).join())
+    if (DEBUG_MODE) throw new Error(msgs.map(m => m.toString()).join())
 }

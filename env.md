@@ -27,6 +27,7 @@
 - `ADMIN_PASSWORD`･･･ 管理者のパスワード
 - `JWT_SECRET`･･･ JSON Web Token (JWT) のシークレット
 - `NODE_ENV`･･･ バックエンドが実行されている環境（例：`development`）
+- `ENABLE_HEARTBEAT_SHUTDOWN`･･･ ブラウザでDAWのページを開いていない状態で30秒以上経過した時に、自動的にターミナルを終了するかどうか（例：`false`）
 - 記述例（元々あった[`.env.example`](/bank/.env.example)参考 とりあえずこれで動くはず）：
 
     ```env
@@ -37,4 +38,5 @@
     NODE_ENV=development
     HTTPS=false
     BANKURL=http://localhost:6002
+    ENABLE_HEARTBEAT_SHUTDOWN=false
     ```

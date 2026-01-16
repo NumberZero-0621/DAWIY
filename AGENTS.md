@@ -90,6 +90,8 @@ this.app.doIt(
   - Starts Server on port `6002`.
 - **Build Client:** `cd public && npm run build`
 - **Install Dependencies:** `npm install` (Root), `cd public && npm install`, `cd bank && npm install`.
+- **Run Tests:** `cd public && npm test`
+  - Runs Jest unit tests. New features should be tested where possible.
 
 ## 5. Token Optimization Strategy
 

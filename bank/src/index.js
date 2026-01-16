@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const config= require('./config');
+const config = require('./config');
 const utils = require('./utils');
 
 const projectsRoutes = require('./routes/projects.routes');
@@ -24,7 +24,7 @@ app.use((req, res, next) => {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     next();
 });
-  
+
 
 utils.checkEnvVars();
 utils.createDirectories();
@@ -50,19 +50,21 @@ app.use("/AudioMetro", cors(CORS_ALL), express.static(path.join(__dirname, "../A
 
 // --- Heartbeat & Auto-Shutdown ---
 let heartbeatTimeout = null;
-const HEARTBEAT_TIMEOUT_MS = 5000; // 5 seconds grace period
+const HEARTBEAT_TIMEOUT_MS = 30000; // 30 seconds grace period
 
 app.get('/heartbeat', cors(CORS_ALL), (req, res) => {
     if (heartbeatTimeout) {
         clearTimeout(heartbeatTimeout);
     }
-    
+
     // Reset the shutdown timer
     // The server will shut down if no heartbeat is received within the timeout
-    heartbeatTimeout = setTimeout(() => {
-        console.log('Heartbeat lost. Shutting down server...');
-        process.exit(0);
-    }, HEARTBEAT_TIMEOUT_MS);
+    if (config.enableHeartbeatShutdown) {
+        heartbeatTimeout = setTimeout(() => {
+            console.log('Heartbeat lost. Shutting down server...');
+            process.exit(0);
+        }, HEARTBEAT_TIMEOUT_MS);
+    }
 
     res.sendStatus(200);
 });

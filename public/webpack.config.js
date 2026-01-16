@@ -39,7 +39,7 @@ module.exports = (env, argv) => {
                 },
                 progress: true,
             },
-            port: process.env.PORT || 5002, 
+            port: process.env.PORT || 5002,
             host: process.env.HOST || '0.0.0.0',
             https: process.env.HTTPS === 'true',
             open: {
@@ -61,16 +61,28 @@ module.exports = (env, argv) => {
                     // Basic body parsing for raw text
                     let data = '';
                     req.setEncoding('utf8');
-                    req.on('data', function(chunk) { 
+                    req.on('data', function (chunk) {
                         data += chunk;
                     });
-                    req.on('end', function() {
+                    req.on('end', function () {
                         const targetPath = path.join(__dirname, 'src', 'DawiyPlugins', filename);
-                        
+
                         // Security check: prevent directory traversal
                         if (!targetPath.startsWith(path.join(__dirname, 'src', 'DawiyPlugins'))) {
                             res.status(403).send('Invalid file path');
                             return;
+                        }
+
+                        // Check if file already exists
+                        if (fs.existsSync(targetPath)) {
+                            res.status(409).send('File already exists');
+                            return;
+                        }
+
+                        // Create directories if they don't exist
+                        const dir = path.dirname(targetPath);
+                        if (!fs.existsSync(dir)) {
+                            fs.mkdirSync(dir, { recursive: true });
                         }
 
                         fs.writeFile(targetPath, data, (err) => {
@@ -157,7 +169,7 @@ module.exports = (env, argv) => {
                         const https = process.env.HTTPS === 'true' ? 's' : '';
                         const host = process.env.HOST || 'localhost';
                         const url = `http${https}://${host}:${port}`;
-                        
+
                         setTimeout(() => {
                             console.log('===========================================================');
                             console.log('  DAWIY Frontend is running!');

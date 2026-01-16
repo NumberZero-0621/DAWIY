@@ -29,23 +29,17 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
     };
 
     private durationOptions = [
-        { label: "1/32", value: 1/32 },
-        { label: "1/16", value: 1/16 },
-        { label: "1/8", value: 1/8 },
-        { label: "1/4", value: 1/4 },
-        { label: "1/2", value: 1/2 },
+        { label: "1/32", value: 1 / 32 },
+        { label: "1/16", value: 1 / 16 },
+        { label: "1/8", value: 1 / 8 },
+        { label: "1/4", value: 1 / 4 },
+        { label: "1/2", value: 1 / 2 },
         { label: "1/1", value: 1 },
         { label: "2/1", value: 2 }
     ];
-    
+
     // Simple Pitch Map (C-1 to G9 is 0 to 127)
     // C4 is 60.
-    private getPitchLabel(midi: number): string {
-        const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-        const octave = Math.floor(midi / 12) - 1;
-        const note = notes[midi % 12];
-        return `${note}${octave}`;
-    }
 
     constructor(app: App) {
         this.app = app;
@@ -111,7 +105,7 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
             return input;
         };
 
-        const createSelect = (options: {label: string, value: any}[], selected: any, onChange: (val: any) => void) => {
+        const createSelect = (options: { label: string, value: any }[], selected: any, onChange: (val: any) => void) => {
             const select = document.createElement("select");
             select.style.background = "#444";
             select.style.color = "#fff";
@@ -149,7 +143,7 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
         // Pitch Range
         const pitchOptions = [];
         for (let i = 0; i <= 127; i++) {
-            pitchOptions.push({ label: this.getPitchLabel(i), value: i });
+            pitchOptions.push({ label: MIDI.getPitchLabel(i), value: i });
         }
         const pitchContainer = document.createElement("div");
         pitchContainer.style.display = "flex";
@@ -163,9 +157,9 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
         const durContainer = document.createElement("div");
         durContainer.style.display = "flex";
         durContainer.style.gap = "5px";
-        durContainer.appendChild(createSelect(this.durationOptions.map(o => ({...o, value: o.label})), this.params.minDuration, v => this.params.minDuration = v));
+        durContainer.appendChild(createSelect(this.durationOptions.map(o => ({ ...o, value: o.label })), this.params.minDuration, v => this.params.minDuration = v));
         durContainer.appendChild(document.createTextNode(" to "));
-        durContainer.appendChild(createSelect(this.durationOptions.map(o => ({...o, value: o.label})), this.params.maxDuration, v => this.params.maxDuration = v));
+        durContainer.appendChild(createSelect(this.durationOptions.map(o => ({ ...o, value: o.label })), this.params.maxDuration, v => this.params.maxDuration = v));
         createRow("Duration Range:", durContainer);
 
         // Triplet
@@ -201,34 +195,34 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
         const timeSig = this.app.hostView.metronome.timeSignature || [4, 4];
         const num = timeSig[0];
         const den = timeSig[1];
-        
+
         // Beat duration in ms = (60 / TEMPO) * 1000
         // But "Beat" usually refers to the denominator note.
         // In 4/4, a beat is a quarter note.
         // In 6/8, a beat is an eighth note (usually grouped, but let's stick to simple calc).
-        
+
         // 1 Beat (Quarter note usually) duration in MS
-        const beatDurationMs = (60 / TEMPO) * 1000; 
+        const beatDurationMs = (60 / TEMPO) * 1000;
         // 1 Bar duration = beatDurationMs * num * (4 / den) ? 
         // If 4/4: 1 beat = 1/4 note. Bar = 4 beats.
         // If 6/8: 1 beat = 1/8 note (if we define beat as denominator). Bar = 6 beats.
         // Standard definition: Beat duration depends on tempo which is usually BPM (Quarter notes per minute).
         // Let's assume TEMPO is BPM (Quarter notes).
-        
+
         const quarterNoteMs = (60 / TEMPO) * 1000;
-        
+
         // Calculate offset for Start
         // (Bar - 1) * BarDuration + (Beat - 1) * BeatDuration
         // We need to know how many Quarter notes in a Bar.
         // 4/4 -> 4 quarters. 3/4 -> 3 quarters. 6/8 -> 3 quarters equivalent (6 eighths).
         const quartersPerBar = num * (4 / den);
-        
+
         const startTotalQuarters = (this.params.startBar - 1) * quartersPerBar + (this.params.startBeat - 1);
         const endTotalQuarters = (this.params.endBar - 1) * quartersPerBar + (this.params.endBeat - 1);
-        
+
         const startMs = startTotalQuarters * quarterNoteMs;
         const endMs = endTotalQuarters * quarterNoteMs;
-        
+
         if (endMs <= startMs) {
             alert("End time must be after start time.");
             return;
@@ -245,24 +239,24 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
         const minDurMult = parseDuration(this.params.minDuration);
         const maxDurMult = parseDuration(this.params.maxDuration);
 
-        const newNotes: {note: number, start: number, duration: number}[] = [];
+        const newNotes: { note: number, start: number, duration: number }[] = [];
 
         for (let d = 0; d < this.params.density; d++) {
             let currentMs = startMs;
-            
+
             while (currentMs < endMs) {
                 // 1. Rest or Note?
                 const isRest = Math.random() * 100 < this.params.restProbability;
-                
+
                 // 2. Duration
                 let durMult = minDurMult + Math.random() * (maxDurMult - minDurMult);
-                
+
                 // Triplet logic: random chance to be 2/3 of a standard value? 
                 // Or just allow the random duration to be multiplied by 2/3?
                 if (this.params.triplet && Math.random() < 0.5) {
-                    durMult *= (2/3);
+                    durMult *= (2 / 3);
                 }
-                
+
                 // Snap duration to standard values? User didn't strictly say, but usually preferred.
                 // The prompt says "choose from shortest to longest". 
                 // Let's pick a random value from the list that is within range.
@@ -270,22 +264,22 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
                     const valMult = o.value * 4;
                     return valMult >= minDurMult && valMult <= maxDurMult;
                 });
-                
+
                 if (validOptions.length > 0) {
-                     const chosen = validOptions[Math.floor(Math.random() * validOptions.length)];
-                     durMult = chosen.value * 4;
+                    const chosen = validOptions[Math.floor(Math.random() * validOptions.length)];
+                    durMult = chosen.value * 4;
                 }
-                
+
                 if (this.params.triplet && Math.random() < 0.3) { // 30% chance for triplet if enabled
-                    durMult *= (2/3);
+                    durMult *= (2 / 3);
                 }
 
                 const durationMs = durMult * quarterNoteMs;
-                
+
                 if (!isRest) {
                     // 3. Pitch
                     const pitch = Math.floor(this.params.minPitch + Math.random() * (this.params.maxPitch - this.params.minPitch + 1));
-                    
+
                     if (currentMs + durationMs <= endMs) {
                         newNotes.push({
                             note: pitch,
@@ -294,21 +288,21 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
                         });
                     }
                 }
-                
+
                 currentMs += durationMs;
                 // If rest, we just advanced time (transparent note)
             }
         }
-        
+
         if (newNotes.length === 0) return;
 
         // Add notes to track
         // We need to create a region or add to existing.
         // Simple approach: Create a new Region covering the range.
         const regionDuration = endMs - startMs;
-        const midi = new MIDI(500, regionDuration); 
+        const midi = new MIDI(500, regionDuration);
         // Initialize MIDI duration
-        
+
         newNotes.forEach(n => {
             // Note start is relative to Region start
             const localStart = n.start - startMs;
@@ -316,22 +310,22 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
         });
 
         const newRegion = new MIDIRegion(midi, startMs);
-        
+
         const redo = () => {
             this.app.regionsController.addRegion(track, newRegion);
             if (this.app.pianoRollController.isVisible) {
-            this.app.pianoRollController.redraw();
+                this.app.pianoRollController.redraw();
             }
         };
         const undo = () => {
             this.app.regionsController.removeRegion(newRegion);
             if (this.app.pianoRollController.isVisible) {
-            this.app.pianoRollController.redraw();
+                this.app.pianoRollController.redraw();
             }
         };
 
         this.app.doIt(true, redo, undo);
-        
+
         console.log(`Generated ${newNotes.length} notes.`);
     }
 }

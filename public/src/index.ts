@@ -56,7 +56,7 @@ window.addEventListener('beforeunload', (e) => {
     e.returnValue = 'test';
 });
 
-const audioCtx = new AudioContext({latencyHint: 0.00001});
+const audioCtx = new AudioContext({ latencyHint: 0.00001 });
 const app = new App();
 
 (async () => {
@@ -92,7 +92,7 @@ const app = new App();
 
     // --- Heartbeat Client ---
     const HEARTBEAT_INTERVAL_MS = 2000;
-    setInterval(() => {
+    const sendHeartbeat = () => {
         fetch(`${BACKEND_URL}/heartbeat`)
             .then(res => {
                 if (!res.ok) throw new Error("Heartbeat error");
@@ -100,7 +100,7 @@ const app = new App();
             .catch(() => {
                 // Server is down
                 console.warn("Server connection lost. Attempting to close...");
-                
+
                 // Try to close window (may be blocked by browser)
                 window.close();
 
@@ -123,7 +123,11 @@ const app = new App();
                     </div>
                 `;
             });
-    }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    // Send immediately to prevent gap during reload
+    sendHeartbeat();
+    setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
     // ------------------------
 
 })();

@@ -37,8 +37,8 @@ export default class DawiyPluginController {
 
             context.keys().forEach((key: string) => {
                 // Ignore non-plugin files
-                if (key.includes('IDawiyPlugin') || 
-                    key.includes('README') || 
+                if (key.includes('IDawiyPlugin') ||
+                    key.includes('README') ||
                     key.includes('.d.ts') ||
                     key.includes('PluginTemplate')) {
                     return;
@@ -51,7 +51,7 @@ export default class DawiyPluginController {
 
                     if (PluginClass && typeof PluginClass === 'function') {
                         const instance = new PluginClass(this.app);
-                        
+
                         // Basic duck-typing validation to ensure it's a valid plugin
                         if (instance.id && instance.name && typeof instance.render === 'function') {
                             // Check for duplicates
@@ -64,7 +64,7 @@ export default class DawiyPluginController {
                     console.warn(`Failed to load plugin from ${key}:`, err);
                 }
             });
-            
+
             console.log(`Loaded ${this.installedExtensions.length} DAWIY plugins.`);
 
         } catch (e) {
@@ -122,16 +122,18 @@ export default class DawiyPluginController {
                     },
                     body: content
                 })
-                .then(response => {
-                    if (response.ok) {
-                        this.app.showToast(`Plugin "${file.name}" installed! App will reload shortly.`);
-                    } else {
-                        this.app.showToast(`Failed to install plugin: ${response.statusText}`, true);
-                    }
-                })
-                .catch(err => {
-                    this.app.showToast(`Error uploading plugin: ${err}`, true);
-                });
+                    .then(response => {
+                        if (response.ok) {
+                            this.app.showToast(`Plugin "${file.name}" installed! App will reload shortly.`);
+                        } else if (response.status === 409) {
+                            this.app.showToast(`同名のプラグインが既にインストールされています: "${file.name}"`, true);
+                        } else {
+                            this.app.showToast(`Failed to install plugin: ${response.statusText}`, true);
+                        }
+                    })
+                    .catch(err => {
+                        this.app.showToast(`Error uploading plugin: ${err}`, true);
+                    });
             } else {
                 this.app.showToast("Invalid plugin file. Must implement IDawiyPlugin.", true);
             }

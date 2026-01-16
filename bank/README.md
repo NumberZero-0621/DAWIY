@@ -82,7 +82,7 @@ window.instance.gui.cleanup([0, 7]);
 
 ![Wap after cleanup](https://cdn.discordapp.com/attachments/324198067089702913/971825415545040927/step1.png)
 
-4. Then run
+1. Then run
 
 ```js
 window.instance.gui.reOrder([2, 0, 1]);
@@ -92,7 +92,7 @@ window.instance.gui.reOrder([2, 0, 1]);
 
 ![Wap after reOrder](https://cdn.discordapp.com/attachments/324198067089702913/971826303676342372/step2.png)
 
-5. Then run
+1. Then run
 
 ```js
 window.instance.gui.reOrderGrid([0, 1, 2, 6, 7, 8, 3, 4, 5, 9, 10, 11]);
@@ -102,7 +102,7 @@ window.instance.gui.reOrderGrid([0, 1, 2, 6, 7, 8, 3, 4, 5, 9, 10, 11]);
 
 ![Wap after reOrderGrid](https://cdn.discordapp.com/attachments/324198067089702913/971827112090693712/step3.png)
 
-6. Then run and copy the result
+1. Then run and copy the result
 
 ```js
 window.instance.gui.toHTML();
@@ -122,3 +122,11 @@ this._root.innerHTML = clipboard content;
 ```
 
     It may not work for every plugin but it's better than what faust is offering with it's relative position for every components.
+
+## Server Configuration
+
+The server configuration is managed via environment variables. You can create a `.env` file in the `bank` directory to override the defaults. See `.env.example` for reference.
+
+### Available Variables
+
+- `ENABLE_HEARTBEAT_SHUTDOWN`: (boolean) If set to `true`, the server will automatically shut down if no heartbeat is received for 30 seconds. Defaults to `false`.

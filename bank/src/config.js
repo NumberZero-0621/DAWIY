@@ -29,6 +29,7 @@ module.exports = {
     port: process.env.PORT || 6002,
     corsOptions: CORS_OPTIONS,
     debug: process.env.DEBUG === 'true',
+    enableHeartbeatShutdown: process.env.ENABLE_HEARTBEAT_SHUTDOWN === 'true',
     SongTagEnum: {
         "POP": "Pop",
         "ROCK": "Rock",

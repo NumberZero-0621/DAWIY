@@ -264,6 +264,42 @@ export class MIDI extends MIDIView {
 
 
     /* FACTORIES */
+
+    static scaleTypes: { [key: string]: number[] } = {
+        "major": [0, 2, 4, 5, 7, 9, 11],
+        "minor": [0, 2, 3, 5, 7, 8, 10],
+        "harmonic_minor": [0, 2, 3, 5, 7, 8, 11],
+        "pentatonic_major": [0, 2, 4, 7, 9],
+        "pentatonic_minor": [0, 3, 5, 7, 10],
+        "chromatic": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    };
+
+    static getPitchLabel(midi: number): string {
+        const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        const octave = Math.floor(midi / 12) - 1;
+        const note = notes[midi % 12];
+        return `${note}${octave}`;
+    }
+
+    static getScaleNotes(min: number, max: number, root: number, scaleName: string): number[] {
+        const scaleIntervals = MIDI.scaleTypes[scaleName] || MIDI.scaleTypes["major"];
+        const notes: number[] = [];
+
+        // Normalize root to 0-11
+        const rootClass = root % 12;
+
+        for (let midi = min; midi <= max; midi++) {
+            const noteClass = (midi % 12);
+            // Check if noteClass matches any interval from root
+            // noteClass = (rootClass + interval) % 12
+            // => interval = (noteClass - rootClass + 12) % 12
+            const interval = (noteClass - rootClass + 12) % 12;
+            if (scaleIntervals.includes(interval)) {
+                notes.push(midi);
+            }
+        }
+        return notes;
+    }
     /**
      * Create a new MIDI track.
      * @param instant_duration The duration of a single instant in milliseconds.
@@ -493,6 +529,121 @@ export class MIDI extends MIDIView {
 
     static load2(buffer: ArrayBuffer): Promise<MIDI | null> {
         return parseSFMMidi(buffer)
+    }
+
+    /**
+     * Apply glitch effect (chop, delete, merge) to the MIDI track.
+     * @param stepMs The grid size in milliseconds.
+     * @param deleteChance The probability (0-100) to delete a step.
+     * @param mergeChance The probability (0-100) to merge a step with the next.
+     * @param start The start time to apply the effect.
+     * @param end The end time to apply the effect.
+     */
+    glitch(stepMs: number, deleteChance: number, mergeChance: number, start: number = 0, end: number = this.duration): MIDI {
+        // 1. Slice notes
+        const choppedMidi = this.chop(stepMs, start, end);
+
+        if (deleteChance === 0 && mergeChance === 0) return choppedMidi;
+
+        // 2 & 3. Apple Logic (Delete/Merge)
+        let allNotes = choppedMidi.notes;
+
+        // Separate Logic Notes (Active Range) vs Preserved Notes
+        const insideNotes: { note: MIDINote, start: number }[] = [];
+        const outsideNotes: { note: MIDINote, start: number }[] = [];
+
+        // Identify grid slots to reconstruct logic
+        const getStepIndex = (time: number) => Math.floor((time - start + 0.1) / stepMs);
+
+        const notesByStep: { [key: number]: { note: MIDINote, start: number }[] } = {};
+        const steps: number[] = [];
+
+        allNotes.forEach(item => {
+            // Check if item is within process range
+            if (item.start >= start - 0.1 && item.start < end - 0.1) {
+                insideNotes.push(item);
+                const stepIdx = getStepIndex(item.start);
+                if (!notesByStep[stepIdx]) {
+                    notesByStep[stepIdx] = [];
+                    steps.push(stepIdx);
+                }
+                notesByStep[stepIdx].push(item);
+            } else {
+                outsideNotes.push(item);
+            }
+        });
+
+        steps.sort((a, b) => a - b);
+
+        const deletedSteps = new Set<number>();
+        const mergedSteps = new Set<number>();
+
+        // Apply Delete
+        steps.forEach(step => {
+            if (Math.random() * 100 < deleteChance) {
+                deletedSteps.add(step);
+            }
+        });
+
+        // Apply Merge
+        for (let i = 0; i < steps.length - 1; i++) {
+            const currentStep = steps[i];
+            const nextStep = steps[i + 1];
+
+            // Only merge adjacent steps
+            if (nextStep !== currentStep + 1) continue;
+
+            if (!deletedSteps.has(currentStep) && !deletedSteps.has(nextStep)) {
+                if (Math.random() * 100 < mergeChance) {
+                    mergedSteps.add(currentStep);
+                }
+            }
+        }
+
+        // Reconstruct
+        const finalNotes = [...outsideNotes];
+        const consumedNotes = new Set<{ note: MIDINote, start: number }>();
+
+        steps.forEach(step => {
+            if (deletedSteps.has(step)) return;
+
+            const stepNotes = notesByStep[step];
+            if (!stepNotes) return;
+
+            const isMerging = mergedSteps.has(step);
+            const nextStepNotes = notesByStep[step + 1];
+
+            stepNotes.forEach(item => {
+                if (consumedNotes.has(item)) return;
+
+                if (isMerging && nextStepNotes) {
+                    // Try Merge
+                    const match = nextStepNotes.find(n =>
+                        !consumedNotes.has(n) &&
+                        n.note.note === item.note.note &&
+                        Math.abs((item.start + item.note.duration) - n.start) < 1
+                    );
+
+                    if (match) {
+                        // Merge logic
+                        const newNote = new MIDINote(item.note.note, item.note.velocity, item.note.channel, item.note.duration + match.note.duration);
+                        const newItem = { note: newNote, start: item.start };
+
+                        consumedNotes.add(match);
+
+                        // Replace match in next step to allow chain merging
+                        const matchIdx = nextStepNotes.indexOf(match);
+                        nextStepNotes[matchIdx] = newItem;
+                    } else {
+                        finalNotes.push(item);
+                    }
+                } else {
+                    finalNotes.push(item);
+                }
+            });
+        });
+
+        return MIDI.fromNotes(finalNotes, this.instant_duration);
     }
 
 }
