@@ -38,7 +38,23 @@ For detailed API specifications, implementation rules, and template code, please
 
     *Note: `PluginTemplate.ts` and `IDawiyPlugin.ts` are automatically excluded.*
 
-4. **Build/Run:**
+4. **Plugin Creator (Recommended):**
+    DAWIY includes a built-in plugin generation tool.
+    *   **Access:** "Create Plugin" tab in the Plugin Manager (Menu > DAWIY Plugin).
+    *   **Features:**
+        *   **Form Input:** Enter Name, Class Name, and Dependencies to generate a ZIP.
+        *   **Drag & Drop:** Drop an existing `.ts` file to automatically parse and fill class name and `import` statements.
+    *   **Output:** Downloads a ZIP file containing `plugin.json` (config) and `.ts` (source code).
+
+5. **Using External Libraries:**
+    To use third-party libraries (e.g., `tonal`, `lodash`), specify the CDN URL in the `dependencies` field of `plugin.json`.
+    
+    *   **How to specify:** Enter the URL in the "Dependencies" field of the Plugin Creator (one per line).
+    *   **Mechanism:** The system automatically injects `<script>` tags to load the libraries before loading the plugin.
+
+    > See [`AGENTS_en.md`](./AGENTS_en.md) for detailed specifications.
+
+6. **Build/Run:**
     Restart the development server (`npm start`) if new files are not recognized, or reload the page to see changes.
 
 [Return to README at the top](../../../README.md)

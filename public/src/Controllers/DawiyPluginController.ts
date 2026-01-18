@@ -465,11 +465,21 @@ export default class ${className} implements IDawiyPlugin {
     }
 
     render(container: HTMLElement) {
+        // Plugin Convention:
+        // Target specific dimensions: 670px width x 190px height.
+        // However, always use 100% width and height to be responsive to the parent container.
+        // This ensures the plugin looks good in both the track view (small) and full-screen mode.
+
         container.innerHTML = \`
-            <div style="padding: 20px; color: white;">
-                <h3>\${this.name}</h3>
-                <p>${desc}</p>
-                <button id="demo-btn" class="btn btn-primary">Click Me</button>
+            <div style="width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; background: #222; color: white;">
+                <div style="padding: 10px; border-bottom: 1px solid #444;">
+                    <h3 style="margin: 0;">\${this.name}</h3>
+                    <small>${desc}</small>
+                </div>
+                <div style="flex-grow: 1; padding: 10px; overflow-y: auto;">
+                    <p>Designed for 670x190, but responsive to 100%.</p>
+                    <button id="demo-btn" class="btn btn-primary">Click Me</button>
+                </div>
             </div>
         \`;
 

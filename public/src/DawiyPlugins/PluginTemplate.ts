@@ -4,14 +4,17 @@ import { IDawiyPlugin } from "./IDawiyPlugin";
 /**
  * A template for creating new DAWIY plugins.
  * Copy this file and rename it to start your own plugin.
+ * 
+ * For external dependencies (e.g. tonal, lodash), use the Plugin Creator to generate a plugin.json,
+ * or create one manually. See README.md and AGENTS.md for details.
  */
 export default class PluginTemplate implements IDawiyPlugin {
     // Unique ID for the plugin. Use lowercase and hyphens.
     id = "my-new-plugin";
-    
+
     // Display name shown in the UI.
     name = "My New Plugin";
-    
+
     // Brief description of what the plugin does.
     description = "A description of my awesome new plugin.";
 
@@ -28,10 +31,10 @@ export default class PluginTemplate implements IDawiyPlugin {
      */
     public render(container: HTMLElement) {
         this.container = container;
-        
+
         // Clear container
         container.innerHTML = '';
-        
+
         // Basic styling for the container
         this.applyContainerStyles(container);
 
@@ -79,7 +82,7 @@ export default class PluginTemplate implements IDawiyPlugin {
      */
     private doSomething() {
         console.log("Button clicked!");
-        
+
         // Example: Accessing DAWIY state
         const track = this.app.tracksController.selectedTrack;
         if (track) {
@@ -93,6 +96,10 @@ export default class PluginTemplate implements IDawiyPlugin {
 
     /**
      * Helper to apply basic styles to the container.
+     * PLUGIN CONVENTION:
+     * - Target Area: ~670px width x 190px height
+     * - Responsiveness: Always use width: 100% and height: 100% to fill the parent.
+     *   The parent will handle the sizing (whether it's the track view or full-screen).
      */
     private applyContainerStyles(container: HTMLElement) {
         container.style.color = "#eee";
@@ -101,6 +108,39 @@ export default class PluginTemplate implements IDawiyPlugin {
         container.style.flexDirection = "column";
         container.style.gap = "10px";
         container.style.overflowY = "auto";
+        container.style.width = "100%";
         container.style.height = "100%";
     }
+
+    // --- Data Management (Optional) ---
+
+    // /**
+    //  * 1. User Data (Global Settings)
+    //  * Persists across sessions and different projects. 
+    //  * Deleted when the user uninstalls the plugin.
+    //  */
+    // getUserData(): any {
+    //     return { mySetting: "someValue" };
+    // }
+
+    // setUserData(data: any): void {
+    //     if (data.mySetting) {
+    //         console.log("Restored setting:", data.mySetting);
+    //     }
+    // }
+
+    // /**
+    //  * 2. Project Data (Saved with Project)
+    //  * Specific to the current project file. 
+    //  * Saved/Loaded automatically with the .dawiy project.
+    //  */
+    // getProjectData(): any {
+    //     return { projectSpecificValue: 123 };
+    // }
+
+    // setProjectData(data: any): void {
+    //     if (data) {
+    //         console.log("Restored project data:", data);
+    //     }
+    // }
 }
