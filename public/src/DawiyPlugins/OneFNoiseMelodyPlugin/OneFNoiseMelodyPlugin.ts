@@ -1,9 +1,9 @@
-import App from "../App";
-import { TEMPO } from "../Env";
-import MIDIRegion from "../Models/Region/MIDIRegion";
-import { MIDINote } from "../Audio/MIDI/MIDI";
-import { MIDI } from "../Audio/MIDI/MIDI";
-import { IDawiyPlugin } from "./IDawiyPlugin";
+import App from "../../App";
+import { TEMPO } from "../../Env";
+import MIDIRegion from "../../Models/Region/MIDIRegion";
+import { MIDINote } from "../../Audio/MIDI/MIDI";
+import { MIDI } from "../../Audio/MIDI/MIDI";
+import { IDawiyPlugin } from "../IDawiyPlugin";
 
 export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
     id = "one-f-noise-melody";

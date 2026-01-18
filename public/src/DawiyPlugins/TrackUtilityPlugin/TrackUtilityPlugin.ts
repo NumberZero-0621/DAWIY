@@ -1,6 +1,6 @@
-import App from "../App";
-import { IDawiyPlugin } from "./IDawiyPlugin";
-import { getRandomColor } from "../Utils/Color";
+import App from "../../App";
+import { IDawiyPlugin } from "../IDawiyPlugin";
+import { getRandomColor } from "../../Utils/Color";
 
 export default class TrackUtilityPlugin implements IDawiyPlugin {
     id = "track-utility";

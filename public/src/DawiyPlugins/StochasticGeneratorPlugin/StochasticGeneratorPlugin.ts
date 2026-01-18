@@ -1,9 +1,9 @@
-import App from "../App";
-import { RATIO_MILLS_BY_PX, TEMPO } from "../Env";
-import MIDIRegion from "../Models/Region/MIDIRegion";
-import { MIDINote } from "../Audio/MIDI/MIDI";
-import { MIDI } from "../Audio/MIDI/MIDI";
-import { IDawiyPlugin } from "./IDawiyPlugin";
+import App from "../../App";
+import { RATIO_MILLS_BY_PX, TEMPO } from "../../Env";
+import MIDIRegion from "../../Models/Region/MIDIRegion";
+import { MIDINote } from "../../Audio/MIDI/MIDI";
+import { MIDI } from "../../Audio/MIDI/MIDI";
+import { IDawiyPlugin } from "../IDawiyPlugin";
 
 export default class StochasticGeneratorPlugin implements IDawiyPlugin {
     id = "stochastic-generator";
