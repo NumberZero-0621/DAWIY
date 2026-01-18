@@ -1,5 +1,6 @@
 import App from "../App";
 import DawiyPluginView from "../Views/DawiyPluginView";
+import JSZip from "jszip";
 import { IDawiyPlugin } from "../DawiyPlugins/IDawiyPlugin";
 
 // Declaration for Webpack's require.context
@@ -102,9 +103,27 @@ export default class DawiyPluginController {
         }
     }
 
-    private handleFileUpload(file: File) {
+    private async handleFileUpload(file: File) {
+        if (file.name.endsWith('.zip')) {
+            try {
+                const zip = await JSZip.loadAsync(file);
+                zip.forEach(async (relativePath, zipEntry) => {
+                    if (zipEntry.dir) return; // Ignore directories
+                    if (!zipEntry.name.endsWith('.ts')) return; // Allow only .ts inside zip for now
+
+                    const content = await zipEntry.async("string");
+                    // Use relative path from zip root
+                    this.app.uploadPlugin(relativePath, content, zipEntry.name);
+                });
+                this.app.showToast("Msg: ZIP definition loaded started...", false);
+            } catch (err) {
+                this.app.showToast(`Error reading ZIP file: ${err}`, true);
+            }
+            return;
+        }
+
         if (!file.name.endsWith('.ts')) {
-            this.app.showToast("Only .ts files are supported.", true);
+            this.app.showToast("Only .ts and .zip files are supported.", true);
             return;
         }
 
@@ -112,31 +131,7 @@ export default class DawiyPluginController {
         reader.onload = (event) => {
             const content = event.target?.result as string;
             if (!content) return;
-
-            if (content.includes('IDawiyPlugin') || content.includes('implements IDawiyPlugin')) {
-                fetch('/upload-plugin', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'text/plain',
-                        'x-filename': file.name
-                    },
-                    body: content
-                })
-                    .then(response => {
-                        if (response.ok) {
-                            this.app.showToast(`Plugin "${file.name}" installed! App will reload shortly.`);
-                        } else if (response.status === 409) {
-                            this.app.showToast(`同名のプラグインが既にインストールされています: "${file.name}"`, true);
-                        } else {
-                            this.app.showToast(`Failed to install plugin: ${response.statusText}`, true);
-                        }
-                    })
-                    .catch(err => {
-                        this.app.showToast(`Error uploading plugin: ${err}`, true);
-                    });
-            } else {
-                this.app.showToast("Invalid plugin file. Must implement IDawiyPlugin.", true);
-            }
+            this.app.uploadPlugin(file.name, content, file.name);
         };
         reader.readAsText(file);
     }

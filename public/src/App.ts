@@ -2,6 +2,7 @@
 import UndoManager from "undo-manager/lib/undomanager.js";
 
 
+import JSZip from "jszip";
 import TracksController from "./Controllers/Editor/Track/TracksController";
 import HostController from "./Controllers/HostController";
 import HostView from "./Views/HostView";
@@ -177,7 +178,9 @@ export default class App {
     private async traverseFileTree(entry: any, path: string = "") {
         if (entry.isFile) {
             if (entry.name.endsWith('.ts')) {
-                this.uploadFile(entry, path);
+                this.uploadEntryFile(entry, path);
+            } else if (entry.name.endsWith('.zip')) {
+                this.processZipEntry(entry, path);
             }
         } else if (entry.isDirectory) {
             const dirReader = entry.createReader();
@@ -189,46 +192,72 @@ export default class App {
         }
     }
 
-    private uploadFile(fileEntry: any, path: string) {
+    private uploadEntryFile(fileEntry: any, path: string) {
         fileEntry.file((file: File) => {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const content = event.target?.result as string;
                 if (!content) return;
-
-                // Simple check for IDawiyPlugin import or implementation
-                // Matches: import ... IDawiyPlugin ... or implements IDawiyPlugin
-                // Allow "export default class ..." too for simpler plugins
-                if (content.includes('IDawiyPlugin') || content.includes('implements IDawiyPlugin') || content.includes('export default class')) {
-                    // Upload
-                    // Combine folder path and filename
-                    const fullPath = path + file.name;
-
-                    fetch('/upload-plugin', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'text/plain',
-                            // Encode the path to handle special characters if needed, but usually raw path is fine for headers if simple ascii
-                            'x-filename': fullPath
-                        },
-                        body: content
-                    })
-                        .then(response => {
-                            if (response.ok) {
-                                this.showToast(`Plugin "${file.name}" installed to ${path || 'root'}! App will reload shortly.`);
-                            } else if (response.status === 409) {
-                                this.showToast(`同名のプラグイン/フォルダが既にインストールされています: "${fullPath}"`, true);
-                            } else {
-                                this.showToast(`Failed to install plugin: ${response.statusText}`, true);
-                            }
-                        })
-                        .catch(err => {
-                            this.showToast(`Error uploading plugin: ${err}`, true);
-                        });
-                }
+                this.uploadPlugin(path + file.name, content, file.name);
             };
             reader.readAsText(file);
         });
+    }
+
+    private processZipEntry(fileEntry: any, path: string) {
+        fileEntry.file(async (file: File) => {
+            try {
+                const zip = await JSZip.loadAsync(file);
+                zip.forEach(async (relativePath, zipEntry) => {
+                    if (zipEntry.dir) return; // Ignore directories
+                    if (!zipEntry.name.endsWith('.ts')) return; // Allow only .ts inside zip for now
+
+                    const content = await zipEntry.async("string");
+                    // Combine the path where zip was dropped + zip internal structure
+                    // If we want to extract ZIP content AS IS into the target path:
+                    // usually zip contains a folder structure.
+                    const fullPath = path + relativePath;
+                    this.uploadPlugin(fullPath, content, zipEntry.name);
+                });
+            } catch (err) {
+                this.showToast(`Error reading ZIP file: ${err}`, true);
+            }
+        });
+    }
+
+    /**
+     * Uploads the plugin content to the server.
+     * @param fullPath The full path (including filename) relative to DawiyPlugins root.
+     * @param content The file content string.
+     * @param displayName Name to display in toasts (usually just filename).
+     */
+    public uploadPlugin(fullPath: string, content: string, displayName: string) {
+        // Simple check for IDawiyPlugin import or implementation
+        // Matches: import ... IDawiyPlugin ... or implements IDawiyPlugin
+        // Allow "export default class ..." too for simpler plugins
+        if (content.includes('IDawiyPlugin') || content.includes('implements IDawiyPlugin') || content.includes('export default class')) {
+            fetch('/upload-plugin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain',
+                    // Encode the path to handle special characters if needed, but usually raw path is fine for headers if simple ascii
+                    'x-filename': fullPath
+                },
+                body: content
+            })
+                .then(response => {
+                    if (response.ok) {
+                        this.showToast(`Plugin "${displayName}" installed! App will reload shortly.`);
+                    } else if (response.status === 409) {
+                        this.showToast(`同名のプラグイン/フォルダが既にインストールされています: "${fullPath}"`, true);
+                    } else {
+                        this.showToast(`Failed to install plugin: ${response.statusText}`, true);
+                    }
+                })
+                .catch(err => {
+                    this.showToast(`Error uploading plugin: ${err}`, true);
+                });
+        }
     }
 
     public showToast(message: string, isError: boolean = false) {
