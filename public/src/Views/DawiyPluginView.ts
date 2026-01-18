@@ -28,6 +28,10 @@ export default class DawiyPluginView extends DraggableWindow {
     creatorGenerateBtn = document.getElementById("pm-creator-generate") as HTMLButtonElement;
     creatorCancelBtn = document.getElementById("pm-creator-cancel") as HTMLButtonElement;
 
+    // Pop-out UI
+    popOutBtn = document.getElementById("dawiy-popout-btn") as HTMLButtonElement;
+    pluginTitle = document.getElementById("dawiy-extension-title") as HTMLSpanElement;
+
     constructor() {
         super(document.getElementById("dawiy-plugin-header") as HTMLDivElement, document.getElementById("dawiy-plugin-window") as HTMLDivElement);
     }

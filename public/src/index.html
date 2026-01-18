@@ -329,16 +329,35 @@
 
 					<div id="dawiy-extensions-container">
 						<div id="dawiy-extension-list">
-							<!-- Dynamic list items will go here -->
-							<!-- Example:
-                        <div class="dawiy-ext-item active" data-id="1">
-                             <div class="dawiy-ext-icon"></div>
-                        </div>
-                        -->
+
+							<div id="dawiy-list-toolbar">
+								<button id="dawiy-add-folder-btn" class="btn btn-sm btn-outline-secondary"
+									title="Create New Folder">
+									<i class="bi bi-folder-plus"></i>
+								</button>
+							</div>
+
+							<div id="dawiy-list-content">
+							</div>
+
 						</div>
-						<div id="dawiy-extension-view">
-							<!-- Content of the active extension -->
-							<div class="dawiy-ext-placeholder">Select an extension</div>
+
+						<div id="dawiy-extension-main"
+							style="flex-grow: 1; display: flex; flex-direction: column; overflow: hidden;">
+							<div id="dawiy-extension-header"
+								style="height: 30px; background: #2c2c2c; border-bottom: 1px solid #000; display: flex; align-items: center; padding: 0 10px; justify-content: space-between; flex-shrink: 0;">
+								<span id="dawiy-extension-title"
+									style="color: #ccc; font-weight: bold; font-size: 12px;">Plugin</span>
+								<button id="dawiy-popout-btn" class="btn btn-sm btn-outline-secondary"
+									style="padding: 0 5px; font-size: 10px; background: none; border: none; color: #aaa;"
+									title="Pop-out">
+									<i class="bi bi-box-arrow-up-right"></i>
+								</button>
+							</div>
+							<div id="dawiy-extension-view">
+								<!-- Content of the active extension -->
+								<div class="dawiy-ext-placeholder">Select an extension</div>
+							</div>
 						</div>
 					</div>
 				</div>
