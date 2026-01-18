@@ -4,7 +4,8 @@
   },
   "dependencies": {
     "@types/file-saver": "^2.0.7",
-    "file-saver": "^2.0.5"
+    "file-saver": "^2.0.5",
+    "tonal": "^6.4.2"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
