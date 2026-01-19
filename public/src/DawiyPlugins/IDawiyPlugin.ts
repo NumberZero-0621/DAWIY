@@ -2,6 +2,7 @@ export interface IDawiyPlugin {
     id: string;
     name: string;
     description: string;
+    group?: string;
     /**
      * Called when the plugin is selected/opened in the UI.
      * Use this to render your plugin's interface into the provided container.
@@ -41,11 +42,6 @@ export interface IDawiyPlugin {
      * Optional: Set the data specific to the current project.
      */
     setProjectData?(data: any): void;
-
-    /**
-     * Optional: Injected external modules (from plugin.json "externals").
-     */
-    setExternals?(externals: { [key: string]: any }): void;
 }
 
 export const pluginRegistry: any[] = [];

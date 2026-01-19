@@ -11,7 +11,8 @@ export default abstract class DawiyPluginBase implements IDawiyPlugin {
     abstract description: string;
 
     protected app: App;
-    protected externals: { [key: string]: any } = {};
+    protected container: HTMLElement | null = null;
+    protected dynamicImport = new Function('url', 'return import(url)');
 
     constructor(app: App) {
         this.app = app;
@@ -19,19 +20,14 @@ export default abstract class DawiyPluginBase implements IDawiyPlugin {
 
     abstract render(container: HTMLElement): void;
 
-    onActivate() { }
-    onDeactivate() { }
+    public onActivate() { }
+    public onDeactivate() { }
 
     // Data Management
     getUserData(): any { return null; }
     setUserData(data: any): void { }
     getProjectData(): any { return null; }
     setProjectData(data: any): void { }
-
-    // Dependency Injection
-    setExternals(externals: { [key: string]: any }) {
-        this.externals = externals;
-    }
 
     /**
      * Statically validates and loads a plugin from a module.

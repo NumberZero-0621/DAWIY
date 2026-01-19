@@ -1,24 +1,26 @@
 import App from "../../App";
-import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
+import { DAWIYPlugin } from "../IDawiyPlugin";
+import DawiyPluginBase from "../DawiyPluginBase";
 import { MIDINote } from "../../Audio/MIDI/MIDI";
-import { Chord, Note } from "tonal";
 
 @DAWIYPlugin
-export default class C5thPlugin implements IDawiyPlugin {
+export default class C5thPlugin extends DawiyPluginBase {
     id = "c5th-number-zero";
     name = "Chord & Circle of Fifths";
     description = "Displays the chord of selected notes and the Circle of Fifths.";
+    group = "Analyzer";
 
-    private app: App;
-    private container: HTMLElement | null = null;
     private chordDisplay: HTMLElement | null = null;
     private updateInterval: any = null;
 
+    // Tonal.js modules
+    private Tonal: any = null;
+
     constructor(app: App) {
-        this.app = app;
+        super(app);
     }
 
-    public render(container: HTMLElement) {
+    public override async render(container: HTMLElement) {
         this.container = container;
         container.innerHTML = '';
         container.style.color = "#eee";
@@ -42,7 +44,7 @@ export default class C5thPlugin implements IDawiyPlugin {
         this.chordDisplay.style.fontWeight = "bold";
         this.chordDisplay.style.color = "#4CAF50";
         this.chordDisplay.style.minHeight = "40px";
-        this.chordDisplay.textContent = "--";
+        this.chordDisplay.textContent = "Loading Tonal...";
         container.appendChild(this.chordDisplay);
 
         // Image
@@ -55,15 +57,38 @@ export default class C5thPlugin implements IDawiyPlugin {
         img.style.border = "1px solid #444";
         container.appendChild(img);
 
-        // Start listening
-        this.startLoop();
+        // Load Tonal dynamically
+        try {
+            // Check global first (as per user initial context, but we use dynamic import wrapper)
+            // Or just import the CDN
+            const tonalUrl = "https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js";
+            await this.dynamicImport(tonalUrl);
+
+            // Tonal UMD attaches to window.Tonal or returns module
+            // @ts-ignore
+            if (window.Tonal) {
+                // @ts-ignore
+                this.Tonal = window.Tonal;
+            } else {
+                console.warn("Tonal loaded but window.Tonal not found?");
+            }
+
+            if (this.chordDisplay) this.chordDisplay.textContent = "--";
+            this.startLoop();
+
+        } catch (e) {
+            console.error("Failed to load Tonal.js", e);
+            if (this.chordDisplay) this.chordDisplay.textContent = "Error loading library";
+        }
     }
 
-    public onActivate() {
-        this.startLoop();
+    public override onActivate() {
+        if (this.Tonal) {
+            this.startLoop();
+        }
     }
 
-    public onDeactivate() {
+    public override onDeactivate() {
         this.stopLoop();
     }
 
@@ -80,7 +105,7 @@ export default class C5thPlugin implements IDawiyPlugin {
     }
 
     private update() {
-        if (!this.chordDisplay) return;
+        if (!this.chordDisplay || !this.Tonal) return;
 
         // Access the exposed selectedNotes from PianoRollController
         const pianoRoll = this.app.pianoRollController as any;
@@ -88,7 +113,6 @@ export default class C5thPlugin implements IDawiyPlugin {
         let notes: MIDINote[] = [];
         if (pianoRoll && pianoRoll.selectedNotes) {
             notes = Array.from(pianoRoll.selectedNotes);
-            // console.log("C5thPlugin: selectedNotes size:", notes.length);
         }
 
         if (notes.length === 0) {
@@ -103,6 +127,7 @@ export default class C5thPlugin implements IDawiyPlugin {
 
     private detectChord(notes: MIDINote[]): string {
         if (notes.length === 0) return "--";
+        const { Note, Chord } = this.Tonal;
 
         // Convert MIDI notes to note names for tonal
         // tonal expects names like "C4", "Db5", etc.
@@ -123,9 +148,6 @@ export default class C5thPlugin implements IDawiyPlugin {
         for (const noteNum of uniqueNoteNumbers) {
             for (const interval of [3, 4]) {
                 const candidateNoteNum = noteNum + interval;
-                // Avoid if candidate is already in the set (though uniqueNoteNumbers handles this, we are adding new pitches)
-                // Actually if it's already there, it wouldn't have failed detection if it was a valid chord unless it's complex.
-                // But simplified: checking if we already have it is good.
                 if (uniqueNoteNumbers.includes(candidateNoteNum)) continue;
 
                 const candidateNoteName = Note.fromMidi(candidateNoteNum);

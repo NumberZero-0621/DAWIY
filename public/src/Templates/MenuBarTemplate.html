@@ -1,0 +1,184 @@
+<div id="left-controls">
+    <a class="menu-item main" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true"
+        aria-expanded="false">
+        <i class="menu-icon"></i>
+    </a>
+    <div class="dropdown-menu dropright" aria-labelledby="dropdownMenuButton">
+        <div class="dropright">
+            <a class="dropdown-item dropdown-toggle" type="button" id="dropdownSubMenuButton" data-toggle="dropdown"
+                aria-haspopup="true" aria-expanded="false" data-i18n="menu.select_demo">Select Demo Project</a>
+            <div id="songs-container" class="dropdown-menu songs" aria-labelledby="dropdownSubMenuButton"></div>
+        </div>
+
+        <div class="dropdown-divider"></div>
+
+        <div class="dropright">
+            <a class="dropdown-item dropdown-toggle" type="button" id="loadProjectSubMenuButton" data-toggle="dropdown"
+                aria-haspopup="true" aria-expanded="false" data-i18n="menu.load_project">Load project</a>
+            <div class="dropdown-menu" aria-labelledby="loadProjectSubMenuButton">
+                <a class="dropdown-item" id="load-project" data-i18n="menu.load_wam">WAM-Studio</a>
+                <a class="dropdown-item" id="load-dawproject" data-i18n="menu.load_dawproject">dawproject</a>
+            </div>
+        </div>
+        <div class="dropright">
+            <a class="dropdown-item dropdown-toggle" type="button" id="saveProjectSubMenuButton" data-toggle="dropdown"
+                aria-haspopup="true" aria-expanded="false" data-i18n="menu.save_project">Save project</a>
+            <div class="dropdown-menu" aria-labelledby="saveProjectSubMenuButton">
+                <a class="dropdown-item" id="save-project" data-i18n="menu.save_wam">WAM-Studio</a>
+                <a class="dropdown-item" id="save-dawproject" data-i18n="menu.save_dawproject">dawproject</a>
+            </div>
+        </div>
+
+        <div class="dropright">
+            <a class="dropdown-item dropdown-toggle" type="button" id="exportSubMenuButton" data-toggle="dropdown"
+                aria-haspopup="true" aria-expanded="false" data-i18n="menu.export_project">Render/Export project</a>
+            <div class="dropdown-menu" aria-labelledby="exportSubMenuButton">
+                <a class="dropdown-item" id="export-project" data-i18n="menu.export_audio">Audio</a>
+                <a class="dropdown-item" id="export-midi" data-i18n="menu.export_midi">MIDI</a>
+            </div>
+        </div>
+
+        <div class="dropdown-divider"></div>
+
+        <div class="dropright">
+            <a class="dropdown-item dropdown-toggle" type="button" id="importSubMenuButton" data-toggle="dropdown"
+                aria-haspopup="true" aria-expanded="false" data-i18n="menu.import">Import</a>
+            <div class="dropdown-menu" aria-labelledby="importSubMenuButton">
+                <a class="dropdown-item" id="import-songs" data-i18n="menu.import_audio">Audio file(s)</a>
+                <a class="dropdown-item" id="import-midi-btn" data-i18n="menu.import_midi">MIDI file</a>
+            </div>
+        </div>
+        <input id="new-track-input" type="file" accept=".mp3, .wav, .ogg" multiple style="display: none">
+        <input id="new-midi-track-input" type="file" accept=".mid, .midi" multiple style="display: none">
+        <input id="dawproject-input" type="file" accept=".dawproject" style="display: none">
+
+        <div class="dropdown-divider advanced"></div>
+
+        <a class="dropdown-item" id="keyboard-shortcuts-btn" data-i18n="menu.keyboard_shortcuts">Keyboard
+            shortcuts</a>
+
+        <div class="dropdown-divider advanced"></div>
+
+        <a class="dropdown-item" id="latency-btn" data-i18n="menu.calibrate_latency">Calibrate latency
+            compensation</a>
+        <a class="dropdown-item" id="settings-btn" data-i18n="menu.settings">Settings</a>
+        <a class="dropdown-item" id="dawiy-plugin-btn" data-i18n="menu.dawiy_plugin">DAWIY Plugin</a>
+
+        <div class="dropdown-divider advanced"></div>
+
+        <a class="dropdown-item" id="login" data-i18n="menu.login">Log in</a>
+
+        <div class="dropdown-divider advanced"></div>
+
+        <a class="dropdown-item" id="playground-btn" data-i18n="menu.playground">Playground</a>
+
+        <a class="dropdown-item" id="about-btn" data-i18n="menu.about">About</a>
+    </div>
+
+    <div id="back-btn" class="menu-item">
+        <span class="mytooltip">Restart</span>
+        <i class="skip-start-icon"></i>
+    </div>
+    <div id="play-btn" class="menu-item">
+        <span class="mytooltip">Play</span>
+        <i class="play-icon" id="play-icon"></i>
+    </div>
+    <div id="record-btn" class="menu-item">
+        <span class="mytooltip">Record</span>
+        <i class="record-icon"></i>
+    </div>
+    <div id="loop-btn" class="menu-item">
+        <span class="mytooltip">Loop</span>
+        <i class="loop-icon"></i>
+    </div>
+    <div class="timer-item noselect">
+        <div id="timer" class="timer">
+            00:00:00:000
+        </div>
+    </div>
+    <div class="tempo-selector" id="tempo-selector">
+        <!-- the tempo web component will be inserted here -->
+    </div>
+    <div class="time-signature-selector" id="time-signature-selector">
+        <!-- the time-signature web component will be inserted here -->
+    </div>
+    <div id="tool-wrapper" style="position: relative; display: flex; align-items: center; height: 100%;">
+        <div id="tool-btn" class="menu-item" style="height: 100%;">
+            <span class="mytooltip" data-i18n="tooltip.tool_mode">Tool Mode</span>
+            <i class="bi bi-cursor-fill" id="tool-icon"
+                style="font-size: 30px; margin-bottom: 4px; color: #d3d3d3;"></i>
+        </div>
+        <div id="tool-menu" class="dropdown-menu"
+            style="display: none; position: absolute; top: 100%; left: 0; z-index: 1000; min-width: 150px;">
+            <a class="dropdown-item" id="tool-select" data-i18n="tool.select"><i class="bi bi-cursor-fill"></i>
+                Select Mode</a>
+            <a class="dropdown-item" id="tool-pen" data-i18n="tool.pen"><i class="bi bi-pencil-fill"></i> Pen
+                Mode</a>
+        </div>
+    </div>
+    <div id="metro-btn" class="menu-item">
+        <span class="mytooltip" data-i18n="tooltip.metronome">Metronome</span>
+        <i class="metro-icon" style="width: 36px"></i>
+    </div>
+    <button id="metro-btn-arrow" class="metro-btn-arrow" style="margin-left: -20px; z-index: 10;">▼</button>
+    <div id="metronome"></div>
+    <div id="mute-btn" class="menu-item">
+        <span class="mytooltip" data-i18n="tooltip.mute">Mute</span>
+        <i class="volume-up-icon" style="width: 36px" id="mute-icon"></i>
+    </div>
+    <div id="snap-wrapper" style="position: relative; display: flex; align-items: center; height: 100%;">
+        <div id="snap-btn" class="menu-item" style="height: 100%;">
+            <span class="mytooltip" data-i18n="tooltip.snap_grid">Snap grid</span>
+            <i class="snap-icon" style="width: 30px" id="snap-icon"></i>
+        </div>
+        <button id="snap-btn-arrow" class="metro-btn-arrow" style="margin-left: -20px; z-index: 10;">▼</button>
+        <div id="snap-menu" class="dropdown-menu"
+            style="display: none; position: absolute; top: 100%; left: 0; z-index: 1000; min-width: 180px; background-color: #222; border: 1px solid #444;">
+            <a class="dropdown-item" id="snap-1-1" style="color: #eee; cursor: pointer;" data-i18n="snap.bar">1/1
+                (Bar)</a>
+            <a class="dropdown-item" id="snap-1-2" style="color: #eee; cursor: pointer;" data-i18n="snap.half">1/2
+                (Half)</a>
+            <a class="dropdown-item" id="snap-1-4" style="color: #eee; cursor: pointer;" data-i18n="snap.quarter">1/4
+                (Quarter) <span style="float:right">✓</span></a>
+            <a class="dropdown-item" id="snap-1-8" style="color: #eee; cursor: pointer;" data-i18n="snap.eighth">1/8
+                (Eighth)</a>
+            <a class="dropdown-item" id="snap-1-16" style="color: #eee; cursor: pointer;"
+                data-i18n="snap.sixteenth">1/16 (Sixteenth)</a>
+            <a class="dropdown-item" id="snap-1-32" style="color: #eee; cursor: pointer;"
+                data-i18n="snap.thirtysecond">1/32 (Thirty-second)</a>
+            <div class="dropdown-divider" style="border-top: 1px solid #444;"></div>
+            <a class="dropdown-item" id="snap-triplet" style="color: #eee; cursor: pointer;"
+                data-i18n="snap.triplet">Triplet Mode <span id="snap-triplet-check"
+                    style="float: right; display: none;">✓</span></a>
+        </div>
+    </div>
+    <div id="split-btn" class="menu-item">
+        <span class="mytooltip" data-i18n="tooltip.split">Split region (S)</span>
+        <i class="split-icon" style="width: 30px" id="split-icon"></i>
+    </div>
+    <div id="merge-btn" class="menu-item">
+        <span class="mytooltip" data-i18n="tooltip.merge">Merge region (M)</span>
+        <i class="merge-icon" style="width: 30px" id="merge-icon"></i>
+    </div>
+
+    <div id="undo-btn" class="menu-item">
+        <span class="mytooltip" data-i18n="tooltip.undo">Undo</span>
+        <i class="undo-icon-off" style="width: 30px" id="undo-icon"></i>
+    </div>
+    <div id="redo-btn" class="menu-item">
+        <span class="mytooltip" data-i18n="tooltip.redo">Redo</span>
+        <i class="redo-icon-off" style="width: 30px" id="redo-icon"></i>
+    </div>
+</div>
+<div id="right-controls">
+    <input id="spanZoomLevel" type="number" min="0.13" max="16" step="0.1" value="1.00"
+        style="width: 80px; font-size: 1.2em; background: transparent; color: #d3d3d3; border: 1px solid #555; border-radius: 4px; text-align: center; margin-right: 10px;">
+    <div id="zoom-out-btn" class="menu-item">
+        <span class="mytooltip">Zoom out</span>
+        <i class="zoom-out" style="width: 30px"></i>
+    </div>
+    <div id="zoom-in-btn" class="menu-item">
+        <span class="mytooltip">Zoom in</span>
+        <i class="zoom-in" style="width: 30px"></i>
+    </div>
+</div>

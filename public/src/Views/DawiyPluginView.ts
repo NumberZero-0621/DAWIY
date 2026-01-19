@@ -23,7 +23,7 @@ export default class DawiyPluginView extends DraggableWindow {
     creatorNameInput = document.getElementById("pm-creator-name") as HTMLInputElement;
     creatorClassInput = document.getElementById("pm-creator-classname") as HTMLInputElement;
     creatorDescInput = document.getElementById("pm-creator-desc") as HTMLInputElement;
-    creatorDepsInput = document.getElementById("pm-creator-deps") as HTMLTextAreaElement;
+    creatorGroupInput = document.getElementById("pm-creator-group") as HTMLInputElement;
 
     creatorGenerateBtn = document.getElementById("pm-creator-generate") as HTMLButtonElement;
     creatorCancelBtn = document.getElementById("pm-creator-cancel") as HTMLButtonElement;

@@ -13,7 +13,6 @@ export default class DawiyPluginLoader {
     private app: App;
     private plugins: IDawiyPlugin[] = [];
     private pluginGroups: Map<string, string> = new Map();
-    private loadedScripts: Set<string> = new Set();
 
     constructor(app: App) {
         this.app = app;
@@ -35,91 +34,32 @@ export default class DawiyPluginLoader {
 
     private async loadPlugins() {
         try {
-            this.plugins = [];
             // @ts-ignore
-            const context = require.context('../DawiyPlugins', true, /\.(ts|js|json)$/);
+            const context = require.context('../DawiyPlugins', true, /\.(ts|js)$/);
 
-            // ディレクトリごとにリソース（クラス、設定）をまとめるマップ
-            const pluginModules: Map<string, { class?: any, config?: any, path: string }> = new Map();
-
-            // 1. ファイルスキャン & グルーピング
             context.keys().forEach((key: string) => {
-                // 除外ファイル
-                if (key.includes('IDawiyPlugin') || key.includes('README') || key.includes('.d.ts') || key.includes('DawiyPluginBase')) return;
-
-                // ディレクトリパスを取得 (例: "./MyPlugin/index.ts" -> "./MyPlugin")
-                const dir = key.substring(0, key.lastIndexOf('/'));
-
-                if (!pluginModules.has(dir)) {
-                    pluginModules.set(dir, { path: dir });
-                }
-                const entry = pluginModules.get(dir)!;
-
-                if (key.endsWith('plugin.json')) {
-                    entry.config = context(key);
-                } else if (key.match(/\.(ts|js)$/)) {
-                    // モジュールを読み込み、default export (クラス) を取得
-                    const module = context(key);
-                    if (module.default) {
-                        entry.class = module.default;
-                    }
-                }
+                if (key.includes('IDawiyPlugin') ||
+                    key.includes('.d.ts') ||
+                    key.includes('DawiyPluginBase')) return;
+                context(key);
             });
 
-            // 2. 解決 & インスタンス化
-            for (const [dir, entry] of pluginModules) {
-                if (!entry.class) continue; // クラスがないディレクトリはスキップ
-
-                const PluginClass = entry.class;
-                const config = entry.config || {}; // Configがない場合は空
-
+            console.log(`[DawiyPluginLoader] Found ${pluginRegistry.length} plugins in registry.`);
+            for (const PluginClass of pluginRegistry) {
                 try {
-                    // インスタンス化
                     const instance = new PluginClass(this.app);
-
-                    // バリデーション
-                    if (instance.id && typeof instance.render === 'function') {
-
-                        // --- Externalのプログラム解決 & 注入 ---
-                        if (config.externals && typeof config.externals === 'object') {
-                            const loadedExternals: { [key: string]: any } = {};
-
-                            for (const key of Object.keys(config.externals)) {
-                                const url = config.externals[key];
-                                try {
-                                    console.log(`[Plugin: ${instance.name}] Importing external: ${key}`);
-                                    // ダイナミックインポートでモジュールとして取得
-                                    // @ts-ignore
-                                    const module = await import(/* webpackIgnore: true */ url);
-                                    loadedExternals[key] = module;
-                                } catch (e) {
-                                    console.warn(`Failed to import external ${key} for ${instance.name}:`, e);
-                                }
-                            }
-
-                            // プラグインに注入 (インターフェースに定義されている場合)
-                            if (instance.setExternals) {
-                                instance.setExternals(loadedExternals);
-                            }
-                        }
-                        // ------------------------------------------
-
-                        // Dependencies (loadScript) は config.dependencies がある場合のみ実行
-                        // プログラムベースのExternal解決だけで良ければ、plugin.jsonのdependenciesは空にすれば良い
-                        if (config.dependencies) {
-                            for (const url of config.dependencies) {
-                                await this.loadScript(url);
-                            }
-                        }
-
-                        this.plugins.push(instance);
-
-                        // グループ設定など
-                        this.pluginGroups.set(instance.id, 'General'); // 必要ならconfigから取得可能
-                        console.log(`[DawiyPluginLoader] Loaded: ${instance.name}`);
+                    if (this.plugins.some(p => p.id === instance.id)) {
+                        console.warn(`Duplicate plugin ID found: ${instance.id}. Skipping.`);
+                        continue;
                     }
+
+                    this.plugins.push(instance);
+                    this.pluginGroups.set(instance.id, instance.group || "General");
+
+                    console.log(`[DawiyPluginLoader] Loaded: ${instance.name}`);
+
                 } catch (e) {
-                    console.error(`Failed to load plugin from ${dir}:`, e);
+                    console.error(`Failed to instantiate plugin:`, e);
                 }
             }
 
@@ -128,25 +68,5 @@ export default class DawiyPluginLoader {
         } catch (e) {
             console.error("Error loading plugins:", e);
         }
-    }
-
-    private loadScript(url: string): Promise<void> {
-        if (this.loadedScripts.has(url)) return Promise.resolve();
-
-        return new Promise((resolve, reject) => {
-            console.log(`Loading dependency: ${url} `);
-            const script = document.createElement('script');
-            script.src = url;
-            script.onload = () => {
-                this.loadedScripts.add(url);
-                console.log(`Loaded: ${url} `);
-                resolve();
-            };
-            script.onerror = (e) => {
-                console.error(`Failed to load script: ${url} `, e);
-                reject(e);
-            };
-            document.head.appendChild(script);
-        });
     }
 }

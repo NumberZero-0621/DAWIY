@@ -5,6 +5,7 @@
   "dependencies": {
     "@types/file-saver": "^2.0.7",
     "file-saver": "^2.0.5",
+    "html-loader": "^5.1.0",
     "tonal": "^6.4.2"
   },
   "devDependencies": {

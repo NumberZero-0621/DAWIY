@@ -3,16 +3,15 @@ import { RATIO_MILLS_BY_PX, TEMPO } from "../../Env";
 import MIDIRegion from "../../Models/Region/MIDIRegion";
 import { MIDINote } from "../../Audio/MIDI/MIDI";
 import { MIDI } from "../../Audio/MIDI/MIDI";
-import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
+import { DAWIYPlugin } from "../IDawiyPlugin";
+import DawiyPluginBase from "../DawiyPluginBase";
 
 @DAWIYPlugin
-export default class StochasticGeneratorPlugin implements IDawiyPlugin {
+export default class StochasticGeneratorPlugin extends DawiyPluginBase {
     id = "stochastic-generator";
     name = "Stochastic Note Generator";
     description = "Generates random notes based on probability and density.";
-
-    private app: App;
-    private container: HTMLElement | null = null;
+    group = "Generator"
 
     // Parameters
     private params = {
@@ -43,10 +42,10 @@ export default class StochasticGeneratorPlugin implements IDawiyPlugin {
     // C4 is 60.
 
     constructor(app: App) {
-        this.app = app;
+        super(app);
     }
 
-    public render(container: HTMLElement) {
+    public override render(container: HTMLElement) {
         this.container = container;
         container.innerHTML = '';
         container.style.color = "#eee";

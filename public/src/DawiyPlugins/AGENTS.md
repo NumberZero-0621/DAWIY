@@ -19,59 +19,31 @@
     - 整理のためにサブディレクトリを作成することを強く推奨します。
 
 2. **クラス定義**:
-    - `IDawiyPlugin` インターフェースを実装 (`implements`) すること。
+    - `DawiyPluginBase` クラスを継承 (`extends`) すること。
+    - `@DAWIYPlugin` デコレーターを使用すること。
     - クラスは必ず **`export default`** すること。
 
 3. **コンストラクタ**:
-    - `constructor(app: App)` のシグネチャを持ち、`App` インスタンスを保持すること。
+    - `constructor(app: App)` のシグネチャを持ち、`super(app)` を呼び出すこと。
     
-4. **設定ファイル (plugin.json) [推奨]**:
-    - 外部ライブラリを使用する場合や、メタデータを明確に定義する場合は `plugin.json` を使用します。
-    - **Plugin Creator** を使用すると、このファイルは自動生成されます。
+4. **設定ファイル (plugin.json) [任意]**:
+    - メタデータ（名前や説明）を明確に定義する場合に使用します。
+    - 外部ライブラリのロードには `this.dynamicImport` を使用してください。依存関係定義は廃止されました。
 
-    ```json
-    {
-      "name": "My Plugin",
-      "description": "Uses external libraries",
-      "dependencies": [
-        "https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js",
-        "https://code.jquery.com/jquery-3.6.0.min.js"
-      ]
-    }
+5. **グループ化 (Grouping) [任意]**:
+    - プラグインのグループを指定するには、`group` プロパティを設定します（デフォルトは "General"）。
+    ```typescript
+    group = "My Custom Group";
     ```
-    - **dependencies**: 配列にCDNのURLを指定すると、プラグインのロード前に自動的にインジェクトされます。
 
-## 外部ライブラリの利用 (External Libraries)
 
-外部ライブラリを利用するには3つの方法があります。
+## 外部ライブラリ (Dynamic Import)
 
-### 方法1: グローバルロード (推奨: 一般的なライブラリ)
-`plugin.json` の `dependencies` に CDN の URL を記述します。これらのスクリプトはプラグインのロード前にグローバルスコープに読み込まれます。
-JQuery, Lodash, Tonal.js など、UMD/Global ビルドが提供されているライブラリに適しています。
-
-### 方法2: 自動インジェクション (推奨: ESMライブラリ)
-`DawiyPluginBase` を継承するクラスで利用可能です。
-`plugin.json` の `externals` にキーとURLのペアを記述すると、システムが自動的に動的インポートを行い、`this.externals` に注入します。
-
-**plugin.json**
-```json
-{
-  "externals": {
-    "confetti": "https://esm.sh/canvas-confetti"
-  }
-}
-```
-
-**MyPlugin.ts**
-```typescript
-const confetti = this.externals.confetti;
-```
-
-### 方法3: 手動動的インポート (上級者向け)
-コード内で直接 `await import(...)` します。Webpack のバンドル処理を回避するために `/* webpackIgnore: true */` コメントが必須です。
+単純化された動的インポート機構を利用します。
 
 ```typescript
-const confetti = await import(/* webpackIgnore: true */ "https://esm.sh/canvas-confetti");
+// 推奨
+const module = await this.dynamicImport('https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js');
 ```
 
 
@@ -80,10 +52,12 @@ const confetti = await import(/* webpackIgnore: true */ "https://esm.sh/canvas-c
 以下のテンプレートをベースに実装してください。
 
 ```typescript
-import App from "../../App"; // 階層に応じてパスを調整: ../../App
-import { IDawiyPlugin } from "../IDawiyPlugin"; // 階層に応じてパスを調整: ../IDawiyPlugin
+import App from "../../App"; // 階層に応じてパスを調整
+import { DAWIYPlugin } from "../IDawiyPlugin"; // 階層に応じてパスを調整
+import DawiyPluginBase from "../DawiyPluginBase";
 
-export default class MyAgentPlugin implements IDawiyPlugin {
+@DAWIYPlugin
+export default class MyAgentPlugin extends DawiyPluginBase {
     // ユニークなID (他のプラグインと被らないように命名)
     id = "my-agent-plugin";
     // UIに表示される名前
@@ -91,19 +65,16 @@ export default class MyAgentPlugin implements IDawiyPlugin {
     // 機能の説明
     description = "AIエージェントによって生成されたプラグインです。";
 
-    private app: App;
-    private container: HTMLElement | null = null;
-
     constructor(app: App) {
-        this.app = app;
+        super(app);
     }
 
     /**
      * UIの描画
      * @param container プラグインに割り当てられた描画領域 (divなど)
      */
-    public render(container: HTMLElement) {
-        this.container = container;
+    public override render(container: HTMLElement) {
+        this.container = container; // Baseクラスにもありますが、必要に応じて使用
         container.innerHTML = ''; // 再描画のためにクリア
         
         // スタイリング (インラインスタイル推奨、またはクラス定義)
@@ -124,20 +95,23 @@ export default class MyAgentPlugin implements IDawiyPlugin {
     /**
      * プラグインが表示された時に呼ばれる
      */
-    public onActivate() {
+    public override onActivate() {
         // 必要ならイベントリスナー登録など
     }
 
     /**
      * プラグインが非表示/クローズされた時に呼ばれる
      */
-    public onDeactivate() {
+    public override onDeactivate() {
         // クリーンアップ処理
     }
 
-    private doAction() {
+    private async doAction() {
         console.log("Action executed by " + this.name);
         // ここで this.app を通じて DAW を操作する
+        
+        // 例: 動的インポート
+        // const lib = await this.dynamicImport('...');
     }
 }
 ```

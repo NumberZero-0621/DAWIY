@@ -1,20 +1,19 @@
 import App from "../../App";
-import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
+import { DAWIYPlugin } from "../IDawiyPlugin";
+import DawiyPluginBase from "../DawiyPluginBase";
 import { getRandomColor } from "../../Utils/Color";
 
 @DAWIYPlugin
-export default class TrackUtilityPlugin implements IDawiyPlugin {
+export default class TrackUtilityPlugin extends DawiyPluginBase {
     id = "track-utility";
     name = "Track Utils";
     description = "Batch utilities for track management (Mixer Reset, Colors, Naming).";
 
-    private app: App;
-
     constructor(app: App) {
-        this.app = app;
+        super(app);
     }
 
-    public render(container: HTMLElement) {
+    public override render(container: HTMLElement) {
         container.innerHTML = '';
         container.style.color = "#eee";
         container.style.padding = "10px";

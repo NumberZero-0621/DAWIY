@@ -1,17 +1,16 @@
 import { Application, Container, Graphics, FederatedPointerEvent, Text, Point, IPointData } from "pixi.js";
 import App from "../../App";
-import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
+import { DAWIYPlugin } from "../IDawiyPlugin";
+import DawiyPluginBase from "../DawiyPluginBase";
 
 type ToolType = "PEN" | "ERASER" | "STICKY" | "TEXT";
 
 @DAWIYPlugin
-export default class MemoPlugin implements IDawiyPlugin {
+export default class MemoPlugin extends DawiyPluginBase {
     id = "memo-plugin";
     name = "Memo / Sticky Notes";
     description = "Draw freehand notes and add sticky notes to the track view.";
-
-    private app: App;
-    private container: HTMLElement | null = null;
+    group = "Tools";
 
     // PIXI Elements
     private memoContainer: Container;
@@ -28,12 +27,12 @@ export default class MemoPlugin implements IDawiyPlugin {
     private stickyCounter = 0;
 
     constructor(app: App) {
-        this.app = app;
+        super(app);
         this.memoContainer = new Container();
         this.memoContainer.zIndex = 200; // Above regions (usually < 100) and selection box (100)
     }
 
-    public render(container: HTMLElement) {
+    public override render(container: HTMLElement) {
         this.container = container;
         container.innerHTML = '';
         container.style.color = "#eee";
@@ -160,11 +159,11 @@ export default class MemoPlugin implements IDawiyPlugin {
         }
     }
 
-    public onActivate() {
+    public override onActivate() {
         this.activateOverlay();
     }
 
-    public onDeactivate() {
+    public override onDeactivate() {
         this.deactivateOverlay();
     }
 

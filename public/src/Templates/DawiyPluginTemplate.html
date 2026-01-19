@@ -1,0 +1,112 @@
+<div id="dawiy-plugin-header" class="header-window">
+    <span class="title" data-i18n="menu.dawiy_plugin">DAWIY Plugin</span>
+    <button id="dawiy-plugin-close-button" class="close-button">X</button>
+</div>
+<div class="settings-body" id="dawiy-plugin-body"
+    style="padding: 0; display: flex; flex-direction: column; height: calc(100% - 30px);">
+    <!-- Plugin Manager UI -->
+    <div class="plugin-manager-container"
+        style="flex-grow: 1; display: flex; flex-direction: column; padding: 10px; overflow: hidden;">
+
+        <!-- Tabs -->
+        <div class="pm-filters"
+            style="display: flex; gap: 10px; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 10px;">
+            <button id="pm-filter-all" class="btn btn-sm btn-outline-light active"
+                style="border: none; border-bottom: 2px solid transparent; border-radius: 0;">Installed</button>
+            <div style="flex-grow: 1;"></div>
+            <button id="pm-filter-creator" class="btn btn-sm btn-outline-secondary"
+                style="border: none; border-radius: 4px;"> <i class="bi bi-tools"></i> Creator Utility</button>
+
+            <!-- Hidden buttons for compatibility (or to subsequently remove from Controller) -->
+            <button id="pm-filter-installed" style="display:none;"></button>
+            <button id="pm-filter-not-installed" style="display:none;"></button>
+        </div>
+
+        <!-- List View -->
+        <div class="pm-list" id="pm-list" style="flex-grow: 1; overflow-y: auto; padding-right: 5px;">
+            <!-- Plugin Items injected here -->
+        </div>
+
+        <!-- Creator View -->
+        <div class="pm-creator" id="pm-creator" style="display: none; padding: 10px; overflow-y: auto;">
+            <div class="container-fluid p-0">
+                <div class="row">
+                    <!-- Drag & Drop Zone -->
+                    <div class="col-md-6" style="border-right: 1px solid #444;">
+                        <h6
+                            style="color:#aaa; border-bottom: 2px solid #0c85d0; padding-bottom: 5px; margin-bottom: 15px;">
+                            Package (Drag & Drop)</h6>
+                        <div id="pm-creator-dropzone" style="
+                            border: 2px dashed #555; 
+                            border-radius: 8px; 
+                            padding: 40px 20px; 
+                            text-align: center; 
+                            color: #aaa; 
+                            cursor: pointer;
+                            transition: all 0.2s;
+                            background: rgba(0,0,0,0.2);
+                            ">
+                            <i class="bi bi-box-seam" style="font-size: 40px; color: #0c85d0;"></i>
+                            <div style="margin-top:15px; font-weight:bold; color: #ddd;">Drop Folder or File</div>
+                            <div style="font-size:0.85em; color:#888; margin-top: 5px;">
+                                Auto-zips as <code>*DAWIYPlugin.zip</code><br>
+                                (Recursively packs folders)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manual Generation Form -->
+                    <div class="col-md-6">
+                        <h6
+                            style="color:#aaa; border-bottom: 2px solid #0c85d0; padding-bottom: 5px; margin-bottom: 15px;">
+                            Generate Manually</h6>
+
+                        <div class="mb-2">
+                            <label style="font-size: 0.8em; color: #888;">Plugin Name</label>
+                            <input type="text" id="pm-creator-name" class="form-control form-control-sm"
+                                style="background: #222; border: 1px solid #444; color: white;" placeholder="My Plugin">
+                        </div>
+
+                        <div class="row">
+                            <div class="col-6 mb-2">
+                                <label style="font-size: 0.8em; color: #888;">Class Name</label>
+                                <input type="text" id="pm-creator-classname" class="form-control form-control-sm"
+                                    style="background: #222; border: 1px solid #444; color: white;"
+                                    placeholder="MyPlugin">
+                            </div>
+                            <div class="col-6 mb-2">
+                                <label style="font-size: 0.8em; color: #888;">Group</label>
+                                <input type="text" id="pm-creator-group" class="form-control form-control-sm"
+                                    style="background: #222; border: 1px solid #444; color: white;"
+                                    placeholder="General">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label style="font-size: 0.8em; color: #888;">Description</label>
+                            <input type="text" id="pm-creator-desc" class="form-control form-control-sm"
+                                style="background: #222; border: 1px solid #444; color: white;"
+                                placeholder="Short description...">
+                        </div>
+
+                        <button id="pm-creator-generate" class="btn btn-primary btn-sm w-100">
+                            <i class="bi bi-magic"></i> Generate
+                        </button>
+
+                        <!-- Hidden cancel button for Controller logic compatibility -->
+                        <button id="pm-creator-cancel" style="display:none;"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="pm-footer" style="padding-top:10px; border-top:1px solid #444; margin-top: auto;">
+            <button id="pm-add-manual-btn" class="btn btn-outline-secondary btn-sm w-100"
+                style="color: #ccc; border-color: #555;">
+                <i class="bi bi-upload"></i> Install Plugin from ZIP / File
+            </button>
+            <input type="file" id="pm-add-manual-input" accept=".zip,.js,.ts,.json" style="display: none;">
+        </div>
+    </div>
+</div>

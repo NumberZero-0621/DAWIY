@@ -231,12 +231,12 @@ export default class App {
      * @param content The file content string.
      * @param displayName Name to display in toasts (usually just filename).
      */
-    public uploadPlugin(fullPath: string, content: string, displayName: string) {
+    public uploadPlugin(fullPath: string, content: string, displayName: string): Promise<void> {
         // Simple check for IDawiyPlugin import or implementation
         // Matches: import ... IDawiyPlugin ... or implements IDawiyPlugin
         // Allow "export default class ..." too for simpler plugins
-        if (content.includes('IDawiyPlugin') || content.includes('implements IDawiyPlugin') || content.includes('export default class')) {
-            fetch('/upload-plugin', {
+        if (fullPath.endsWith('.json') || content.includes('IDawiyPlugin') || content.includes('implements IDawiyPlugin') || content.includes('export default class')) {
+            return fetch('/upload-plugin', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'text/plain',
@@ -258,6 +258,7 @@ export default class App {
                     this.showToast(`Error uploading plugin: ${err}`, true);
                 });
         }
+        return Promise.resolve();
     }
 
     public showToast(message: string, isError: boolean = false) {
