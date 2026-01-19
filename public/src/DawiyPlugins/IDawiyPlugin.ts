@@ -41,4 +41,16 @@ export interface IDawiyPlugin {
      * Optional: Set the data specific to the current project.
      */
     setProjectData?(data: any): void;
+
+    /**
+     * Optional: Injected external modules (from plugin.json "externals").
+     */
+    setExternals?(externals: { [key: string]: any }): void;
+}
+
+export const pluginRegistry: any[] = [];
+
+export function DAWIYPlugin(constructor: Function) {
+    console.log(`[DAWIYPlugin] Registered: ${constructor.name}`);
+    pluginRegistry.push(constructor);
 }

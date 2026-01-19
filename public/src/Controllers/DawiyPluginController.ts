@@ -3,14 +3,9 @@ import DawiyPluginView from "../Views/DawiyPluginView";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { IDawiyPlugin } from "../DawiyPlugins/IDawiyPlugin";
+import DawiyPluginLoader from "../Loader/DawiyPluginLoader";
 
-// Declaration for Webpack's require.context
-declare const require: {
-    context(directory: string, useSubdirectories: boolean, regExp: RegExp): {
-        keys(): string[];
-        (id: string): any;
-    };
-};
+// Declaration for Webpack's require.context is REMOVED (Moved to Loader)
 
 export interface PluginFolder {
     id: string;
@@ -26,6 +21,7 @@ export default class DawiyPluginController {
 
     private app: App;
     private view: DawiyPluginView;
+    private loader: DawiyPluginLoader;
 
     // Extensions list
     private installedExtensions: IDawiyPlugin[];
@@ -45,93 +41,45 @@ export default class DawiyPluginController {
     constructor(app: App) {
         this.app = app;
         this.installedExtensions = [];
+        this.loader = new DawiyPluginLoader(app);
         this.loadPlugins();
     }
 
-    private loadedScripts: Set<string> = new Set();
-
     /**
-     * Automatically loads plugins from the ../DawiyPlugins directory.
+     * Automatically loads plugins via Loader.
      */
     private async loadPlugins() {
         try {
-            // Include .json for config, .ts/.js for plugins
-            // @ts-ignore
-            const context = require.context('../DawiyPlugins', true, /\.(ts|js|json)$/);
+            await this.loader.init();
 
-            const pluginConfigs: { [key: string]: any } = {};
-            const pluginFiles: string[] = [];
+            this.installedExtensions = this.loader.getPlugins();
 
-            context.keys().forEach((key: string) => {
-                if (key.includes('IDawiyPlugin') || key.includes('README') || key.includes('.d.ts') || key.includes('.map') || key.includes('PluginTemplate')) return;
+            // Re-build groups map from loader (or we could just use loader.getPluginGroup() directly, 
+            // but for compatibility with existing code let's copy it or wrap it)
+            this.installedExtensions.forEach(p => {
+                this.pluginGroups.set(p.id, this.loader.getPluginGroup(p.id));
 
-                if (key.endsWith('plugin.json')) {
-                    pluginConfigs[key] = context(key);
-                } else if (key.match(/\.(ts|js)$/)) {
-                    pluginFiles.push(key);
-                }
-            });
-
-            // process configs first
-            for (const configPath of Object.keys(pluginConfigs)) {
-                const config = pluginConfigs[configPath];
-                if (config.dependencies && Array.isArray(config.dependencies)) {
-                    for (const url of config.dependencies) {
-                        await this.loadScript(url);
-                    }
-                }
-            }
-
-            // Load all plugin files
-            pluginFiles.forEach(key => {
-                try {
-                    const module = context(key);
-                    // We expect "export default class ..."
-                    const PluginClass = module.default;
-
-                    if (PluginClass && typeof PluginClass === 'function') {
-                        const instance = new PluginClass(this.app);
-
-                        // Basic duck-typing validation to ensure it's a valid plugin
-                        if (instance.id && instance.name && typeof instance.render === 'function') {
-                            // Check for duplicates
-                            if (!this.installedExtensions.find(ext => ext.id === instance.id)) {
-                                this.installedExtensions.push(instance);
-                                if (instance.setUserData) {
-                                    try {
-                                        const stored = localStorage.getItem(this.getUserDataKey(instance.id));
-                                        if (stored) {
-                                            instance.setUserData(JSON.parse(stored));
-                                        }
-                                    } catch (e) {
-                                        console.warn(`Failed to load user data for plugin ${instance.name}`, e);
-                                    }
-                                }
-
-                                // Extract Group
-                                // key is like "./C5thPlugin/C5thPlugin.ts" or "./Plugin.ts"
-                                const parts = key.split('/');
-                                let group = 'General';
-                                if (parts.length > 2) {
-                                    // ./Dir/File.ts -> parts[1] is Dir
-                                    group = parts[1];
-                                }
-                                this.pluginGroups.set(instance.id, group);
-                            }
+                // Restore User Data
+                if (p.setUserData) {
+                    try {
+                        const stored = localStorage.getItem(this.getUserDataKey(p.id));
+                        if (stored) {
+                            p.setUserData(JSON.parse(stored));
                         }
+                    } catch (e) {
+                        console.warn(`Failed to load user data for plugin ${p.name}`, e);
                     }
-                } catch (err) {
-                    console.warn(`Failed to load plugin from ${key}:`, err);
                 }
             });
 
-            console.log(`Loaded ${this.installedExtensions.length} DAWIY plugins.`);
+            console.log(`[DawiyPluginController] Synced ${this.installedExtensions.length} plugins from Loader.`);
 
             this.loadLayout();
             this.reconcileLayout();
+            this.refreshBottomPanel();
 
         } catch (e) {
-            console.error("Error loading plugins automatically:", e);
+            console.error("Error loading plugins:", e);
         }
     }
 
@@ -219,26 +167,6 @@ export default class DawiyPluginController {
             this.saveLayout();
             this.refreshBottomPanel();
         }
-    }
-
-    private loadScript(url: string): Promise<void> {
-        if (this.loadedScripts.has(url)) return Promise.resolve();
-
-        return new Promise((resolve, reject) => {
-            console.log(`Loading dependency: ${url} `);
-            const script = document.createElement('script');
-            script.src = url;
-            script.onload = () => {
-                this.loadedScripts.add(url);
-                console.log(`Loaded: ${url} `);
-                resolve();
-            };
-            script.onerror = (e) => {
-                console.error(`Failed to load script: ${url} `, e);
-                reject(e);
-            };
-            document.head.appendChild(script);
-        });
     }
 
     public setView(view: DawiyPluginView) {
@@ -557,9 +485,11 @@ export default class ${className} implements IDawiyPlugin {
     }
 
     private refreshPluginManagerList(filter: 'all' | 'installed' | 'not-installed') {
-        const listContent = document.getElementById('dawiy-list-content');
-        if (!listContent) return;
-        listContent.innerHTML = ''; // クリア
+        // Use the container from the view (pm-list)
+        const listContainer = this.view.listContainer;
+        if (!listContainer) return;
+
+        listContainer.innerHTML = ''; // Clear current list
 
         // For now, we consider all loaded extensions as "Installed".
         // "Not Installed" would be plugins we know about but aren't loaded (e.g. from a registry we don't have yet).
@@ -573,12 +503,12 @@ export default class ${className} implements IDawiyPlugin {
 
         // If filter is 'not-installed', we show nothing (or a placeholder)
         if (filter === 'not-installed') {
-            this.view.listContainer.innerHTML = '<div style="padding: 20px; color: #aaa; text-align: center;">No uninstalled plugins found.</div>';
+            listContainer.innerHTML = '<div style="padding: 20px; color: #aaa; text-align: center;">No uninstalled plugins found.</div>';
             return;
         }
 
         if (pluginsToShow.length === 0) {
-            this.view.listContainer.innerHTML = '<div style="padding: 20px; color: #aaa; text-align: center;">No plugins found.</div>';
+            listContainer.innerHTML = '<div style="padding: 20px; color: #aaa; text-align: center;">No plugins found.</div>';
             return;
         }
 
@@ -624,12 +554,9 @@ export default class ${className} implements IDawiyPlugin {
                     </div>
                 `;
                 groupContainer.appendChild(item);
-
-                // Re-select after append to attach event
-                // Note: querySelector on groupContainer works before appending to listContainer? Yes.
             });
 
-            this.view.listContainer.appendChild(groupContainer);
+            listContainer.appendChild(groupContainer);
 
             // Bind events for this group's items
             groups[groupName].forEach(p => {
@@ -639,11 +566,6 @@ export default class ${className} implements IDawiyPlugin {
                 }
             });
         });
-        const rootDrop = document.createElement('div');
-        rootDrop.style.height = '20px';
-        rootDrop.style.flexGrow = '1';
-        this.setupDropTarget(rootDrop, null, 'root');
-        listContent.appendChild(rootDrop);
     }
 
     public refreshBottomPanel() {

@@ -41,6 +41,40 @@
     ```
     - **dependencies**: 配列にCDNのURLを指定すると、プラグインのロード前に自動的にインジェクトされます。
 
+## 外部ライブラリの利用 (External Libraries)
+
+外部ライブラリを利用するには3つの方法があります。
+
+### 方法1: グローバルロード (推奨: 一般的なライブラリ)
+`plugin.json` の `dependencies` に CDN の URL を記述します。これらのスクリプトはプラグインのロード前にグローバルスコープに読み込まれます。
+JQuery, Lodash, Tonal.js など、UMD/Global ビルドが提供されているライブラリに適しています。
+
+### 方法2: 自動インジェクション (推奨: ESMライブラリ)
+`DawiyPluginBase` を継承するクラスで利用可能です。
+`plugin.json` の `externals` にキーとURLのペアを記述すると、システムが自動的に動的インポートを行い、`this.externals` に注入します。
+
+**plugin.json**
+```json
+{
+  "externals": {
+    "confetti": "https://esm.sh/canvas-confetti"
+  }
+}
+```
+
+**MyPlugin.ts**
+```typescript
+const confetti = this.externals.confetti;
+```
+
+### 方法3: 手動動的インポート (上級者向け)
+コード内で直接 `await import(...)` します。Webpack のバンドル処理を回避するために `/* webpackIgnore: true */` コメントが必須です。
+
+```typescript
+const confetti = await import(/* webpackIgnore: true */ "https://esm.sh/canvas-confetti");
+```
+
+
 ## テンプレートコード
 
 以下のテンプレートをベースに実装してください。

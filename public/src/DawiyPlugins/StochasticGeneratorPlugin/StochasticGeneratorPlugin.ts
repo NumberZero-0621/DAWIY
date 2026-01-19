@@ -3,8 +3,9 @@ import { RATIO_MILLS_BY_PX, TEMPO } from "../../Env";
 import MIDIRegion from "../../Models/Region/MIDIRegion";
 import { MIDINote } from "../../Audio/MIDI/MIDI";
 import { MIDI } from "../../Audio/MIDI/MIDI";
-import { IDawiyPlugin } from "../IDawiyPlugin";
+import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
 
+@DAWIYPlugin
 export default class StochasticGeneratorPlugin implements IDawiyPlugin {
     id = "stochastic-generator";
     name = "Stochastic Note Generator";

@@ -1,7 +1,8 @@
 import App from "../../App";
-import { IDawiyPlugin } from "../IDawiyPlugin";
+import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
 import { getRandomColor } from "../../Utils/Color";
 
+@DAWIYPlugin
 export default class TrackUtilityPlugin implements IDawiyPlugin {
     id = "track-utility";
     name = "Track Utils";

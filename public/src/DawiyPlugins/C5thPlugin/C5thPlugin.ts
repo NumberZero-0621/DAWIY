@@ -1,8 +1,9 @@
 import App from "../../App";
-import { IDawiyPlugin } from "../IDawiyPlugin";
+import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
 import { MIDINote } from "../../Audio/MIDI/MIDI";
 import { Chord, Note } from "tonal";
 
+@DAWIYPlugin
 export default class C5thPlugin implements IDawiyPlugin {
     id = "c5th-number-zero";
     name = "Chord & Circle of Fifths";
