@@ -1,0 +1,145 @@
+<div id="left-container">
+    <div id="track-editor">
+        <div id="track-container">
+            <div id="track-container-header">
+                <div class="icon">
+                    <i class="music-file-icon"></i>
+                </div>
+                <div class="text-icon" data-i18n="header.tracks">
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TRACKS
+                </div>
+            </div>
+
+
+
+            <div id="new-track" class="new-track">
+                <div class="new-track-text" data-i18n="header.new_track">
+                    New track
+                </div>
+                <div class="icon">
+                    <i class="plus-icon"></i>
+                </div>
+
+            </div>
+
+            <div id="automation-menu" hidden>
+            </div>
+        </div>
+
+        <div id="editor">
+            <div id="editor-content">
+                <div id="editor-canvas"></div>
+                <scrollbar-element id="vertical-scrollbar" orientation="vertical"></scrollbar-element>
+            </div>
+            <scrollbar-element id="horizontal-scrollbar" orientation="horizontal"></scrollbar-element>
+
+            <div id="automation-container"></div>
+        </div>
+    </div>
+    <div id="vertical-resizer"></div>
+    <div id="plugin-editor">
+        <div id="plugin-container-header">
+            <div id="header-main-track">
+                <div class="icon">
+                    <i class="sliders-icon"></i>
+                </div>
+                <div class="text-icon" data-i18n="header.master_track">
+                    MASTER TRACK
+                </div>
+            </div>
+
+            <div class="icon">
+                <i class="plugin-icon"></i>
+            </div>
+            <div class="text-icon" data-i18n="header.plugins">
+                PLUGINS
+            </div>
+
+            <div id="min-max-btn">
+                <i id="min-max-icon" class="arrow-down-icon"></i>
+            </div>
+
+        </div>
+
+        <div id="plugins">
+            <div id="main-track" style="color: #0c85d0">
+                <!-- HERE PLACE THE HOST TRACK VIEW -->
+            </div>
+            <div id="add-plugins"></div>
+            <div id="remove-plugins" class="new-track">
+                <div class="new-track-text">
+                    Remove [WAM PLUGIN]
+                </div>
+                <div class="icon">
+                    <i class="close-icon" style="width: 40px"></i>
+                </div>
+            </div>
+            <div id="hide-pedalboard" class="new-track">
+                <div class="new-track-text">
+                    Hide [WAM PLUGIN]
+                </div>
+                <div class="icon">
+                    <i class="arrow-down-left-icon"></i>
+                </div>
+            </div>
+            <div id="show-pedalboard" class="new-track">
+                <div class="new-track-text">
+                    Show [WAM PLUGIN]
+                </div>
+                <div class="icon">
+                    <i class="arrow-up-right-icon"></i>
+                </div>
+            </div>
+            <div id="loading-pedalboard" class="new-track">
+                <div class="new-track-text">
+                    Loading [WAM PLUGIN]
+                </div>
+                <div class="icon">
+                    <i class="loading-icon"></i>
+                </div>
+            </div>
+
+            <div class="vertical-divider"></div>
+
+            <div id="dawiy-extensions-container">
+                <div id="dawiy-extension-list">
+
+                    <div id="dawiy-list-toolbar">
+                        <button id="dawiy-add-folder-btn" class="btn btn-sm btn-outline-secondary"
+                            title="Create New Folder">
+                            <i class="bi bi-folder-plus"></i>
+                        </button>
+                    </div>
+
+                    <div id="dawiy-list-content">
+                    </div>
+
+                </div>
+
+                <div id="dawiy-extension-main"
+                    style="flex-grow: 1; display: flex; flex-direction: column; overflow: hidden;">
+                    <div id="dawiy-extension-header"
+                        style="height: 30px; background: #2c2c2c; border-bottom: 1px solid #000; display: flex; align-items: center; padding: 0 10px; justify-content: space-between; flex-shrink: 0;">
+                        <span id="dawiy-extension-title"
+                            style="color: #ccc; font-weight: bold; font-size: 12px;">Plugin</span>
+                        <button id="dawiy-popout-btn" class="btn btn-sm btn-outline-secondary"
+                            style="padding: 0 5px; font-size: 10px; background: none; border: none; color: #aaa;"
+                            title="Pop-out">
+                            <i class="bi bi-box-arrow-up-right"></i>
+                        </button>
+                    </div>
+                    <div id="dawiy-extension-view">
+                        <!-- Content of the active extension -->
+                        <div class="dawiy-ext-placeholder">Select an extension</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="audio-loop-browser"></div>
+<div id="ToggleButtons">
+    <button id="soundLoupBtn">
+        <i class="bi bi-music-note-list"></i>
+    </button>
+</div>

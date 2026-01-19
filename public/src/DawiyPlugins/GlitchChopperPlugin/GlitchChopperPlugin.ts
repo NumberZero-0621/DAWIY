@@ -1,6 +1,7 @@
 import App from "../../App";
 import { RATIO_MILLS_BY_PX, TEMPO } from "../../Env";
-import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
+import { DAWIYPlugin } from "../IDawiyPlugin";
+import DawiyPluginBase from "../DawiyPluginBase";
 import Region, { RegionOf } from "../../Models/Region/Region";
 import MIDIRegion from "../../Models/Region/MIDIRegion";
 import SampleRegion from "../../Models/Region/SampleRegion";
@@ -8,13 +9,11 @@ import { MIDI, MIDINote } from "../../Audio/MIDI/MIDI";
 import { audioCtx } from "../../index";
 
 @DAWIYPlugin
-export default class GlitchChopperPlugin implements IDawiyPlugin {
+export default class GlitchChopperPlugin extends DawiyPluginBase {
     id = "glitch-chopper";
     name = "Glitch Chopper";
     description = "Slices selection into grid parts and randomly deletes or merges them.";
-
-    private app: App;
-    private container: HTMLElement | null = null;
+    group = "Generator";
 
     private params = {
         grid: "1/16",
@@ -23,10 +22,10 @@ export default class GlitchChopperPlugin implements IDawiyPlugin {
     };
 
     constructor(app: App) {
-        this.app = app;
+        super(app);
     }
 
-    public render(container: HTMLElement) {
+    public override render(container: HTMLElement) {
         this.container = container;
         container.innerHTML = '';
         container.style.color = "#eee";

@@ -52,11 +52,14 @@ customElements.define(
 );
 
 
+import TemplateLoader from './TemplateLoader';
+
 window.addEventListener('beforeunload', (e) => {
     e.returnValue = 'test';
 });
 
 const audioCtx = new AudioContext({ latencyHint: 0.00001 });
+TemplateLoader.load();
 const app = new App();
 
 (async () => {

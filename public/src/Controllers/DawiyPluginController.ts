@@ -235,8 +235,9 @@ export default class DawiyPluginController {
                 this.view.creatorDropZone.style.border = "2px dashed #555";
                 this.view.creatorDropZone.style.color = "#aaa";
 
-                if (e.dataTransfer && e.dataTransfer.files.length > 0) {
-                    this.handleCreatorDrop(e.dataTransfer.files[0]);
+                if (e.dataTransfer && e.dataTransfer.items.length > 0) {
+                    const item = e.dataTransfer.items[0];
+                    this.handleCreatorDrop(item);
                 }
             };
         }
@@ -249,75 +250,67 @@ export default class DawiyPluginController {
         }
     }
 
-    private async handleCreatorDrop(file: File) {
-        if (!file.name.match(/\.(ts|js)$/)) {
-            this.app.showToast("Please drop a .ts or .js file.", true);
-            return;
-        }
+    private async handleCreatorDrop(item: DataTransferItem) {
+        // @ts-ignore
+        const entry = item.webkitGetAsEntry();
+        if (!entry) return;
 
-        const text = await file.text();
-        this.analyzePluginCode(text, file.name);
-    }
+        const zip = new JSZip();
+        let zipName = "";
 
-    private analyzePluginCode(code: string, filename: string) {
-        // 1. Extract Class Name
-        // Match "export default class MyClass" or "class MyClass implements"
-        let className = "";
-        const classMatch = code.match(/class\s+(\w+)\s+implements\s+IDawiyPlugin/);
-        if (classMatch) {
-            className = classMatch[1];
-        } else {
-            // Fallback: filename base
-            className = filename.replace(/\.(ts|js)$/, "");
-        }
+        if (entry.isDirectory) {
+            zipName = entry.name + "DAWIYPlugin.zip";
+            await this.scanFiles(entry, zip, "");
+        } else if (entry.isFile) {
+            const fileName = entry.name; // e.g. MyPlugin.ts
+            const nameNoExt = fileName.replace(/\.(ts|js)$/, "");
+            zipName = nameNoExt + "DAWIYPlugin.zip";
 
-        // 2. Extract Plugin Name (name = "...")
-        let pluginName = "";
-        const nameMatch = code.match(/name\s*=\s*['"](.+?)['"]/);
-        if (nameMatch) {
-            pluginName = nameMatch[1];
-        }
+            // Create folder with same name inside zip
+            const folder = zip.folder(nameNoExt);
 
-        // 3. Extract Description
-        let desc = "";
-        const descMatch = code.match(/description\s*=\s*['"](.*?)['"]/);
-        if (descMatch) {
-            desc = descMatch[1];
-        }
-
-        // 4. Extract Imports for Dependencies
-        const deps: string[] = [];
-        const importRegex = /from\s+['"](.+?)['"]/g;
-        let match;
-        while ((match = importRegex.exec(code)) !== null) {
-            const pkg = match[1];
-            if (pkg.startsWith(".") || pkg.startsWith("/")) continue; // Ignore relative/absolute paths
-            if (pkg === "jszip") continue; // internalized? or common
-
-            // Simple heuristic mapping
-            if (pkg === "tonal" || pkg.startsWith("@tonaljs")) {
-                deps.push("https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js");
-            } else if (pkg === "jquery") {
-                deps.push("https://code.jquery.com/jquery-3.6.0.min.js");
-            } else if (pkg === "lodash") {
-                deps.push("https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js");
-            } else if (pkg === "pixi.js") {
-                // assume included in dawiy, but maybe they want external?
-                // Skip for now as Dawiy includes Pixi
-                continue;
-            } else {
-                // Just add a placeholder or the package name so user can fix it
-                deps.push(`https://cdn.jsdelivr.net/npm/${pkg}/+esm`); // basic guess
+            // Get File object
+            const file = await new Promise<File>((resolve) => (entry as any).file(resolve));
+            if (folder) {
+                folder.file(fileName, file);
             }
         }
 
-        // Fill Form
-        this.view.creatorClassInput.value = className;
-        this.view.creatorNameInput.value = pluginName;
-        this.view.creatorDescInput.value = desc;
-        this.view.creatorDepsInput.value = [...new Set(deps)].join("\n"); // unique
+        const content = await zip.generateAsync({ type: "blob" });
+        saveAs(content, zipName);
+        this.app.showToast(`Packed & Downloaded: ${zipName}`, false);
+    }
 
-        this.app.showToast("Auto-filled from file content!", false);
+    private async scanFiles(entry: any, zip: JSZip, path: string) {
+        if (entry.isFile) {
+            const file = await new Promise<File>((resolve) => entry.file(resolve));
+            // Add to zip. Path includes parent folders relative to root.
+            zip.file(path + entry.name, file);
+        } else if (entry.isDirectory) {
+            const dirPath = path + entry.name + "/";
+            // Create folder in zip (optional, but good for empty dirs)
+            // zip.folder(dirPath); 
+
+            const dirReader = entry.createReader();
+            const entries = await new Promise<any[]>((resolve, reject) => {
+                const results: any[] = [];
+                const read = () => {
+                    dirReader.readEntries((batch: any[]) => {
+                        if (batch.length === 0) {
+                            resolve(results);
+                        } else {
+                            results.push(...batch);
+                            read();
+                        }
+                    }, (err: any) => reject(err));
+                };
+                read();
+            });
+
+            for (const e of entries) {
+                await this.scanFiles(e, zip, dirPath);
+            }
+        }
     }
 
     private showCreator() {
@@ -344,7 +337,7 @@ export default class DawiyPluginController {
         const name = this.view.creatorNameInput.value.trim();
         const className = this.view.creatorClassInput.value.trim();
         const desc = this.view.creatorDescInput.value.trim();
-        const depsText = this.view.creatorDepsInput.value.trim();
+        const group = this.view.creatorGroupInput.value.trim() || "General";
 
         if (!name || !className) {
             this.app.showToast("Plugin Name and Class Name are required.", true);
@@ -357,42 +350,42 @@ export default class DawiyPluginController {
             return;
         }
 
-        const deps = depsText.split('\n').map(d => d.trim()).filter(d => d.length > 0);
-
-        const zip = new JSZip();
+        const id = className.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 
         // 1. plugin.json
         const config = {
             name: name,
             description: desc,
-            dependencies: deps
+            group: group
         };
-        zip.file('plugin.json', JSON.stringify(config, null, 2));
+        const jsonContent = JSON.stringify(config, null, 2);
 
-        // 2. Class.ts
-        const tsContent = `import { IDawiyPlugin } from "../IDawiyPlugin";
+        // 2. Class.ts (using template literal string)
+        const tsContent = `import { DAWIYPlugin } from "../IDawiyPlugin";
+import DawiyPluginBase from "../DawiyPluginBase";
 import App from "../../App";
 
-export default class ${className} implements IDawiyPlugin {
-    id = "${className}-${Date.now()}"; // Unique ID
+@DAWIYPlugin
+export default class ${className} extends DawiyPluginBase {
+    id = "${id}"; 
     name = "${name}";
-
-    private app: App;
+    description = "${desc}";
+    group = "${group}";
 
     constructor(app: App) {
-        this.app = app;
+        super(app);
     }
 
-    onActivate() {
+    public override onActivate() {
         console.log("${name} activated");
         this.app.showToast("${name} activated!");
     }
 
-    onDeactivate() {
+    public override onDeactivate() {
         console.log("${name} deactivated");
     }
 
-    render(container: HTMLElement) {
+    public override render(container: HTMLElement) {
         // Plugin Convention:
         // Target specific dimensions: 670px width x 190px height.
         // However, always use 100% width and height to be responsive to the parent container.
@@ -420,16 +413,19 @@ export default class ${className} implements IDawiyPlugin {
     }
 }
 `;
-        zip.file(`${className}.ts`, tsContent);
 
-        // Generate zip
-        const content = await zip.generateAsync({ type: "blob" });
+        try {
+            // Upload files directly to the server
+            await this.app.uploadPlugin(`${className}/plugin.json`, jsonContent, "plugin.json");
+            await this.app.uploadPlugin(`${className}/${className}.ts`, tsContent, `${className}.ts`);
 
-        // Save
-        saveAs(content, `${className}.zip`);
+            this.app.showToast(`Plugin ${name} generated and installed!`, false);
+            this.hideCreator();
 
-        this.app.showToast(`Plugin ${name} generated!`, false);
-        this.hideCreator();
+        } catch (e) {
+            console.error(e);
+            this.app.showToast(`Error generating plugin: ${e}`, true);
+        }
     }
 
     private async handleFileUpload(file: File) {

@@ -2,16 +2,16 @@ import App from "../../App";
 import { RATIO_MILLS_BY_PX, TEMPO } from "../../Env";
 import MIDIRegion from "../../Models/Region/MIDIRegion";
 import { MIDINote, MIDI } from "../../Audio/MIDI/MIDI";
-import { IDawiyPlugin } from "../IDawiyPlugin";
+import { DAWIYPlugin } from "../IDawiyPlugin";
+import DawiyPluginBase from "../DawiyPluginBase";
 import { PATTERNS, addNotesForStep, DrumNote, PatternParams } from "./DrumPatterns";
 
-export default class DrumPatternPlugin implements IDawiyPlugin {
+@DAWIYPlugin
+export default class DrumPatternPlugin extends DawiyPluginBase {
     id = "drum-pattern-gen";
     name = "Drum Pattern Generator";
     description = "Generates drum patterns in the selected time range.";
-
-    private app: App;
-    private container: HTMLElement | null = null;
+    group = "Generator";
 
     private params: PatternParams = {
         pattern: "basic_rock", // Default needs to match an ID in PATTERNS
@@ -22,10 +22,10 @@ export default class DrumPatternPlugin implements IDawiyPlugin {
     };
 
     constructor(app: App) {
-        this.app = app;
+        super(app);
     }
 
-    public render(container: HTMLElement) {
+    public override render(container: HTMLElement) {
         this.container = container;
         container.innerHTML = '';
         container.style.color = "#eee";

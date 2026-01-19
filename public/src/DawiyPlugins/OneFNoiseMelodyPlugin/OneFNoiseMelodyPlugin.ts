@@ -1,18 +1,16 @@
-import App from "../../App";
 import { TEMPO } from "../../Env";
 import MIDIRegion from "../../Models/Region/MIDIRegion";
 import { MIDINote } from "../../Audio/MIDI/MIDI";
 import { MIDI } from "../../Audio/MIDI/MIDI";
-import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
+import { DAWIYPlugin } from "../IDawiyPlugin";
+import DawiyPluginBase from "../DawiyPluginBase";
 
 @DAWIYPlugin
-export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
+export default class OneFNoiseMelodyPlugin extends DawiyPluginBase {
     id = "one-f-noise-melody";
     name = "1/f Melody Generator";
     description = "Generates melodies using 1/f (pink) noise fluctuation.";
-
-    private app: App;
-    private container: HTMLElement | null = null;
+    group = "Generator";
 
     // Pink Noise State
     private maxKey = 0x1f; // 5 octaves
@@ -42,12 +40,11 @@ export default class OneFNoiseMelodyPlugin implements IDawiyPlugin {
         { label: "1/2", value: 1 / 2 },
     ];
 
-
-    constructor(app: App) {
-        this.app = app;
+    constructor(app: any) {
+        super(app);
     }
 
-    public render(container: HTMLElement) {
+    public override render(container: HTMLElement) {
         this.container = container;
         container.innerHTML = '';
         container.style.color = "#eee";

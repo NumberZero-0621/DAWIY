@@ -1,17 +1,17 @@
 import App from "../../App";
-import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
+import { DAWIYPlugin } from "../IDawiyPlugin";
 import DawiyPluginBase from "../DawiyPluginBase";
 
 /**
  * A template for creating new DAWIY plugins.
  * Copy this file and rename it to start your own plugin.
  * 
- * For external dependencies (e.g. tonal, lodash), you have two options:
- * 1. (Recommended) Use the Plugin Creator (or edit plugin.json) to add CDN URLs. These specific versions 
- *    will be loaded before your plugin initializes.
- * 2. (Advanced) Use `externals` in plugin.json. The system will load them and inject them into `this.externals`.
- *    Example plugin.json: { "externals": { "confetti": "https://esm.sh/canvas-confetti" } }
- *    Usage: `const confetti = this.externals.confetti;`
+ * For external dependencies (e.g. tonal, lodash), we recommend using dynamic imports directly in your code.
+ * 
+ * Example:
+ * `const module = await this.dynamicImport('https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js');`
+ * 
+ * You can also use `plugin.json` dependencies if needed, but dynamic imports keep things simpler and self-contained.
  * 
  * See AGENTS.md for more details.
  */
@@ -19,14 +19,12 @@ import DawiyPluginBase from "../DawiyPluginBase";
 export default class PluginTemplate extends DawiyPluginBase {
     // Unique ID for the plugin. Use lowercase and hyphens.
     id = "my-new-plugin";
-
     // Display name shown in the UI.
     name = "My New Plugin";
-
     // Brief description of what the plugin does.
     description = "A description of my awesome new plugin.";
-
-    private container: HTMLElement | null = null;
+    // Optional: Group name (Default: "General")
+    group = "General";
 
     constructor(app: App) {
         super(app);
@@ -89,19 +87,18 @@ export default class PluginTemplate extends DawiyPluginBase {
      */
     async doSomething() {
         console.log("Button clicked!");
-
-        // --- Example: Dynamic Import (Externals) ---
-        // If you defined "externals": { "confetti": "..." } in plugin.json:
-        const confetti = this.externals['confetti'];
-        if (confetti) {
-            confetti.default({
-                particleCount: 100,
-                spread: 70,
-                origin: { y: 0.6 }
-            });
-            console.log("Confetti launched via externals!");
-        } else {
-            console.log("Confetti not found in externals. Check plugin.json.");
+        try {
+            const confetti = await this.dynamicImport('https://esm.sh/canvas-confetti');
+            if (confetti && confetti.default) {
+                confetti.default({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+                console.log("Confetti launched via dynamic import!");
+            }
+        } catch (e) {
+            console.warn("Failed to load confetti", e);
         }
 
         // Example: Accessing DAWIY state
