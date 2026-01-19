@@ -8,9 +8,9 @@ export default class WamAudioLoopBrowser extends HTMLElement {
         super();
         this.audioData = null;
         this.URL_SERVER = BACKEND_URL;
-        console.log("before:",this.shadowRoot)
+        console.log("before:", this.shadowRoot)
         this.attachShadow({ mode: "open" })
-        console.log("after:",this.shadowRoot)
+        console.log("after:", this.shadowRoot)
     }
 
 
@@ -202,6 +202,7 @@ export default class WamAudioLoopBrowser extends HTMLElement {
             .folder-icon {
             margin-left: 0.5rem;
             font-size: 18px;
+            color: white;
             }
 
           .audio-file-item {
@@ -513,7 +514,7 @@ export default class WamAudioLoopBrowser extends HTMLElement {
 
         folderContainer.innerHTML = '';
         filesContainer.innerHTML = '';
-        this.generateStructure(this.audioData,folderContainer);
+        this.generateStructure(this.audioData, folderContainer);
         this.attachFavouriteButtonEventListeners();
     }
     resetDisplay() {

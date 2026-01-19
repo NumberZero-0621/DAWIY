@@ -1,31 +1,9 @@
-
 import App from "../../App";
-import { IDawiyPlugin } from "../IDawiyPlugin";
+import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
 import { MIDINote } from "../../Audio/MIDI/MIDI";
+import { Chord, Note } from "tonal";
 
-const NOTE_NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
-
-interface ChordPattern {
-    name: string;
-    intervals: number[];
-}
-
-const CHORDS: ChordPattern[] = [
-    { name: "", intervals: [0, 4, 7] }, // Major
-    { name: "m", intervals: [0, 3, 7] }, // Minor
-    { name: "dim", intervals: [0, 3, 6] },
-    { name: "aug", intervals: [0, 4, 8] },
-    { name: "sus4", intervals: [0, 5, 7] },
-    { name: "sus2", intervals: [0, 2, 7] },
-    { name: "7", intervals: [0, 4, 7, 10] },
-    { name: "maj7", intervals: [0, 4, 7, 11] },
-    { name: "m7", intervals: [0, 3, 7, 10] },
-    { name: "m7b5", intervals: [0, 3, 6, 10] },
-    { name: "dim7", intervals: [0, 3, 6, 9] },
-    { name: "6", intervals: [0, 4, 7, 9] },
-    { name: "m6", intervals: [0, 3, 7, 9] },
-];
-
+@DAWIYPlugin
 export default class C5thPlugin implements IDawiyPlugin {
     id = "c5th-number-zero";
     name = "Chord & Circle of Fifths";
@@ -105,16 +83,12 @@ export default class C5thPlugin implements IDawiyPlugin {
         if (!this.chordDisplay) return;
 
         // Access the exposed selectedNotes from PianoRollController
-        // We cast to any because TS might not know about the property we just added unless we update types def, 
-        // but at runtime it will exist.
         const pianoRoll = this.app.pianoRollController as any;
 
         let notes: MIDINote[] = [];
         if (pianoRoll && pianoRoll.selectedNotes) {
             notes = Array.from(pianoRoll.selectedNotes);
-            console.log("C5thPlugin: selectedNotes size:", notes.length);
-        } else {
-            console.log("C5thPlugin: pianoRoll or selectedNotes missing", !!pianoRoll);
+            // console.log("C5thPlugin: selectedNotes size:", notes.length);
         }
 
         if (notes.length === 0) {
@@ -123,7 +97,6 @@ export default class C5thPlugin implements IDawiyPlugin {
         }
 
         // Detect Chord
-        console.log("C5thPlugin: Detecting chord for notes:", notes.map(n => n.note));
         const chordName = this.detectChord(notes);
         this.chordDisplay.textContent = chordName;
     }
@@ -131,42 +104,40 @@ export default class C5thPlugin implements IDawiyPlugin {
     private detectChord(notes: MIDINote[]): string {
         if (notes.length === 0) return "--";
 
-        // 1. ノートを高さ順にソートし、ベース音（最低音）を特定
-        const sortedNotes = [...notes].sort((a, b) => a.note - b.note);
-        const bassNotePC = sortedNotes[0].note % 12;
+        // Convert MIDI notes to note names for tonal
+        // tonal expects names like "C4", "Db5", etc.
+        // We can use Note.fromMidi(midiNumber) from tonal
+        const uniqueNoteNumbers = Array.from(new Set(notes.map(n => n.note)));
+        const noteNames = uniqueNoteNumbers.map(n => Note.fromMidi(n));
 
-        // 2. ユニークなピッチクラス(PC)を抽出
-        const pcs = Array.from(new Set(notes.map(n => n.note % 12)));
+        // Detect chord
+        const detected = Chord.detect(noteNames);
 
-        if (pcs.length === 1) return NOTE_NAMES[pcs[0]];
+        if (detected.length > 0) {
+            // Return the first detected chord name
+            return detected[0];
+        }
 
-        // 3. ルート候補の作成：ベース音を最優先し、残りは数値順
-        // これにより転回形よりもルートポジションの判定が優先されやすくなる
-        const rootCandidates = [
-            bassNotePC,
-            ...pcs.filter(p => p !== bassNotePC).sort((a, b) => a - b)
-        ];
+        // Additional detected for omit3
+        // Try adding a 3rd (minor: +3, major: +4) to each note and see if it forms a valid chord
+        for (const noteNum of uniqueNoteNumbers) {
+            for (const interval of [3, 4]) {
+                const candidateNoteNum = noteNum + interval;
+                // Avoid if candidate is already in the set (though uniqueNoteNumbers handles this, we are adding new pitches)
+                // Actually if it's already there, it wouldn't have failed detection if it was a valid chord unless it's complex.
+                // But simplified: checking if we already have it is good.
+                if (uniqueNoteNumbers.includes(candidateNoteNum)) continue;
 
-        // 4. 候補ごとにパターンマッチング
-        for (const root of rootCandidates) {
-            // 現在のルート候補に対するインターバル算出
-            const intervals = pcs.map(p => (p - root + 12) % 12).sort((a, b) => a - b);
+                const candidateNoteName = Note.fromMidi(candidateNoteNum);
+                const combinedNames = [...noteNames, candidateNoteName];
+                const combinedDetected = Chord.detect(combinedNames);
 
-            for (const pattern of CHORDS) {
-                if (this.arraysEqual(intervals, pattern.intervals)) {
-                    return NOTE_NAMES[root] + pattern.name;
+                if (combinedDetected.length > 0) {
+                    return `${combinedDetected[0]} (omit3)`;
                 }
             }
         }
 
         return "Unknown";
-    }
-
-    private arraysEqual(a: number[], b: number[]) {
-        if (a.length !== b.length) return false;
-        for (let i = 0; i < a.length; i++) {
-            if (a[i] !== b[i]) return false;
-        }
-        return true;
     }
 }

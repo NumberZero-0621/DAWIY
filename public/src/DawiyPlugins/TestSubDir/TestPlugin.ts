@@ -1,6 +1,7 @@
 import App from "../../App";
-import { IDawiyPlugin } from "../IDawiyPlugin";
+import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
 
+@DAWIYPlugin
 export default class TestPlugin implements IDawiyPlugin {
     id = "test-subdir-plugin";
     name = "Test Subdir Plugin";

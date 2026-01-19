@@ -24,6 +24,56 @@
 
 3. **コンストラクタ**:
     - `constructor(app: App)` のシグネチャを持ち、`App` インスタンスを保持すること。
+    
+4. **設定ファイル (plugin.json) [推奨]**:
+    - 外部ライブラリを使用する場合や、メタデータを明確に定義する場合は `plugin.json` を使用します。
+    - **Plugin Creator** を使用すると、このファイルは自動生成されます。
+
+    ```json
+    {
+      "name": "My Plugin",
+      "description": "Uses external libraries",
+      "dependencies": [
+        "https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js",
+        "https://code.jquery.com/jquery-3.6.0.min.js"
+      ]
+    }
+    ```
+    - **dependencies**: 配列にCDNのURLを指定すると、プラグインのロード前に自動的にインジェクトされます。
+
+## 外部ライブラリの利用 (External Libraries)
+
+外部ライブラリを利用するには3つの方法があります。
+
+### 方法1: グローバルロード (推奨: 一般的なライブラリ)
+`plugin.json` の `dependencies` に CDN の URL を記述します。これらのスクリプトはプラグインのロード前にグローバルスコープに読み込まれます。
+JQuery, Lodash, Tonal.js など、UMD/Global ビルドが提供されているライブラリに適しています。
+
+### 方法2: 自動インジェクション (推奨: ESMライブラリ)
+`DawiyPluginBase` を継承するクラスで利用可能です。
+`plugin.json` の `externals` にキーとURLのペアを記述すると、システムが自動的に動的インポートを行い、`this.externals` に注入します。
+
+**plugin.json**
+```json
+{
+  "externals": {
+    "confetti": "https://esm.sh/canvas-confetti"
+  }
+}
+```
+
+**MyPlugin.ts**
+```typescript
+const confetti = this.externals.confetti;
+```
+
+### 方法3: 手動動的インポート (上級者向け)
+コード内で直接 `await import(...)` します。Webpack のバンドル処理を回避するために `/* webpackIgnore: true */` コメントが必須です。
+
+```typescript
+const confetti = await import(/* webpackIgnore: true */ "https://esm.sh/canvas-confetti");
+```
+
 
 ## テンプレートコード
 
@@ -116,6 +166,57 @@ DAW の状態を変更する操作 (トラック追加、ノート移動など) 
 
 - UI は必ず引数で渡された `container` 内に構築してください。グローバルな `document.body` などに直接 append しないでください。
 
+## データ管理機能
+
+プラグインは2種類のデータを管理できます。それぞれの用途に合わせてメソッドを実装してください。
+
+### 1. ユーザーデータ (User Data) - グローバル設定
+*   **用途**: プラグイン全体の設定、APIキー、UIの好みなど。
+*   **寿命**: プロジェクトが変わっても保持されます (`localStorage` に保存)。ユーザーがプラグインを**アンインストールすると削除**されます。
+*   **実装**: `getUserData` / `setUserData`
+
+```typescript
+// ユーザーデータの取得（保存時に呼ばれる）
+getUserData(): any {
+    return {
+        theme: this.theme,
+        apiKey: this.apiKey
+    };
+}
+
+// ユーザーデータの復元（プラグインロード時に呼ばれる）
+setUserData(data: any): void {
+    if (data) {
+        this.theme = data.theme;
+        this.apiKey = data.apiKey;
+    }
+}
+```
+
+### 2. プロジェクトデータ (Project Data) - プロジェクト固有
+*   **用途**: その楽曲（プロジェクト）固有の状態、シーケンスデータ、パラメータなど。
+*   **寿命**: `.dawiy` プロジェクトファイルと一緒に保存・ロードされます。
+*   **実装**: `getProjectData` / `setProjectData`
+
+```typescript
+// プロジェクトデータの取得（プロジェクト保存時に呼ばれる）
+getProjectData(): any {
+    return {
+        sequence: this.sequenceData,
+        parameters: this.currentParams
+    };
+}
+
+// プロジェクトデータの復元（プロジェクトロード時に呼ばれる）
+setProjectData(data: any): void {
+    if (data) {
+        this.sequenceData = data.sequence || [];
+        this.currentParams = data.parameters || {};
+        this.refreshUI(); // データを反映して再描画
+    }
+}
+```
+
 ### 自己メンテナンスプロトコル
 
 **重要:** `AGENTS.md` は **生きたドキュメント** です。
@@ -125,3 +226,4 @@ DAW の状態を変更する操作 (トラック追加、ノート移動など) 
   2. **エラーリカバリ:** ここで古い手順に従ったためにバグが発生した場合は、コードを修正した後、**ドキュメントを修正** してください。
   3. **発見:** ドキュメントには記載されていないが重要な、隠れた規約や「落とし穴」を見つけた場合は、すぐにここに記録してください。
 - **目標:** これらのファイルをプロジェクトの長期記憶として扱ってください。システムの内部動作に関するドキュメントの改善は、ユーザーの許可を待たずに行ってください。
+

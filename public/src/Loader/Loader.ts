@@ -16,24 +16,24 @@ import { audioCtx } from "../index";
  * Increment the major version number when the project format changes in a way that is not backward compatible.
  * Increment the minor version number when the project format changes in a way that is backward but not forward compatible.
  */
-const CURRENT_PROJECT_VERSION: [number,number]=[1,0]
+const CURRENT_PROJECT_VERSION: [number, number] = [1, 0]
 
 /** Loaders to load regions. */
 const regionLoaders: {
-    [key: RegionType<any>] : {
-        loader: (buffer:ArrayBuffer)=>Promise<RegionOf<any>>,
+    [key: RegionType<any>]: {
+        loader: (buffer: ArrayBuffer) => Promise<RegionOf<any>>,
         extension: string,
     }
 } = {
-    [MIDIRegion.TYPE]:{
-        loader: async buffer => new MIDIRegion(await MIDI.load(buffer),0),
+    [MIDIRegion.TYPE]: {
+        loader: async buffer => new MIDIRegion(await MIDI.load(buffer), 0),
         extension: "wamstudiomidi",
     },
-    [SampleRegion.TYPE]:{
-        loader: async buffer =>{
+    [SampleRegion.TYPE]: {
+        loader: async buffer => {
             const audioBuffer = await audioCtx.decodeAudioData(buffer);
             const opAudioBuffer = OperableAudioBuffer.make(audioBuffer);
-            return new SampleRegion(opAudioBuffer,0)
+            return new SampleRegion(opAudioBuffer, 0)
         },
         extension: "wav",
     },
@@ -42,18 +42,20 @@ const regionLoaders: {
 
 /** The project data format. */
 export interface ProjectData {
-    version: [major:number, minor:number];
+    version: [major: number, minor: number];
     host: {
         playhead: number;
         tempo: number,
-        time_signature: [number,number],
+        time_signature: [number, number],
         volume: number;
         plugin?: {
             name: string;
             state: any;
         };
+        // Plugins project data (ID -> Data)
+        plugins?: { [id: string]: any };
     }
-    tracks:{
+    tracks: {
         name: string;
         muted: boolean;
         solo: boolean;
@@ -64,11 +66,11 @@ export interface ProjectData {
             name: string;
             state: any;
         };
-        automations:{
+        automations: {
             param: string;
             state: State
         }[];
-        regions:{
+        regions: {
             type: string;
             content_name: string;
             start: number;
@@ -80,9 +82,9 @@ export interface ProjectData {
  * The region content format.
  * Separated from the project data to allow loading regions asynchronously.
  */
-export interface RegionContent{
-    content_name:string;
-    blob:Blob;
+export interface RegionContent {
+    content_name: string;
+    blob: Blob;
 }
 
 export default class Loader {
@@ -96,19 +98,21 @@ export default class Loader {
      * Save the current project.
      * @returns The current project data.
      */
-    async saveProject(): Promise<[ProjectData,RegionContent[]]> {
+    async saveProject(): Promise<[ProjectData, RegionContent[]]> {
 
         let pluginHostState = await this._app.host.plugin?.getState();
-        
+        const pluginsData = this._app.dawiyPluginController.getPluginsProjectData();
+
+
         // Save the tracks
         let contents: RegionContent[] = [];
         let tracks: ProjectData['tracks'] = [];
         for (let track of this._app.tracksController.tracks) {
             // Add automations to the track
             let automations: ProjectData['tracks'][0]['automations'] = [];
-            let pluginState=await track.plugin?.getState()
-            let pluginData= pluginState ? {name:track.plugin!.name,state:pluginState} : undefined
-            
+            let pluginState = await track.plugin?.getState()
+            let pluginData = pluginState ? { name: track.plugin!.name, state: pluginState } : undefined
+
             if (pluginData) {
                 let parameters = await track.plugin!.instance!._audioNode.getParameterInfo();
                 for (let param in parameters) {
@@ -127,14 +131,14 @@ export default class Loader {
             // Add regions to the track
             let regions: ProjectData['tracks'][0]['regions'] = [];
             for (let region of track.regions) {
-                let content_name=`track-${track.id}-region-${region.id}`
+                let content_name = `track-${track.id}-region-${region.id}`
 
-                const extension=regionLoaders[region.regionType]?.extension
-                if(extension)content_name+=`.${extension}`
+                const extension = regionLoaders[region.regionType]?.extension
+                if (extension) content_name += `.${extension}`
 
                 contents.push({
                     content_name,
-                    blob:region.save()
+                    blob: region.save()
                 });
                 regions.push({
                     content_name,
@@ -163,28 +167,29 @@ export default class Loader {
                 tempo: this._app.hostView.tempoSelector.tempo,
                 time_signature: this._app.hostView.timeSignatureSelector.timeSignature,
                 volume: this._app.host.volume,
-                plugin: pluginHostState
+                plugin: pluginHostState,
+                plugins: pluginsData
             },
             tracks: tracks
         }
-        console.log("Save Project:",project,contents)
-        return [project,contents]
+        console.log("Save Project:", project, contents)
+        return [project, contents]
     }
 
-    async loadProject(data: ProjectData, contents: (id:string)=>XMLHttpRequest) {
+    async loadProject(data: ProjectData, contents: (id: string) => XMLHttpRequest) {
         this._app.editorView.setLoading(true)
         let project: ProjectData = data;
         console.log("Load Project:", project)
 
         // Version check
         {
-            let error_message=null
+            let error_message = null
             let version = project.version;
-            if(!Array.isArray(version) || version.length!=2)error_message= `The project version(${version}) is invalid, the project incompatible`
-            else if(version[0]<CURRENT_PROJECT_VERSION[0])error_message= `The project version(${version.join(".")}) is too old`
-            else if(version[0]>CURRENT_PROJECT_VERSION[0])error_message= `The project version(${version.join(".")}) is too recent. Use a more recent version WAMStudio`
-            else if(version[1]>CURRENT_PROJECT_VERSION[1])error_message= `The project version(${version.join(".")}) is too recent. Use a more recent version WAMStudio`
-            if(error_message!=null){
+            if (!Array.isArray(version) || version.length != 2) error_message = `The project version(${version}) is invalid, the project incompatible`
+            else if (version[0] < CURRENT_PROJECT_VERSION[0]) error_message = `The project version(${version.join(".")}) is too old`
+            else if (version[0] > CURRENT_PROJECT_VERSION[0]) error_message = `The project version(${version.join(".")}) is too recent. Use a more recent version WAMStudio`
+            else if (version[1] > CURRENT_PROJECT_VERSION[1]) error_message = `The project version(${version.join(".")}) is too recent. Use a more recent version WAMStudio`
+            if (error_message != null) {
                 alert(`${error_message}. WAM Studio version: ${CURRENT_PROJECT_VERSION.join(".")}`)
                 return
             }
@@ -194,16 +199,20 @@ export default class Loader {
         this._app.hostController.stopAllTracks()
         this._app.tracksController.clearTracks()
         this._app.host.playhead = 0
-        this._app.host.volume=project.host.volume
+        this._app.host.volume = project.host.volume
         this._app.hostView.tempoSelector.tempo = project.host.tempo
         this._app.hostView.timeSignatureSelector.timeSignature = project.host.time_signature
 
         if (project.host.plugin) {
-            const plugin=await this._app.pluginsController.fetchPlugin(project.host.plugin.name)
-            if(plugin){
+            const plugin = await this._app.pluginsController.fetchPlugin(project.host.plugin.name)
+            if (plugin) {
                 await this._app.host.connectPlugin(plugin);
-            await this._app.host.plugin?.setState(project.host.plugin.state)
+                await this._app.host.plugin?.setState(project.host.plugin.state)
             }
+        }
+
+        if (project.host.plugins) {
+            this._app.dawiyPluginController.setPluginsProjectData(project.host.plugins);
         }
 
         // Load tracks
@@ -213,25 +222,25 @@ export default class Loader {
             track.element.name = trackJson.name
             track.element.trackNameInput.value = trackJson.name
 
-            track.isMuted= trackJson.muted
-            track.isSolo= trackJson.solo
-            track.balance= trackJson.balance
-            track.volume= trackJson.volume
+            track.isMuted = trackJson.muted
+            track.isSolo = trackJson.solo
+            track.balance = trackJson.balance
+            track.volume = trackJson.volume
             this._app.tracksController.setColor(track, trackJson.color)
 
             const pluginData = trackJson.plugin;
-            console.log("Load Plugin",pluginData)
+            console.log("Load Plugin", pluginData)
             if (pluginData) {
-                const plugin=await this._app.pluginsController.fetchPlugin(pluginData.name)
-                if(plugin){
-                    await this._app.pluginsController.connectPlugin(track,plugin);
+                const plugin = await this._app.pluginsController.fetchPlugin(pluginData.name)
+                if (plugin) {
+                    await this._app.pluginsController.connectPlugin(track, plugin);
                     await track.plugin?.setState(pluginData.state)
                     await this._app.automationController.updateAutomations(track);
                 }
                 let automations = trackJson.automations;
                 for (let automation of automations) {
                     let bpf = track.automation.getBpfOfParam(automation.param);
-                    
+
                     if (bpf !== undefined) {
                         bpf.state = automation.state;
                     }
@@ -243,17 +252,17 @@ export default class Loader {
         }
 
         this._app.editorView.setLoading(false)
-        
+
     }
 
-    loadTrackRegions(track: Track, regions: ProjectData['tracks'][0]['regions'], contents: (id:string)=>XMLHttpRequest) {
+    loadTrackRegions(track: Track, regions: ProjectData['tracks'][0]['regions'], contents: (id: string) => XMLHttpRequest) {
         let loadedRegions = 0;
         let totalSize = new Map();
         let totalLoaded = 0;
 
         for (let region of regions) {
-            const decoder=regionLoaders[region.type]?.loader
-            if(!decoder)continue
+            const decoder = regionLoaders[region.type]?.loader
+            if (!decoder) continue
 
             let xhr = contents(region.content_name)
             xhr.responseType = "arraybuffer"
@@ -281,7 +290,7 @@ export default class Loader {
             xhr.onload = async () => {
                 if (xhr.status == 200) {
                     loadedRegions++;
-                        
+
                     let audioArrayBuffer = xhr.response as ArrayBuffer
                     let newRegion = await decoder(audioArrayBuffer)
 
@@ -311,7 +320,7 @@ export default class Loader {
     }
 
     loadTrackUrl(track: Track, url: string) {
-        console.log("Load Track" +url)
+        console.log("Load Track" + url)
 
         let xhr = new XMLHttpRequest();
         xhr.open('GET', url, true);
@@ -340,7 +349,7 @@ export default class Loader {
                         }
                         let operableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
                         operableAudioBuffer = operableAudioBuffer.makeStereo();
-                        this._app.regionsController.addRegion(track, new SampleRegion(operableAudioBuffer,0));
+                        this._app.regionsController.addRegion(track, new SampleRegion(operableAudioBuffer, 0));
                         track.element.progressDone();
                     });
             } else {

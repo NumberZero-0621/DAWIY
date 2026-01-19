@@ -1,9 +1,10 @@
 import { Application, Container, Graphics, FederatedPointerEvent, Text, Point, IPointData } from "pixi.js";
 import App from "../../App";
-import { IDawiyPlugin } from "../IDawiyPlugin";
+import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
 
 type ToolType = "PEN" | "ERASER" | "STICKY" | "TEXT";
 
+@DAWIYPlugin
 export default class MemoPlugin implements IDawiyPlugin {
     id = "memo-plugin";
     name = "Memo / Sticky Notes";

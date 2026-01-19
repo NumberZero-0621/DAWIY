@@ -329,16 +329,35 @@
 
 					<div id="dawiy-extensions-container">
 						<div id="dawiy-extension-list">
-							<!-- Dynamic list items will go here -->
-							<!-- Example:
-                        <div class="dawiy-ext-item active" data-id="1">
-                             <div class="dawiy-ext-icon"></div>
-                        </div>
-                        -->
+
+							<div id="dawiy-list-toolbar">
+								<button id="dawiy-add-folder-btn" class="btn btn-sm btn-outline-secondary"
+									title="Create New Folder">
+									<i class="bi bi-folder-plus"></i>
+								</button>
+							</div>
+
+							<div id="dawiy-list-content">
+							</div>
+
 						</div>
-						<div id="dawiy-extension-view">
-							<!-- Content of the active extension -->
-							<div class="dawiy-ext-placeholder">Select an extension</div>
+
+						<div id="dawiy-extension-main"
+							style="flex-grow: 1; display: flex; flex-direction: column; overflow: hidden;">
+							<div id="dawiy-extension-header"
+								style="height: 30px; background: #2c2c2c; border-bottom: 1px solid #000; display: flex; align-items: center; padding: 0 10px; justify-content: space-between; flex-shrink: 0;">
+								<span id="dawiy-extension-title"
+									style="color: #ccc; font-weight: bold; font-size: 12px;">Plugin</span>
+								<button id="dawiy-popout-btn" class="btn btn-sm btn-outline-secondary"
+									style="padding: 0 5px; font-size: 10px; background: none; border: none; color: #aaa;"
+									title="Pop-out">
+									<i class="bi bi-box-arrow-up-right"></i>
+								</button>
+							</div>
+							<div id="dawiy-extension-view">
+								<!-- Content of the active extension -->
+								<div class="dawiy-ext-placeholder">Select an extension</div>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -450,6 +469,9 @@
 					<button id="pm-filter-all" class="pm-filter-btn active">All</button>
 					<button id="pm-filter-installed" class="pm-filter-btn">Installed</button>
 					<button id="pm-filter-not-installed" class="pm-filter-btn">Not Installed</button>
+					<button id="pm-filter-creator" class="pm-filter-btn"
+						style="margin-left: 10px; border-left: 1px solid #555; padding-left: 10px;">Create
+						Plugin</button>
 				</div>
 				<div class="pm-list" id="pm-list">
 					<!-- Plugin Items -->
@@ -469,6 +491,45 @@
 					<button id="pm-add-manual-btn" class="pm-install-btn" style="width: 100%;">Install Plugin manually
 						(.ts)</button>
 					<input type="file" id="pm-add-manual-input" accept=".ts" style="display: none;">
+				</div>
+
+				<div class="pm-creator" id="pm-creator" style="display: none; padding: 15px;">
+					<h5 style="color: #ddd; margin-bottom: 15px;">Create New Plugin</h5>
+
+					<div id="pm-creator-dropzone"
+						style="border: 2px dashed #555; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 15px; color: #aaa; cursor: pointer;">
+						<i class="bi bi-file-earmark-code"
+							style="font-size: 2em; display: block; margin-bottom: 5px;"></i>
+						Drop a plugin file (.ts) here to auto-fill
+					</div>
+
+					<div style="margin-bottom: 10px;">
+						<label style="color: #aaa; display: block; font-size: 0.9em;">Plugin Name</label>
+						<input type="text" id="pm-creator-name" class="form-control" placeholder="My Cool Plugin"
+							style="background: #333; color: white; border: 1px solid #555;">
+					</div>
+					<div style="margin-bottom: 10px;">
+						<label style="color: #aaa; display: block; font-size: 0.9em;">Class Name (No spaces)</label>
+						<input type="text" id="pm-creator-classname" class="form-control" placeholder="MyCoolPlugin"
+							style="background: #333; color: white; border: 1px solid #555;">
+					</div>
+					<div style="margin-bottom: 10px;">
+						<label style="color: #aaa; display: block; font-size: 0.9em;">Description</label>
+						<input type="text" id="pm-creator-desc" class="form-control" placeholder="Description..."
+							style="background: #333; color: white; border: 1px solid #555;">
+					</div>
+					<div style="margin-bottom: 15px;">
+						<label style="color: #aaa; display: block; font-size: 0.9em;">Dependencies (CDN URLs, one per
+							line)</label>
+						<textarea id="pm-creator-deps" class="form-control" rows="3"
+							placeholder="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"
+							style="background: #333; color: white; border: 1px solid #555;"></textarea>
+					</div>
+					<button id="pm-creator-generate" class="pm-install-btn" style="width: 100%;">Generate & Download
+						ZIP</button>
+					<div style="text-align: right; margin-top: 10px;">
+						<a href="#" id="pm-creator-cancel" style="color: #aaa; font-size: 0.9em;">Cancel/Back</a>
+					</div>
 				</div>
 			</div>
 		</div>

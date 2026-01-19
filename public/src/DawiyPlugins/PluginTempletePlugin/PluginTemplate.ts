@@ -1,37 +1,47 @@
-import App from "../App";
-import { IDawiyPlugin } from "./IDawiyPlugin";
+import App from "../../App";
+import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
+import DawiyPluginBase from "../DawiyPluginBase";
 
 /**
  * A template for creating new DAWIY plugins.
  * Copy this file and rename it to start your own plugin.
+ * 
+ * For external dependencies (e.g. tonal, lodash), you have two options:
+ * 1. (Recommended) Use the Plugin Creator (or edit plugin.json) to add CDN URLs. These specific versions 
+ *    will be loaded before your plugin initializes.
+ * 2. (Advanced) Use `externals` in plugin.json. The system will load them and inject them into `this.externals`.
+ *    Example plugin.json: { "externals": { "confetti": "https://esm.sh/canvas-confetti" } }
+ *    Usage: `const confetti = this.externals.confetti;`
+ * 
+ * See AGENTS.md for more details.
  */
-export default class PluginTemplate implements IDawiyPlugin {
+@DAWIYPlugin
+export default class PluginTemplate extends DawiyPluginBase {
     // Unique ID for the plugin. Use lowercase and hyphens.
     id = "my-new-plugin";
-    
+
     // Display name shown in the UI.
     name = "My New Plugin";
-    
+
     // Brief description of what the plugin does.
     description = "A description of my awesome new plugin.";
 
-    private app: App;
     private container: HTMLElement | null = null;
 
     constructor(app: App) {
-        this.app = app;
+        super(app);
     }
 
     /**
      * Renders the plugin's UI into the provided container.
      * @param container The HTML element where you should build your UI.
      */
-    public render(container: HTMLElement) {
+    public override render(container: HTMLElement) {
         this.container = container;
-        
+
         // Clear container
         container.innerHTML = '';
-        
+
         // Basic styling for the container
         this.applyContainerStyles(container);
 
@@ -63,28 +73,42 @@ export default class PluginTemplate implements IDawiyPlugin {
     /**
      * Optional: Called when the plugin is activated/opened.
      */
-    public onActivate() {
+    public override onActivate() {
         console.log(`${this.name} activated`);
     }
 
     /**
      * Optional: Called when the plugin is deactivated/closed.
      */
-    public onDeactivate() {
+    public override onDeactivate() {
         console.log(`${this.name} deactivated`);
     }
 
     /**
      * Custom method to implement your plugin's logic.
      */
-    private doSomething() {
+    async doSomething() {
         console.log("Button clicked!");
-        
+
+        // --- Example: Dynamic Import (Externals) ---
+        // If you defined "externals": { "confetti": "..." } in plugin.json:
+        const confetti = this.externals['confetti'];
+        if (confetti) {
+            confetti.default({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+            console.log("Confetti launched via externals!");
+        } else {
+            console.log("Confetti not found in externals. Check plugin.json.");
+        }
+
         // Example: Accessing DAWIY state
         const track = this.app.tracksController.selectedTrack;
         if (track) {
             console.log("Selected track:", track.element.name);
-            alert(`Selected track: ${track.element.name}`);
+            alert(`Selected track: ${track.element.name} `);
         } else {
             console.log("No track selected.");
             alert("No track selected. Select a track in the editor first.");
@@ -93,6 +117,10 @@ export default class PluginTemplate implements IDawiyPlugin {
 
     /**
      * Helper to apply basic styles to the container.
+     * PLUGIN CONVENTION:
+     * - Target Area: ~670px width x 190px height
+     * - Responsiveness: Always use width: 100% and height: 100% to fill the parent.
+     *   The parent will handle the sizing (whether it's the track view or full-screen).
      */
     private applyContainerStyles(container: HTMLElement) {
         container.style.color = "#eee";
@@ -101,6 +129,39 @@ export default class PluginTemplate implements IDawiyPlugin {
         container.style.flexDirection = "column";
         container.style.gap = "10px";
         container.style.overflowY = "auto";
+        container.style.width = "100%";
         container.style.height = "100%";
     }
+
+    // --- Data Management (Optional) ---
+
+    // /**
+    //  * 1. User Data (Global Settings)
+    //  * Persists across sessions and different projects. 
+    //  * Deleted when the user uninstalls the plugin.
+    //  */
+    // getUserData(): any {
+    //     return { mySetting: "someValue" };
+    // }
+
+    // setUserData(data: any): void {
+    //     if (data.mySetting) {
+    //         console.log("Restored setting:", data.mySetting);
+    //     }
+    // }
+
+    // /**
+    //  * 2. Project Data (Saved with Project)
+    //  * Specific to the current project file. 
+    //  * Saved/Loaded automatically with the .dawiy project.
+    //  */
+    // getProjectData(): any {
+    //     return { projectSpecificValue: 123 };
+    // }
+
+    // setProjectData(data: any): void {
+    //     if (data) {
+    //         console.log("Restored project data:", data);
+    //     }
+    // }
 }

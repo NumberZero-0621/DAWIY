@@ -1,12 +1,13 @@
 import App from "../../App";
 import { RATIO_MILLS_BY_PX, TEMPO } from "../../Env";
-import { IDawiyPlugin } from "../IDawiyPlugin";
+import { IDawiyPlugin, DAWIYPlugin } from "../IDawiyPlugin";
 import Region, { RegionOf } from "../../Models/Region/Region";
 import MIDIRegion from "../../Models/Region/MIDIRegion";
 import SampleRegion from "../../Models/Region/SampleRegion";
 import { MIDI, MIDINote } from "../../Audio/MIDI/MIDI";
 import { audioCtx } from "../../index";
 
+@DAWIYPlugin
 export default class GlitchChopperPlugin implements IDawiyPlugin {
     id = "glitch-chopper";
     name = "Glitch Chopper";
