@@ -574,10 +574,7 @@ export default class HostController {
       this._view.keyboardShortcutsWindow.hidden = true;
     })
 
-    this._view.latencyBtn.addEventListener("click", () => {
-      this._app.latencyView.openWindow();
-      this.focus(this._app.latencyView);
-    });
+
     this._view.importSongs.addEventListener("click", () => {
       this._view.newTrackInput.click();
     });

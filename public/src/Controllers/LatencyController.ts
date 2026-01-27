@@ -2,6 +2,7 @@ import App from "../App";
 import HostView from "../Views/HostView";
 import LatencyView from "../Views/LatencyView";
 import { audioCtx } from "../index";
+import { t } from "../Utils/i18n";
 
 
 export default class LatencyController {
@@ -73,20 +74,20 @@ export default class LatencyController {
      * @private
      */
     private async setupWorklet(): Promise<void> {
-        this._recordAudioContext = new AudioContext({latencyHint: 0.00001});
+        this._recordAudioContext = new AudioContext({ latencyHint: 0.00001 });
         await this._recordAudioContext.suspend();
         await this._recordAudioContext.audioWorklet.addModule(new URL('../Audio/LatencyProcessor.js', import.meta.url))
 
         const stream = await navigator.mediaDevices.getUserMedia(this._app.settingsController.constraints);
         const mic = this._recordAudioContext.createMediaStreamSource(stream);
 
-        const workletNode = new AudioWorkletNode(this._recordAudioContext, 'measure-processor', {outputChannelCount: [1]});
+        const workletNode = new AudioWorkletNode(this._recordAudioContext, 'measure-processor', { outputChannelCount: [1] });
 
         workletNode.channelCount = 1;
-        workletNode.port.postMessage({threshold: 0.20 });
+        workletNode.port.postMessage({ threshold: 0.20 });
 
         workletNode.port.onmessage = (e) => {
-            console.log("   latency:"+JSON.stringify(e.data))
+            console.log("   latency:" + JSON.stringify(e.data))
             const roundtripLatency = e.data.latency * 1000;
             // @ts-ignore
             const outputLatency = audioCtx.outputLatency * 1000;
@@ -110,7 +111,7 @@ export default class LatencyController {
         await this.setupWorklet()
         await this._recordAudioContext.resume();
         this._calibrating = true;
-        this._view.calibrationButton.innerText = "Stop Calibration";
+        this._view.calibrationButton.innerText = t("window.stop_calibrate");
     }
 
     /**
@@ -121,7 +122,7 @@ export default class LatencyController {
         console.log("stop calibrate")
         await this._recordAudioContext.close()
         this._calibrating = false;
-        this._view.calibrationButton.innerText = "Calibrate Latency";
+        this._view.calibrationButton.innerText = t("window.calibrate");
     }
 
     /**
@@ -133,7 +134,7 @@ export default class LatencyController {
             const latency = parseFloat(localStorage.getItem("latency-compensation")!);
             this._app.host.latency = latency
             this._view.latencyInput.value = latency.toString();
-            this._view.inputLatencyLabel.innerText = "Compensation : -" + latency.toFixed(2) + "ms";
+            this._view.inputLatencyLabel.innerHTML = t("window.latency_compensation_label") + " : -" + latency.toFixed(2) + "ms";
         }
     }
 }

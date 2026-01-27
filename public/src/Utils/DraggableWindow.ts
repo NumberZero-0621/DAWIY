@@ -55,4 +55,12 @@ export default class DraggableWindow {
         // @ts-ignore
         el.style.transform = "translate3d(" + xPos + "px, " + yPos + "px, 0)";
     }
+
+    public setPosition(x: number, y: number) {
+        this.currentX = x;
+        this.currentY = y;
+        this.xOffset = x;
+        this.yOffset = y;
+        this.setTranslate(this.currentX, this.currentY, this.resizableWindow);
+    }
 }

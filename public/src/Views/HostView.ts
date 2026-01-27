@@ -71,7 +71,7 @@ export default class HostView {
     importMidi = document.getElementById("import-midi-btn") as HTMLInputElement
     newTrackInput: HTMLInputElement = document.getElementById("new-track-input") as HTMLInputElement
     newMidiTrackInput: HTMLInputElement = document.getElementById("new-midi-track-input") as HTMLInputElement
-    latencyBtn = document.getElementById("latency-btn") as HTMLDivElement
+
     settingsBtn = document.getElementById("settings-btn") as HTMLDivElement
     dawiyPluginBtn = document.getElementById("dawiy-plugin-btn") as HTMLDivElement
     saveBtn = document.getElementById("save-project") as HTMLDivElement
@@ -114,15 +114,15 @@ export default class HostView {
     toggleAudioLoopBrowser = this.soundLoopBtn.addEventListener("click", () => {
         this.audioLoopBrowserDiv.style.display = this.audioLoopBrowserDiv.style.display !== "flex" ? "flex" : "none";
     });
-    
-    
+
+
     public updateMetronomeBtn(metronomeOn: boolean) {
         let tooltip = this.metroBtn.firstElementChild as HTMLSpanElement;
-        if(metronomeOn){
+        if (metronomeOn) {
             this.metroBtn.style.backgroundColor = "black";
             tooltip.textContent = t("tooltip.metronome_on");
         }
-        else{
+        else {
             this.metroBtn.style.backgroundColor = "";
             tooltip.textContent = t("tooltip.metronome_off");
         }
@@ -135,7 +135,7 @@ export default class HostView {
             this.toolIcon.className = "bi bi-pencil-fill";
         }
     }
-        
+
     /**
      * Updates the timer of the host view.
      *
@@ -152,7 +152,7 @@ export default class HostView {
      */
     public updateTimerByPixelsPos(pos: number) {
         // turn the pos from pixels to ms
-        const posInMs = pos*RATIO_MILLS_BY_PX;
+        const posInMs = pos * RATIO_MILLS_BY_PX;
         this.timer.innerHTML = HostView.millisToMinutesAndSeconds(posInMs);
     }
 
@@ -246,13 +246,13 @@ export default class HostView {
     public updateSnapMenu(denominator: number, triplet: boolean) {
         // Clear all checks
         [this.snap1_1, this.snap1_2, this.snap1_4, this.snap1_8, this.snap1_16, this.snap1_32].forEach(el => {
-           const span = el.querySelector('span');
-           if (span) span.remove();
+            const span = el.querySelector('span');
+            if (span) span.remove();
         });
 
         // Check active
         let activeEl;
-        switch(denominator) {
+        switch (denominator) {
             case 1: activeEl = this.snap1_1; break;
             case 2: activeEl = this.snap1_2; break;
             case 4: activeEl = this.snap1_4; break;
@@ -268,16 +268,16 @@ export default class HostView {
     }
 
     public setUndoButtonState(undoAvailable: boolean): void {
-        if(undoAvailable) 
-            this.undoIcon.className= "undo-icon";
-        else 
-            this.undoIcon.className ="undo-icon-off";
+        if (undoAvailable)
+            this.undoIcon.className = "undo-icon";
+        else
+            this.undoIcon.className = "undo-icon-off";
     }
 
     public setRedoButtonState(redoAvailable: boolean): void {
-        if(redoAvailable) 
+        if (redoAvailable)
             this.redoIcon.className = "redo-icon";
-        else 
+        else
             this.redoIcon.className = "redo-icon-off";
     }
 

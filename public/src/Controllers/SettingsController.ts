@@ -170,5 +170,22 @@ export default class SettingsController {
 
     private bindEvents() {
         this.view.closeBtn.onclick = () => this.view.settingsWindow.hidden = true
+        this.view.latencyBtn.onclick = () => {
+            this.app.latencyView.openWindow();
+
+            const settingsRect = this.view.settingsWindow.getBoundingClientRect();
+            const latencyRect = this.app.latencyView.LatencyWindow.getBoundingClientRect();
+
+            const targetX = settingsRect.right + 20;
+            const targetY = settingsRect.top;
+
+            const deltaX = targetX - latencyRect.left;
+            const deltaY = targetY - latencyRect.top;
+
+            this.app.latencyView.setPosition(
+                this.app.latencyView.xOffset + deltaX,
+                this.app.latencyView.yOffset + deltaY
+            );
+        }
     }
 }
