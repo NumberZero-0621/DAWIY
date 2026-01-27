@@ -11,7 +11,7 @@ import RegionView from "./RegionView";
 export default class SampleRegionView extends RegionView<SampleRegion> {
 
     constructor(editor: EditorView, region: SampleRegion) {
-        super(editor,region)
+        super(editor, region)
     }
 
     /**
@@ -28,12 +28,18 @@ export default class SampleRegionView extends RegionView<SampleRegion> {
         // use some color transparency as regions can overlap
         target.beginFill(colorHex, 0.8);
 
-        let amp = (HEIGHT_TRACK-1) / 2;
-        let fromX = Math.floor(from/region.duration * range);
-        let toX = Math.floor(to/region.duration * range);
-        for (let channel = 0; channel < region.buffer.numberOfChannels; channel++) {
+        let numChannels = region.buffer.numberOfChannels;
+        let isStereo = numChannels === 2;
+        let channelHeight = isStereo ? HEIGHT_TRACK / 2 : HEIGHT_TRACK;
+        let amp = (channelHeight - 1) / 2;
+
+        let fromX = Math.floor(from / region.duration * range);
+        let toX = Math.floor(to / region.duration * range);
+
+        for (let channel = 0; channel < numChannels; channel++) {
             let data = region.buffer.getChannelData(channel);
             let step = Math.round(data.length / range);
+            let channelOffset = isStereo ? channel * channelHeight : 0;
 
             for (let i = fromX; i < toX; i++) {
                 let min = 1.0;
@@ -44,14 +50,15 @@ export default class SampleRegionView extends RegionView<SampleRegion> {
                     if (dataum > max) max = dataum;
                 }
                 const rectWidth = 1;
-                let rectHeight = Math.max(1, (max-min) * amp);
+                let rectHeight = Math.max(1, (max - min) * amp);
 
-                // MB: we need to clip the rectangle so that if does not go over track dimensions
-                if(rectHeight < HEIGHT_TRACK) {
-                    target.drawRect(i, (1+min) * amp, rectWidth, rectHeight);
+                // MB: we need to clip the rectangle so that if does not go over track/channel dimensions
+                let y = channelOffset + (1 + min) * amp;
+                if (rectHeight < channelHeight) {
+                    target.drawRect(i, y, rectWidth, rectHeight);
                 } else {
-                    rectHeight = HEIGHT_TRACK;
-                    target.drawRect(i, 0 * amp, rectWidth, rectHeight);
+                    rectHeight = channelHeight;
+                    target.drawRect(i, channelOffset, rectWidth, rectHeight);
                 }
             }
         }

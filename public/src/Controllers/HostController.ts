@@ -42,7 +42,7 @@ export default class HostController {
   /**
    * Interval to update the timer.
    */
-  private _timerInterval: any| undefined;
+  private _timerInterval: any | undefined;
   /**
    * Interval time to update the vu meter.
    */
@@ -55,7 +55,7 @@ export default class HostController {
     this._timerIntervalPaused = false;
 
     this._view.host?.append(this._app.host.element)
-    this._app.host.element.name="Master Track"
+    this._app.host.element.name = "Master Track"
     this._app.tracksController.bindSoundProviderEvents(this._app.host)
 
     this.initializeDemoSongs();
@@ -77,12 +77,12 @@ export default class HostController {
    * @param inRecordingMode - Boolean to know if the button is a stop button or not when recording.
    */
   public play(): void {
-    const host=this._app.host
+    const host = this._app.host
     if (!host.isPlaying) {
       this._app.automationController.applyAllAutomations();
-      if (host.modified){
+      if (host.modified) {
         host.update(audioCtx)
-        host.modified=false
+        host.modified = false
       }
       host.play()
       this.launchTimerInterval();
@@ -94,9 +94,9 @@ export default class HostController {
   /**
    * Stop playing the audio.
    */
-  stop(){
-    const host= this._app.host
-    if(host.isPlaying){
+  stop() {
+    const host = this._app.host
+    if (host.isPlaying) {
       this._app.tracksController.tracks.forEach((track) => {
         if (track.plugin && track.plugin.instance) track.plugin.instance?.audioNode?.clearEvents()
       })
@@ -127,7 +127,7 @@ export default class HostController {
     // adjust horizontal scrollbar
     this._app.editorView.horizontalScrollbar.moveToBeginning();
   }
-  
+
 
   public toggleMetronome(): void {
     const metronomeOn = !this._app.host.metronomeOn;
@@ -138,14 +138,14 @@ export default class HostController {
     console.log(`Metronome ${metronomeOn ? "started" : "stopped"}`);
 
     // Start or stop the metronome based on both metronome state and whether playback is active
-    if (this._app.host.isPlaying){
-      if(metronomeOn)this._view.metronome.start(this._app.host.playhead);
+    if (this._app.host.isPlaying) {
+      if (metronomeOn) this._view.metronome.start(this._app.host.playhead);
       else this._view.metronome.stop();
     }
 
     // Update the icon to reflect the new state.
     this._view.updateMetronomeBtn(metronomeOn);
-}
+  }
 
 
   public snapOnOff(): void {
@@ -155,22 +155,22 @@ export default class HostController {
     this._view.updateSnapButton(snapping);
   }
 
-   /** Handles the loop button. It loops the song or not. */
+  /** Handles the loop button. It loops the song or not. */
   public loop(): void {
     const looping = !this._app.host.loopRange;
     this._view.updateLoopButton(looping);
     this._app.editorView.loop.updateActive(looping);
 
     if (looping) {
-        const selectedRange = this._app.playheadController.getRangePx();
-        if (selectedRange) {
-            this._app.loopController.moveLoopToSelection(selectedRange.start, selectedRange.end);
-        }
-        // Activate loop on the host with the current range (updated or default)
-        this._app.host.setLoop(this._loopRange);
+      const selectedRange = this._app.playheadController.getRangePx();
+      if (selectedRange) {
+        this._app.loopController.moveLoopToSelection(selectedRange.start, selectedRange.end);
+      }
+      // Activate loop on the host with the current range (updated or default)
+      this._app.host.setLoop(this._loopRange);
     } else {
-        // Deactivate loop
-        this._app.host.setLoop(null);
+      // Deactivate loop
+      this._app.host.setLoop(null);
     }
 
     if (this._app.pianoRollController) this._app.pianoRollController.updateLoop(looping);
@@ -181,13 +181,13 @@ export default class HostController {
    *
    * @param range - Time of the left and right of the loop in milliseconds.
    */
-  public setLoop(range: [number,number]): void {
-    this._loopRange=range
-    if(this._app.host.loopRange)this._app.host.setLoop(range)
+  public setLoop(range: [number, number]): void {
+    this._loopRange = range
+    if (this._app.host.loopRange) this._app.host.setLoop(range)
     if (this._app.pianoRollController) this._app.pianoRollController.updateLoopRange(range);
   }
-  private _loopRange: [number,number] = [0,0]
-  get loopRange(): [number,number]{ return this._loopRange }
+  private _loopRange: [number, number] = [0, 0]
+  get loopRange(): [number, number] { return this._loopRange }
 
   /**
    * Handles the import of files by the browser. It creates a new track for each file.
@@ -238,7 +238,7 @@ export default class HostController {
       try {
         const arrayBuffer = await file.arrayBuffer();
         const zip = await JSZip.loadAsync(arrayBuffer);
-        
+
         // We will implement DawProjectLoader to handle the rest
         const { default: DawProjectLoader } = await import("../Loader/DawProjectLoader");
         const loader = new DawProjectLoader(this._app);
@@ -253,14 +253,14 @@ export default class HostController {
   }
 
   public async saveDawProject(): Promise<void> {
-      try {
-          const { default: DawProjectExporter } = await import("../Loader/DawProjectExporter");
-          const exporter = new DawProjectExporter(this._app);
-          await exporter.export();
-      } catch (err) {
-          console.error("Failed to save dawproject:", err);
-          alert("Failed to save .dawproject file. See console for details.");
-      }
+    try {
+      const { default: DawProjectExporter } = await import("../Loader/DawProjectExporter");
+      const exporter = new DawProjectExporter(this._app);
+      await exporter.export();
+    } catch (err) {
+      console.error("Failed to save dawproject:", err);
+      alert("Failed to save .dawproject file. See console for details.");
+    }
   }
 
   /**
@@ -325,17 +325,29 @@ export default class HostController {
     }
   }
 
-  public onPlayButton(){
-    if(!this._app.host.isPlaying) this._app.hostController.play()
-      else this._app.hostController.stop()
+  public onPlayButton() {
+    if (!this._app.host.isPlaying) this._app.hostController.play()
+    else this._app.hostController.stop()
   }
 
-  public onRecordButton(){
-    if(!this._app.recorderController.isRecording){
+  public onRecordButton() {
+    if (!this._app.recorderController.isRecording) {
       this._app.recorderController.startRecordingAll()
       this._app.hostController.play()
     }
     else this._app.recorderController.stopRecordingAll()
+  }
+
+  public switchToSelectMode(): void {
+    App.TOOL_MODE = "SELECT";
+    this._view.updateToolIcon("SELECT");
+    this._view.toolMenu.style.display = "none";
+  }
+
+  public switchToPenMode(): void {
+    App.TOOL_MODE = "PEN";
+    this._view.updateToolIcon("PEN");
+    this._view.toolMenu.style.display = "none";
   }
 
   /**
@@ -356,14 +368,14 @@ export default class HostController {
     });
 
     this._view.playBtn.addEventListener("click", () => this.onPlayButton());
-    
+
     this._view.recordBtn.addEventListener("click", () => this.onRecordButton());
 
     this._view.loopBtn.addEventListener("click", () => {
       this.loop();
     });
     this._view.muteBtn.addEventListener("click", () => {
-      this._app.host.isMuted=!this._app.host.isMuted
+      this._app.host.isMuted = !this._app.host.isMuted
       this._view.updateMuteButton(this._app.host.isMuted)
     });
     this._view.metroBtn.addEventListener("click", () => {
@@ -375,34 +387,30 @@ export default class HostController {
 
     // Tool Button Logic
     const toggleToolMenu = () => {
-        const display = this._view.toolMenu.style.display;
-        this._view.toolMenu.style.display = display === "none" ? "block" : "none";
+      const display = this._view.toolMenu.style.display;
+      this._view.toolMenu.style.display = display === "none" ? "block" : "none";
     };
     this._view.toolBtn.addEventListener("click", toggleToolMenu);
 
     this._view.toolSelectBtn.addEventListener("click", () => {
-        App.TOOL_MODE = "SELECT";
-        this._view.updateToolIcon("SELECT");
-        this._view.toolMenu.style.display = "none";
+      this.switchToSelectMode();
     });
 
     this._view.toolPenBtn.addEventListener("click", () => {
-        App.TOOL_MODE = "PEN";
-        this._view.updateToolIcon("PEN");
-        this._view.toolMenu.style.display = "none";
+      this.switchToPenMode();
     });
 
     // Hide tool menu on outside click
     window.addEventListener("click", (e) => {
-        if (!this._view.toolMenu.contains(e.target as Node) && 
-            !this._view.toolBtn.contains(e.target as Node)) {
-            this._view.toolMenu.style.display = "none";
-        }
+      if (!this._view.toolMenu.contains(e.target as Node) &&
+        !this._view.toolBtn.contains(e.target as Node)) {
+        this._view.toolMenu.style.display = "none";
+      }
     });
 
-    this._view.metronomeContainer.hidden=true
-    this._view.metronomeArrow?.addEventListener("click",()=>{
-      this._view.metronomeContainer.hidden=!this._view.metronomeContainer.hidden
+    this._view.metronomeContainer.hidden = true
+    this._view.metronomeArrow?.addEventListener("click", () => {
+      this._view.metronomeContainer.hidden = !this._view.metronomeContainer.hidden
     })
 
     this._view.splitBtn.addEventListener("click", () => {
@@ -427,6 +435,14 @@ export default class HostController {
           case "y":
             this._app.undoManager.redo();
             break;
+          case "1":
+            e.preventDefault();
+            this.switchToSelectMode();
+            break;
+          case "2":
+            e.preventDefault();
+            this.switchToPenMode();
+            break;
         }
         this._app.hostView.setUndoButtonState(this._app.undoManager.hasUndo());
         this._app.hostView.setRedoButtonState(this._app.undoManager.hasRedo());
@@ -448,35 +464,35 @@ export default class HostController {
 
     // ZOOM BUTTONS
     this._view.zoomInBtn.addEventListener("click", async () => {
-      this._app.editorController.zoomTo(ZOOM_LEVEL*1.5);
+      this._app.editorController.zoomTo(ZOOM_LEVEL * 1.5);
     });
     this._view.zoomOutBtn.addEventListener("click", async () => {
-      this._app.editorController.zoomTo(ZOOM_LEVEL/1.5);
+      this._app.editorController.zoomTo(ZOOM_LEVEL / 1.5);
     });
 
     // ZOOM INPUT
     this._app.editorView.spanZoomLevel.addEventListener("change", () => {
-        let val = parseFloat(this._app.editorView.spanZoomLevel.value);
-        if (isNaN(val)) val = 1;
-        this._app.editorController.zoomTo(val);
+      let val = parseFloat(this._app.editorView.spanZoomLevel.value);
+      if (isNaN(val)) val = 1;
+      this._app.editorController.zoomTo(val);
     });
 
     // Tempo and Time Signature selectors
-    this._view.timeSignatureSelector.on_change.add(([numerator,denominator])=>{
-      this._app.editorView.grid.updateTimeSignature(numerator,denominator)
-      this._app.hostView.metronome.timeSignature= [numerator,denominator]
-      this._app.hostView.metronome.playhead=this._app.host.playhead
+    this._view.timeSignatureSelector.on_change.add(([numerator, denominator]) => {
+      this._app.editorView.grid.updateTimeSignature(numerator, denominator)
+      this._app.hostView.metronome.timeSignature = [numerator, denominator]
+      this._app.hostView.metronome.playhead = this._app.host.playhead
       this._app.pianoRollController.redraw(); // Update Piano Roll Grid
     })
 
-    this._view.tempoSelector.on_change.add((newTempo)=>{
-      if(newTempo < 5 || newTempo > 600){
-        this._view.tempoSelector.tempo=Math.max(5,Math.min(600,newTempo))
+    this._view.tempoSelector.on_change.add((newTempo) => {
+      if (newTempo < 5 || newTempo > 600) {
+        this._view.tempoSelector.tempo = Math.max(5, Math.min(600, newTempo))
         return
       }
-      this._app.hostView.metronome.tempo= newTempo
+      this._app.hostView.metronome.tempo = newTempo
       setTempo(newTempo)
-      this._app.playheadController.moveTo(this._app.host.playhead,false)
+      this._app.playheadController.moveTo(this._app.host.playhead, false)
 
       // redraw all tracks according to new tempo
       this._app.tracksController.tracks.forEach((track) => {
@@ -491,7 +507,7 @@ export default class HostController {
           // TODO: Useful for what ? region.start=region.start / TEMPO
         }
 
-        track.modified=true
+        track.modified = true
 
         this._app.editorView.drawRegions(track);
       });
@@ -532,8 +548,8 @@ export default class HostController {
       this.focus(this._app.settingsView);
     })
     this._view.dawiyPluginBtn.addEventListener("click", () => {
-        this._app.dawiyPluginController.openWindow();
-        this.focus(this._app.dawiyPluginView);
+      this._app.dawiyPluginController.openWindow();
+      this.focus(this._app.dawiyPluginView);
     })
 
     this._view.aboutBtn.addEventListener("click", () => {
@@ -578,8 +594,8 @@ export default class HostController {
     // SCROLL SYNC
     const trackDiv = this._app.tracksView.trackContainerDiv;
     const automationDiv = this._app.automationView.automationContainer;
-    trackDiv.addEventListener( "mouseenter", e=>  this.active = e.target );
-    automationDiv.addEventListener( "mouseenter", e=>  this.active = e.target );
+    trackDiv.addEventListener("mouseenter", e => this.active = e.target);
+    automationDiv.addEventListener("mouseenter", e => this.active = e.target);
 
     trackDiv.addEventListener("scroll", (e: Event) => {
       if (e.target !== this.active) return
@@ -602,45 +618,45 @@ export default class HostController {
     const pluginsView = this._app.pluginsView;
 
     const mouseMoveHandler = (e: MouseEvent) => {
-        // Calculate the new height based on mouse position from the bottom of the viewport
-        const newHeight = window.innerHeight - e.clientY - (resizer.offsetHeight / 2);
+      // Calculate the new height based on mouse position from the bottom of the viewport
+      const newHeight = window.innerHeight - e.clientY - (resizer.offsetHeight / 2);
 
-        // Define boundaries for resizing
-        const minHeight = 25; // Collapsed height
-        const maxHeight = window.innerHeight - 200; // Leave at least 200px for the top editor
-        
-        const clampedHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
-        
-        pluginEditor.style.height = `${clampedHeight}px`;
-        pluginEditor.style.minHeight = `${clampedHeight}px`; // Ensure minHeight is also set
+      // Define boundaries for resizing
+      const minHeight = 25; // Collapsed height
+      const maxHeight = window.innerHeight - 200; // Leave at least 200px for the top editor
 
-        // Trigger the main editor canvas resize
-        this._app.editorView.resizeCanvas();
+      const clampedHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+
+      pluginEditor.style.height = `${clampedHeight}px`;
+      pluginEditor.style.minHeight = `${clampedHeight}px`; // Ensure minHeight is also set
+
+      // Trigger the main editor canvas resize
+      this._app.editorView.resizeCanvas();
     };
 
     const mouseUpHandler = () => {
-        document.removeEventListener('mousemove', mouseMoveHandler);
-        document.removeEventListener('mouseup', mouseUpHandler);
-        document.body.style.cursor = 'default';
-        document.body.style.userSelect = 'auto';
+      document.removeEventListener('mousemove', mouseMoveHandler);
+      document.removeEventListener('mouseup', mouseUpHandler);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
 
-        // Store the new height for when the panel is maximized again
-        const currentHeight = pluginEditor.offsetHeight;
-        if (currentHeight > 30) { // Only store if not collapsed
-            pluginsView.lastUserHeight = currentHeight;
-        }
+      // Store the new height for when the panel is maximized again
+      const currentHeight = pluginEditor.offsetHeight;
+      if (currentHeight > 30) { // Only store if not collapsed
+        pluginsView.lastUserHeight = currentHeight;
+      }
     };
 
     resizer.addEventListener('mousedown', (e) => {
-        e.preventDefault();
+      e.preventDefault();
 
-        // If the panel is currently collapsed, maximizing it should be done by the dedicated button
-        // Or we can decide to let the drag maximize it. Let's do that.
-        
-        document.addEventListener('mousemove', mouseMoveHandler);
-        document.addEventListener('mouseup', mouseUpHandler);
-        document.body.style.cursor = 'row-resize';
-        document.body.style.userSelect = 'none';
+      // If the panel is currently collapsed, maximizing it should be done by the dedicated button
+      // Or we can decide to let the drag maximize it. Let's do that.
+
+      document.addEventListener('mousemove', mouseMoveHandler);
+      document.addEventListener('mouseup', mouseUpHandler);
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
     });
   }
 
@@ -657,7 +673,7 @@ export default class HostController {
         for (let trackSong of song.songs) {
           const url = SONGS_FILE_URL + trackSong;
           let track = await this._app.tracksController.createTrack(url);
-          this._app.loader.loadTrackUrl(track,url);
+          this._app.loader.loadTrackUrl(track, url);
         }
       };
     });

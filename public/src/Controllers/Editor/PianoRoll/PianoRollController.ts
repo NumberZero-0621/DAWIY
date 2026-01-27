@@ -757,7 +757,8 @@ export default class PianoRollController {
             }
 
             if (this.hasSelection() && (e.key === "ArrowUp" || e.key === "ArrowDown") && !e.ctrlKey && !e.metaKey) {
-                const shift = e.key === "ArrowUp" ? 1 : -1;
+                const step = e.shiftKey ? 12 : 1;
+                const shift = e.key === "ArrowUp" ? step : -step;
                 this.handleNoteVerticalArrowPress(shift);
                 e.preventDefault();
                 e.stopImmediatePropagation();
