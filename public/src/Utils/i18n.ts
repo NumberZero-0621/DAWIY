@@ -24,7 +24,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "menu.calibrate_latency": "Calibrate latency compensation",
         "menu.settings": "Settings",
         "menu.dawiy_plugin": "DAWIY Plugin",
-        "menu.login": "Log in",
+        "menu.login": "Login (Administrator)",
+        "menu.logout": "Log out (Administrator)",
         "menu.playground": "Playground",
         "menu.about": "About",
         "tooltip.restart": "Restart",
@@ -94,7 +95,8 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "menu.calibrate_latency": "レイテンシー補正を調整",
         "menu.settings": "設定",
         "menu.dawiy_plugin": "DAWIYプラグイン",
-        "menu.login": "ログイン",
+        "menu.login": "ログイン（管理者用）",
+        "menu.logout": "ログアウト",
         "menu.playground": "プレイグラウンド",
         "menu.about": "このアプリについて",
         "tooltip.restart": "最初に戻る",
@@ -172,9 +174,9 @@ export function updateDOM() {
                         textNodeFound = true;
                     }
                 });
-                
+
                 if (!textNodeFound && el.children.length === 0) {
-                     el.textContent = t(key);
+                    el.textContent = t(key);
                 }
             }
         }

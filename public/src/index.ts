@@ -54,12 +54,15 @@ customElements.define(
 
 import TemplateLoader from './TemplateLoader';
 
+import { updateDOM } from './Utils/i18n';
+
 window.addEventListener('beforeunload', (e) => {
     e.returnValue = 'test';
 });
 
 const audioCtx = new AudioContext({ latencyHint: 0.00001 });
 TemplateLoader.load();
+updateDOM();
 const app = new App();
 
 (async () => {

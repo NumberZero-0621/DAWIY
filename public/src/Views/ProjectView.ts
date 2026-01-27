@@ -3,16 +3,17 @@ import LoadProjectElement from "../Components/Project/LoadProjectElement";
 import SaveProjectElement from "../Components/Project/SaveProjectElement";
 import ExportProjectElement from "../Components/Project/ExportProjectElement";
 import DraggableWindow from "../Utils/DraggableWindow";
+import { t } from "../Utils/i18n";
 
 /**
  * View for the project window. It contains all the elements of the project window. Load, save, login and export.
  */
 export default class ProjectView extends DraggableWindow {
 
-    window= document.getElementById("project-window") as HTMLDivElement;
-    mount= document.getElementById("project-mount") as HTMLDivElement;
-    closeBtn= document.getElementById("project-close-button") as HTMLButtonElement;
-    title= document.getElementById("project-title") as HTMLDivElement;
+    window = document.getElementById("project-window") as HTMLDivElement;
+    mount = document.getElementById("project-mount") as HTMLDivElement;
+    closeBtn = document.getElementById("project-close-button") as HTMLButtonElement;
+    title = document.getElementById("project-title") as HTMLDivElement;
     login = document.getElementById("login") as HTMLDivElement;
 
     saveElement = new SaveProjectElement();
@@ -61,7 +62,7 @@ export default class ProjectView extends DraggableWindow {
      * Mounts the login element.
      */
     public mountLogin() {
-        this.title.innerText = "Login";
+        this.title.innerText = t("menu.login");
         this.mount.innerHTML = "";
         this.mount.appendChild(this.loginElement);
     }
@@ -87,9 +88,9 @@ export default class ProjectView extends DraggableWindow {
 
         this.loginElement.usernameForm.style.display = isLoggedIn ? "none" : "flex";
         this.loginElement.passwordForm.style.display = isLoggedIn ? "none" : "flex";
-        this.title.innerText = isLoggedIn ? "Log out" : "Log in";
+        this.title.innerText = isLoggedIn ? t("menu.logout") : t("menu.login");
 
-        this.login.innerText = isLoggedIn ? "Log out" : "Log in";
+        this.login.innerText = isLoggedIn ? t("menu.logout") : t("menu.login");
     }
 
 }

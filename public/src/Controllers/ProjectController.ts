@@ -131,7 +131,7 @@ export default class ProjectController {
                 let trackIds = exportElement.getSelectedTracks();
                 let masterTrack = exportElement.isMasterTrackSelected();
                 let name = exportElement.nameInput.value;
-                
+
                 if (this.currentExportMode === 'MIDI') {
                     await this._app.exportController.exportMidi(masterTrack, trackIds, name);
                 } else {
@@ -151,11 +151,11 @@ export default class ProjectController {
         if (!this._view.loginElement.initialized) {
             this._view.loginElement.initialized = true;
 
-            this._view.loginElement.logInButton.addEventListener("click",  () => {
+            this._view.loginElement.logInButton.addEventListener("click", () => {
                 this.login();
             });
 
-            this._view.loginElement.logOutButton.addEventListener("click",  () => {
+            this._view.loginElement.logOutButton.addEventListener("click", () => {
                 this.logout();
             });
         }
@@ -179,7 +179,7 @@ export default class ProjectController {
             return;
         }
 
-        let [project,contents] = await this._app.loader.saveProject();
+        let [project, contents] = await this._app.loader.saveProject();
 
         // Upload the project file
         let response = await fetch(url, {
@@ -249,10 +249,10 @@ export default class ProjectController {
                 this.currentUsername = this._view.loadElement.selectedUsername;
                 this.currentProjectName = this._view.loadElement.selectedProjectName;
                 await this._app.loader.loadProject(
-                    responseData.data??{},
-                    id=>{
-                        const xhr=new XMLHttpRequest()
-                        xhr.open('GET',url+'/audio/'+id,true)
+                    responseData.data ?? {},
+                    id => {
+                        const xhr = new XMLHttpRequest()
+                        xhr.open('GET', url + '/audio/' + id, true)
                         return xhr
                     }
                 );
@@ -355,7 +355,7 @@ export default class ProjectController {
             }
         }).then(response => {
             this._logged = response.status === 200;
-            this._view.login.innerText = this._logged ? "Log out" : "Log in";
+            this._view.updateLogin(this._logged);
         })
     }
 
