@@ -1,56 +1,205 @@
 <div id="about-header" class="header-window">
-    <span class="title">About Wam Open Studio</span>
+    <span class="title">About</span>
     <button id="about-close-button" class="close-button">X</button>
 </div>
-<div class="settings-body" style="display:flex; justify-content: center; align-items: center">
-    <div>
-        Contributors
-    </div>
-    <div class="settings-small-item-text">
-        Wam Open Studio is a Work-In-Progress project by <a href="https://github.com/Brotherta" target="_blank">Antoine
-            Vidal-Mazuy</a>,
-        <a href="https://github.com/micbuffa" target="_blank">Michel Buffa</a> and <a href="https://github.com/Jempasam"
-            target="_blank">Samuel Demont</a>.
-        It is based on the <a href="https://github.com/webaudiomodules" target="_blank">Web Audio Modules
-            standard</a> (WAM),
-        which is an open source project that aims to make audio plugins available for the Web platform (aka VSTs
-        for the Web).
-        It has been developed as a showcase for the WAM standard, and to help developers understand how to use
-        it.more
-        You can find the DAW source code on <a href="https://github.com/Brotherta/wam-refont"
-            target="_blank">Github</a>.
-        If you want to contribute, please contact us by email (<a
-            href="mailto:michel.buffa@univ-cotedazur.fr">michel.buffa@univ-cotedazur.fr</a>,
-        <a href="mailto:antoine.vidalma@gmail.com">antoine.vidalma@gmail.com</a>) or
-        in the #webaudio / webaudiomodules slack channel (get invitation here : <a
-            href="https://web-audio-slackin.herokuapp.com/"
-            target="_blank">https://web-audio-slackin.herokuapp.com/</a>).
+<div class="settings-body"
+    style="display:flex; flex-direction: column; justify-content: flex-start; align-items: center; padding-top: 10px;">
+
+    <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+        <button id="about-tab-wam"
+            style="background: none; border: none; color: white; cursor: pointer; font-weight: bold; text-decoration: underline; font-size: 14px;">WAM
+            Open Studio</button>
+        <button id="about-tab-dawiy"
+            style="background: none; border: none; color: white; cursor: pointer; opacity: 0.6; font-size: 14px;">DAWIY</button>
     </div>
 
-    <div>
-        Special thanks
-    </div>
-    <div class="settings-small-item-text">
-        Thanks to Paul Adenot from Mozilla for his help and tools: his Ring buffer, metronome and latency tester
-        code has been adapted and included in this DAW.
-        Original code can be found in
-        <a href="https://github.com/padenot" target="_blank">Paul's GitHub repo</a>.
-    </div>
-    <div class="settings-small-item-text">
-        Thanks also to <a href="https://github.com/QuentinBeauchet" target="_blank">Quentin Beauchet</a> for his
-        help and his contributions
-        with the Pedalboard / plugin manager (<a href="https://wam-bank.vidalmazuy.fr" target="_blank">wam-bank</a>).
+    <!-- WAM Content -->
+    <div id="about-content-wam" style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+        <!-- English WAM -->
+        <div class="lang-en" style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+            <div>
+                Contributors
+            </div>
+            <div class="settings-small-item-text">
+                Wam Open Studio is a Work-In-Progress project by <a href="https://github.com/Brotherta"
+                    target="_blank">Antoine
+                    Vidal-Mazuy</a>,
+                <a href="https://github.com/micbuffa" target="_blank">Michel Buffa</a> and <a
+                    href="https://github.com/Jempasam" target="_blank">Samuel Demont</a>.
+                It is based on the <a href="https://github.com/webaudiomodules" target="_blank">Web Audio Modules
+                    standard</a> (WAM),
+                which is an open source project that aims to make audio plugins available for the Web platform (aka VSTs
+                for the Web).
+                It has been developed as a showcase for the WAM standard, and to help developers understand how to use
+                it.
+                You can find the DAW source code on <a href="https://github.com/Brotherta/wam-refont"
+                    target="_blank">Github</a>.
+                If you want to contribute, please contact us by email (<a
+                    href="mailto:michel.buffa@univ-cotedazur.fr">michel.buffa@univ-cotedazur.fr</a>,
+                <a href="mailto:antoine.vidalma@gmail.com">antoine.vidalma@gmail.com</a>) or
+                in the #webaudio / webaudiomodules slack channel (get invitation here : <a
+                    href="https://web-audio-slackin.herokuapp.com/"
+                    target="_blank">https://web-audio-slackin.herokuapp.com/</a>).
+            </div>
+
+            <div>
+                Special thanks
+            </div>
+            <div class="settings-small-item-text">
+                Thanks to Paul Adenot from Mozilla for his help and tools: his Ring buffer, metronome and latency tester
+                code has been adapted and included in this DAW.
+                Original code can be found in
+                <a href="https://github.com/padenot" target="_blank">Paul's GitHub repo</a>.
+            </div>
+            <div class="settings-small-item-text">
+                Thanks also to <a href="https://github.com/QuentinBeauchet" target="_blank">Quentin Beauchet</a> for his
+                help and his contributions
+                with the Pedalboard / plugin manager (<a href="https://wam-bank.vidalmazuy.fr"
+                    target="_blank">wam-bank</a>).
+            </div>
+
+            <div>
+                Web Audio Modules
+            </div>
+            <div class="settings-small-item-text">
+                Web Audio Modules 2.0 contributors: Michel Buffa, Jerome Lebrun, Shihong Ren, Owen Campbell, Tom Burns,
+                Steven Yi, Jari Kleimola, Oliver Larkin
+            </div>
+        </div>
+
+        <!-- Japanese WAM -->
+        <div class="lang-ja" style="display: none; flex-direction: column; align-items: center; width: 100%;">
+            <div>
+                開発者
+            </div>
+            <div class="settings-small-item-text">
+                Wam Open Studioは、<a href="https://github.com/Brotherta" target="_blank">Antoine Vidal-Mazuy</a>、
+                <a href="https://github.com/micbuffa" target="_blank">Michel Buffa</a>、<a
+                    href="https://github.com/Jempasam" target="_blank">Samuel Demont</a>によるプロジェクトです（開発継続中）。
+                これは、<a href="https://github.com/webaudiomodules" target="_blank">Web Audio Modules standard</a> (WAM)
+                に基づいています。
+                WAMは、Webプラットフォームでオーディオプラグイン（Web用VSTなど）を利用可能にすることを目的としたオープンソースプロジェクトです。
+                このDAWは、WAM標準のショーケースとして、また開発者がその使用方法を理解するのを助けるために開発されました。
+                ソースコードは<a href="https://github.com/Brotherta/wam-refont" target="_blank">Github</a>で確認できます。
+                貢献したい場合は、メール (<a href="mailto:michel.buffa@univ-cotedazur.fr">michel.buffa@univ-cotedazur.fr</a>, <a
+                    href="mailto:antoine.vidalma@gmail.com">antoine.vidalma@gmail.com</a>)
+                またはSlackチャンネル #webaudio / webaudiomodules (<a href="https://web-audio-slackin.herokuapp.com/"
+                    target="_blank">招待はこちら</a>) でご連絡ください。
+            </div>
+
+            <div>
+                Special thanks
+            </div>
+            <div class="settings-small-item-text">
+                MozillaのPaul Adenot氏に感謝します。彼のRing buffer、メトロノーム、レイテンシーテスターのコードがこのDAWに適合され含まれています。
+                オリジナルコードは<a href="https://github.com/padenot" target="_blank">Paul氏のGitHubリポジトリ</a>にあります。
+            </div>
+            <div class="settings-small-item-text">
+                また、ペダルボード/プラグインマネージャー(<a href="https://wam-bank.vidalmazuy.fr"
+                    target="_blank">wam-bank</a>)への貢献と協力をしてくれた<a href="https://github.com/QuentinBeauchet"
+                    target="_blank">Quentin Beauchet</a>氏に感謝します。
+            </div>
+
+            <div>
+                Web Audio Modules
+            </div>
+            <div class="settings-small-item-text">
+                Web Audio Modules 2.0 貢献者: Michel Buffa, Jerome Lebrun, Shihong Ren, Owen Campbell, Tom Burns,
+                Steven Yi, Jari Kleimola, Oliver Larkin
+            </div>
+        </div>
+        <div style="width: 100%; display: flex; justify-content: center">
+            <img src="images/WAM.png" alt="Wam Open Studio" width="80" height="auto">
+        </div>
     </div>
 
-    <div>
-        Web Audio Modules
-    </div>
-    <div class="settings-small-item-text">
-        Web Audio Modules 2.0 contributors: Michel Buffa, Jerome Lebrun, Shihong Ren, Owen Campbell, Tom Burns,
-        Steven Yi, Jari Kleimola, Oliver Larkin
-    </div>
-    <br>
-    <div style="width: 100%; display: flex; justify-content: center">
-        <img src="images/WAM.png" alt="Wam Open Studio" width="80" height="auto">
+    <!-- DAWIY Content -->
+    <div id="about-content-dawiy" style="display: none; flex-direction: column; align-items: center; width: 100%;">
+        <h6>DAW + DIY = DAWIY</h6>
+
+        <!-- Japanese DAWIY (Default from user edits) -->
+        <div class="lang-ja" style="display: none; text-align: center; width: 100%;">
+            <div class="settings-small-item-text" style="text-align: center;">
+                <b>「自分好みのDAW環境をDIYする共通プラットフォーム」</b><br>
+                …を目指しています。
+            </div>
+
+            <div style="margin-top: 15px;">
+                目的
+            </div>
+            <div class="settings-small-item-text">
+                <ul style="padding-left: 20px; list-style-type: none; text-align: left; display: inline-block;">
+                    <li>・ DAWでもユーザ主導の設計・展開を！</li>
+                    <li>・ 誰もが機能を追加・改良できる「DAWツールキット」を目指して</li>
+                    <li>・ もっと思い通りに、もっと手早く、もっとわかりやすくやりたい</li>
+                    <li>・ もっと自由に音作りがしたい！</li>
+                    <li>・ 作曲を、もっと楽しく！</li>
+                    <li>・ クリエイターが理想の環境を自力で手に入れ、<br>
+                        &nbsp;&nbsp;&nbsp;音楽の可能性をさらに探究できる未来を目指す</li>
+                </ul>
+            </div>
+            <br>
+            <div class="settings-small-item-text">
+                <a href="https://github.com/NumberZero-0621/DAWIY" target="_blank">DAWIY</a>は、No.0（<a
+                    href="https://x.com/NumberZero_0621" target="_blank">Xアカウント</a>、<a
+                    href="https://github.com/NumberZero-0621" target="_blank">GitHubアカウント</a>）によって開発中の
+                DAWです。詳細等については<a href="https://github.com/NumberZero-0621/DAWIY/blob/main/README.md"
+                    target="_blank">README.md</a>
+                を見てもらえればと...。
+            </div>
+
+            <div class="settings-small-item-text"
+                style="margin-top: 20px; border-top: 1px solid #555; padding-top: 10px;">
+                このプロジェクトは、<a href="https://github.com/Brotherta/wam-studio" target="_blank">WAM-studio</a> (Copyright
+                (c) 2023 Antoine-Vidal-Mazuy) をベースにしています。<br>
+                元の部分はMITライセンスの下で提供されています。<br>
+                No.0による変更部分はMIT No Attribution (MIT-0) の下で提供されています。
+            </div>
+        </div>
+
+        <!-- English DAWIY -->
+        <div class="lang-en" style="display: block; text-align: center; width: 100%;">
+            <div class="settings-small-item-text" style="text-align: center;">
+                <b>"A common platform to DIY your own DAW environment"</b><br>
+                ...is what we aim for.
+            </div>
+
+            <div style="margin-top: 15px;">
+                Vision
+            </div>
+            <div class="settings-small-item-text">
+                <ul style="padding-left: 20px; list-style-type: none; text-align: left; display: inline-block;">
+                    <li>- User-driven design and deployment even in DAWs!</li>
+                    <li>- Aiming for a 'DAW Toolkit' where anyone can add and <br>
+                        &nbsp;&nbsp;&nbsp;improve functions</li>
+                    <li>- Do it more exactly as you want, faster, and easier</li>
+                    <li>- I want to make sounds more freely!</li>
+                    <li>- Make composing more fun!</li>
+                    <li>- Aiming for a future where creators can get their <br>
+                        &nbsp;&nbsp;&nbsp;ideal environment by themselves and further explore <br>
+                        &nbsp;&nbsp;&nbsp;the possibilities of music</li>
+                </ul>
+            </div>
+            <br>
+            <div class="settings-small-item-text">
+                <a href="https://github.com/NumberZero-0621/DAWIY" target="_blank">DAWIY</a> is a DAW currently under
+                development <br>
+                by No.0 (<a href="https://x.com/NumberZero_0621" target="_blank">X Account</a>, <a
+                    href="https://github.com/NumberZero-0621" target="_blank">GitHub Account</a>).<br>
+                For more details, please see <a href="https://github.com/NumberZero-0621/DAWIY/blob/main/README.md"
+                    target="_blank">README.md</a>.
+            </div>
+
+            <div class="settings-small-item-text"
+                style="margin-top: 20px; border-top: 1px solid #555; padding-top: 10px;">
+                This project is based on <a href="https://github.com/Brotherta/wam-studio"
+                    target="_blank">WAM-studio</a> (Copyright (c) 2023 Antoine-Vidal-Mazuy).<br>
+                Original parts are under MIT License.<br>
+                Modifications by No.0 are under MIT No Attribution (MIT-0).
+            </div>
+        </div>
+        <div style="width: 100%; display: flex; justify-content: center">
+            <img src="images/DAWIY.svg" alt="Wam Open Studio" width="80" height="auto">
+        </div>
     </div>
 </div>

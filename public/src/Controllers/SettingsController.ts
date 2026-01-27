@@ -22,7 +22,10 @@ export default class SettingsController {
     /** The constraints for the media stream. */
     public constraints: MediaStreamConstraints | undefined;
 
+    private app: App;
+
     constructor(app: App) {
+        this.app = app;
         this.view = app.settingsView;
 
         this.initMIDIInputDevice()
@@ -40,14 +43,14 @@ export default class SettingsController {
         // On midi message callback
         // @ts-ignore
         function onMidiMessage(e: MIDIMessageEvent) {
-            if(e.data){
+            if (e.data) {
                 // Transform "NoteOn + Velocity 0" en "NoteOff" to maximize compatibility
-                const type= e.data[0] >> 4
+                const type = e.data[0] >> 4
                 const channel = e.data[0] & 0xf
-                if(type == 0x9 && e.data[2] == 0){
+                if (type == 0x9 && e.data[2] == 0) {
                     e.data[0] = 0x8 + channel
                 }
-                
+
                 that.on_midi_message.forEach((callback) => callback(e))
             }
         }
@@ -154,6 +157,7 @@ export default class SettingsController {
         this.view.selectLanguage.onchange = () => {
             const newLang = this.view.selectLanguage.value as Language;
             setLanguage(newLang);
+            this.app.aboutView.updateLanguage();
         };
     }
 

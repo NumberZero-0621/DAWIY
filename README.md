@@ -102,6 +102,10 @@
 
 ***
 
+### 連絡等
+
+- [制作者のXアカウント](https://x.com/NumberZero_0621)
+
 ### 自作の関連文献
 
 - [ProjectDAWIY - GriCo: Excel VBAを用いた確率的自動作曲システム(EC2025)](https://ipsj.ixsq.nii.ac.jp/records/2003653)
