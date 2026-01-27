@@ -2,7 +2,6 @@ import AboutTemplate from "./Templates/AboutTemplate.html";
 import DawiyPluginTemplate from "./Templates/DawiyPluginTemplate.html";
 import KeyboardShortcutsTemplate from "./Templates/KeyboardShortcutsTemplate.html";
 import LatencyTemplate from "./Templates/LatencyTemplate.html";
-import PlaygroundTemplate from "./Templates/PlaygroundTemplate.html";
 import PluginWindowTemplate from "./Templates/PluginWindowTemplate.html";
 import ProjectTemplate from "./Templates/ProjectTemplate.html";
 import SettingsTemplate from "./Templates/SettingsTemplate.html";
@@ -21,7 +20,6 @@ export default class TemplateLoader {
         this.inject("settings-window", SettingsTemplate);
         this.inject("latency-window", LatencyTemplate);
         this.inject("keyboard-shortcuts-window", KeyboardShortcutsTemplate);
-        this.inject("playground-window", PlaygroundTemplate);
         this.inject("project-window", ProjectTemplate);
         this.inject("plugin-window", PluginWindowTemplate);
         this.inject("dawiy-plugin-window", DawiyPluginTemplate);

@@ -26,7 +26,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "menu.dawiy_plugin": "DAWIY Plugin",
         "menu.login": "Login (Administrator)",
         "menu.logout": "Log out (Administrator)",
-        "menu.playground": "Playground",
+
         "menu.about": "About",
         "tooltip.restart": "Restart",
         "tooltip.play": "Play",
@@ -81,7 +81,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "window.latency_output_latency": "Output Latency",
         "window.latency_explanation_1": "Latency refers to the duration that your device needs to process the sound picked up by your microphone and transmit it back to your speakers. The extent of this delay is determined by the type of device you are using and any additional hardware such as headphones or external microphones. While it is impossible to entirely eliminate latency, we can assist you in finding ways to deal with it.",
         "window.latency_explanation_2": "Here’s a suggestion: Play a drum track while simultaneously recording some music or noise in rhythm. If you observe that the recorded track is out of sync with the drum track, it implies that you need to adjust for latency. You can accomplish this manually by adjusting the latency compensation slider or by using the automatic calibration button.",
-        "window.playground": "Developper Playground",
+
         "window.advanced": "Advanced Window"
     },
     "ja": {
@@ -105,7 +105,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "menu.dawiy_plugin": "DAWIYプラグイン",
         "menu.login": "ログイン（管理者用）",
         "menu.logout": "ログアウト",
-        "menu.playground": "プレイグラウンド",
+
         "menu.about": "このアプリについて",
         "tooltip.restart": "最初に戻る",
         "tooltip.play": "再生",
@@ -160,7 +160,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "window.latency_output_latency": "出力レイテンシー",
         "window.latency_explanation_1": "レイテンシーとは、マイクが音を拾ってからデバイスが処理し、スピーカーから音が出るまでの遅延時間のことです。この遅延の程度は、使用しているデバイスや、ヘッドフォンや外部マイクなどの追加ハードウェアによって決まります。レイテンシーを完全に解消することは不可能ですが、対処する方法はあります。",
         "window.latency_explanation_2": "提案：ドラムトラックを再生しながら、リズムに合わせて音楽やノイズを録音してみてください。録音されたトラックがドラムトラックとずれている場合、レイテンシーの調整が必要です。スライダーを手動で調整するか、自動キャリブレーションボタンを使用して調整できます。",
-        "window.playground": "開発者用プレイグラウンド",
+
         "window.advanced": "詳細ウィンドウ"
     }
 };
