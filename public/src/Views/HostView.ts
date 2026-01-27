@@ -85,16 +85,13 @@ export default class HostView {
     loadBtn = document.getElementById("load-project") as HTMLDivElement
     loadDawProjectBtn = document.getElementById("load-dawproject") as HTMLDivElement
     dawprojectInput = document.getElementById("dawproject-input") as HTMLInputElement
-    loginBtn = document.getElementById("login") as HTMLDivElement
     exportProject = document.getElementById("export-project") as HTMLInputElement
     exportMidi = document.getElementById("export-midi") as HTMLInputElement
 
     aboutBtn = document.getElementById("about-btn") as HTMLDivElement
     aboutCloseBtn = document.getElementById("about-close-button") as HTMLDivElement
     aboutWindow = document.getElementById("about-window") as HTMLDivElement
-    playgroundBtn = document.getElementById("playground-btn") as HTMLDivElement
-    playgroundCloseBtn = document.getElementById("playground-close-button") as HTMLDivElement
-    playgroundWindow = document.getElementById("playground-window") as HTMLDivElement
+
 
     keyboardShortcutsBtn = document.getElementById("keyboard-shortcuts-btn") as HTMLDivElement;
     keyboardShortcutsCloseBtn = document.getElementById("keyboard-shortcuts-close-button") as HTMLDivElement;

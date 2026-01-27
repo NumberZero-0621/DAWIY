@@ -66,8 +66,8 @@ button {
         <br>
     </div>
     
-    <button id="login-btn" type="button">Log in (Administrator)</button>
-    <button id="logout-btn" type="button">Log out (Administrator)</button>
+    <button id="login-btn" type="button">Log in</button>
+    <button id="logout-btn" type="button">Log out</button>
 </div>    
 `
 

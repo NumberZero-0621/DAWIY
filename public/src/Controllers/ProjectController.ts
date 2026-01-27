@@ -312,6 +312,7 @@ export default class ProjectController {
             }
 
             this._view.updateLogin(this._logged);
+            this._app.settingsController.updateLoginStatus(this._logged);
         });
     }
 
@@ -338,6 +339,7 @@ export default class ProjectController {
                 this._view.loginElement.showError("Logout failed");
             }
             this._view.updateLogin(this._logged);
+            this._app.settingsController.updateLoginStatus(this._logged);
         });
     }
 
@@ -356,6 +358,7 @@ export default class ProjectController {
         }).then(response => {
             this._logged = response.status === 200;
             this._view.updateLogin(this._logged);
+            this._app.settingsController.updateLoginStatus(this._logged);
         })
     }
 

@@ -15,6 +15,7 @@ export default class SettingsView extends DraggableWindow {
     selectMIDIInputDevice = document.getElementById("select-midi-input-device") as HTMLSelectElement;
     selectLanguage = document.getElementById("select-language") as HTMLSelectElement;
     latencyBtn = document.getElementById("settings-latency-btn") as HTMLButtonElement;
+    loginBtn = document.getElementById("settings-login-btn") as HTMLButtonElement;
 
     constructor() {
         super(document.getElementById("settings-header") as HTMLDivElement, document.getElementById("settings-window") as HTMLDivElement);

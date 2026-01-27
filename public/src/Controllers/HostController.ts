@@ -539,10 +539,7 @@ export default class HostController {
     this._view.dawprojectInput.addEventListener("change", (e) => {
       this.loadDawProject(e as InputEvent);
     });
-    this._view.loginBtn.addEventListener("click", () => {
-      this._app.projectController.openLoginWindow();
-      this.focus(this._app.projectView);
-    })
+
     this._view.settingsBtn.addEventListener("click", () => {
       this._app.settingsController.openSettings();
       this.focus(this._app.settingsView);
@@ -556,14 +553,8 @@ export default class HostController {
       this._view.aboutWindow.hidden = false;
       this.focus(this._app.aboutView);
     })
-    this._view.playgroundBtn.addEventListener("click", () => {
-      this._view.playgroundWindow.hidden = false;
-    })
     this._view.aboutCloseBtn.addEventListener("click", () => {
       this._view.aboutWindow.hidden = true;
-    })
-    this._view.playgroundCloseBtn.addEventListener("click", () => {
-      this._view.playgroundWindow.hidden = true;
     })
 
     this._view.keyboardShortcutsBtn.addEventListener("click", () => {

@@ -86,7 +86,7 @@ export default class PlayheadController {
       if (key === "Shift") this.snappingDisabled = true;
 
       const regionsSelected = this._app.regionsController.hasSelection();
-      const notesSelected = this._app.pianoRollController.hasSelection() && this._app.pianoRollController.isVisible;
+      const notesSelected = this._app.pianoRollController?.hasSelection() && this._app.pianoRollController?.isVisible;
 
       if (!regionsSelected && !notesSelected) {
         if (key === "ArrowLeft" && !isKeyPressed("Control", "Meta")) this.handleArrowPress(-1);
@@ -181,7 +181,7 @@ export default class PlayheadController {
   }
 
   private handlePointerMove(e: FederatedPointerEvent) {
-    if (this._app.pianoRollController.isVisible) return;
+    if (this._app.pianoRollController?.isVisible) return;
 
     let pos = e.data.global.x + this._app.editorView.viewport.left;
 
@@ -307,7 +307,7 @@ export default class PlayheadController {
    * @param e - Event fired by PIXI.JS that contains all the information needed to handle the event
    */
   private handlePointerDown(e: FederatedPointerEvent) {
-    if (this._app.pianoRollController.isVisible) return;
+    if (this._app.pianoRollController?.isVisible) return;
 
     this._pointerIsDown = true;
     let pos = e.data.global.x + this._app.editorView.viewport.left; this._app.hostController.pauseTimerInterval();

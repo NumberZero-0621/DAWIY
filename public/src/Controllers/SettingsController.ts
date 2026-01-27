@@ -2,7 +2,7 @@ import App from "../App";
 import { createSelect } from "../Utils/dom";
 import SettingsView from "../Views/SettingsView";
 import { audioCtx } from "../index";
-import { CURRENT_LANGUAGE, setLanguage, Language } from "../Utils/i18n";
+import { CURRENT_LANGUAGE, setLanguage, Language, t } from "../Utils/i18n";
 
 /**
  * The class that control the events related to the global settings of the host.
@@ -187,5 +187,13 @@ export default class SettingsController {
                 this.app.latencyView.yOffset + deltaY
             );
         }
+        this.view.loginBtn.onclick = () => {
+            this.app.projectController.openLoginWindow();
+            this.view.settingsWindow.hidden = true; // Close settings after opening login
+        }
+    }
+
+    public updateLoginStatus(isLoggedIn: boolean) {
+        this.view.loginBtn.innerText = isLoggedIn ? t("menu.logout") : t("settings.login");
     }
 }

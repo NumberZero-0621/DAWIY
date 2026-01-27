@@ -14,7 +14,6 @@ export default class ProjectView extends DraggableWindow {
     mount = document.getElementById("project-mount") as HTMLDivElement;
     closeBtn = document.getElementById("project-close-button") as HTMLButtonElement;
     title = document.getElementById("project-title") as HTMLDivElement;
-    login = document.getElementById("login") as HTMLDivElement;
 
     saveElement = new SaveProjectElement();
     loadElement = new LoadProjectElement();
@@ -89,8 +88,6 @@ export default class ProjectView extends DraggableWindow {
         this.loginElement.usernameForm.style.display = isLoggedIn ? "none" : "flex";
         this.loginElement.passwordForm.style.display = isLoggedIn ? "none" : "flex";
         this.title.innerText = isLoggedIn ? t("menu.logout") : t("menu.login");
-
-        this.login.innerText = isLoggedIn ? t("menu.logout") : t("menu.login");
     }
 
 }
