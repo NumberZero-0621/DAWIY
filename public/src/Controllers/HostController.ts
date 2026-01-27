@@ -424,28 +424,28 @@ export default class HostController {
     // undo/redo
     // with cdm/ctl-z or cmd-ctrl-shift-z
     document.addEventListener("keydown", (e: KeyboardEvent) => {
-      // MB: not sure that this is the proper way do handle
-      // keyboard shortcuts for copy/cut/paste
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key) {
-          case "z":
-            this._app.undoManager.undo();
-            break;
-          case "Z":
-          case "y":
-            this._app.undoManager.redo();
-            break;
-          case "1":
-            e.preventDefault();
-            this.switchToSelectMode();
-            break;
-          case "2":
-            e.preventDefault();
-            this.switchToPenMode();
-            break;
-        }
+      // Replaced with ShortcutController
+      if (this._app.shortcutController.isTriggered("edit.undo", e)) {
+        this._app.undoManager.undo();
         this._app.hostView.setUndoButtonState(this._app.undoManager.hasUndo());
         this._app.hostView.setRedoButtonState(this._app.undoManager.hasRedo());
+        return;
+      }
+      if (this._app.shortcutController.isTriggered("edit.redo", e)) {
+        this._app.undoManager.redo();
+        this._app.hostView.setUndoButtonState(this._app.undoManager.hasUndo());
+        this._app.hostView.setRedoButtonState(this._app.undoManager.hasRedo());
+        return;
+      }
+      if (this._app.shortcutController.isTriggered("tool.select", e)) {
+        e.preventDefault();
+        this.switchToSelectMode();
+        return;
+      }
+      if (this._app.shortcutController.isTriggered("tool.pen", e)) {
+        e.preventDefault();
+        this.switchToPenMode();
+        return;
       }
     });
 
@@ -559,6 +559,7 @@ export default class HostController {
 
     this._view.keyboardShortcutsBtn.addEventListener("click", () => {
       this._view.keyboardShortcutsWindow.hidden = false;
+      this._app.shortcutController.refreshUI();
       this.focus(this._app.keyboardShortcutsView);
     })
     this._view.keyboardShortcutsCloseBtn.addEventListener("click", () => {

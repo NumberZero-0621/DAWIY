@@ -26,6 +26,7 @@ import DawiyPluginController from "./Controllers/DawiyPluginController";
 import Loader from "./Loader/Loader";
 import Host from "./Models/Track/Host";
 import AboutView from "./Views/AboutView";
+import ShortcutController from "./Controllers/ShortcutController";
 import AutomationView from "./Views/AutomationView";
 import EditorView from "./Views/Editor/EditorView";
 import KeyboardShortcutsView from "./Views/KeyboardShortcutsView";
@@ -63,6 +64,7 @@ export default class App {
     pianoRollController: PianoRollController;
     autoSaveController: AutoSaveController;
     contextMenuController: ContextMenuController;
+    shortcutController: ShortcutController;
 
     hostView: HostView;
     tracksView: TracksView;
@@ -122,6 +124,7 @@ export default class App {
         this.pianoRollController = new PianoRollController(this);
         this.autoSaveController = new AutoSaveController(this);
         this.contextMenuController = new ContextMenuController(this);
+        this.shortcutController = new ShortcutController(this);
 
         this.hostController.addDraggableWindow(this.pluginsView, this.latencyView, this.settingsView,
             this.projectView, this.aboutView, this.keyboardShortcutsView, this.dawiyPluginView);

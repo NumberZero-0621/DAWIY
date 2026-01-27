@@ -1,0 +1,19 @@
+
+> test
+> jest src/Controllers/ShortcutController.test.ts
+
+PASS src/Controllers/ShortcutController.test.ts (6.282 s)
+  ShortcutController
+    竏・should initialize with default shortcuts (5 ms)
+    竏・isTriggered should return true for matching key event (1 ms)
+    竏・isTriggered should respect modifiers (1 ms)
+    竏・updateShortcut should update definition and save to storage (2 ms)
+    竏・updateShortcut should throw on conflict (30 ms)
+    竏・resetToDefault should restore defaults (2 ms)
+    竏・loadSettings should load from localStorage on init (1 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        6.696 s, estimated 13 s
+Ran all test suites matching src/Controllers/ShortcutController.test.ts.

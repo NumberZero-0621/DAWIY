@@ -9,4 +9,8 @@ export default class KeyboarsShortcutsWindow extends DraggableWindow {
         super(document.getElementById("keyboard-shortcuts-header") as HTMLDivElement, document.getElementById("keyboard-shortcuts-window") as HTMLDivElement);
     }
 
+    listContainer = document.getElementById("keyboard-shortcuts-list") as HTMLDivElement;
+    resetBtn = document.getElementById("keyboard-shortcuts-reset-btn") as HTMLButtonElement;
+    errorDiv = document.getElementById("keyboard-shortcuts-error") as HTMLDivElement;
+
 }

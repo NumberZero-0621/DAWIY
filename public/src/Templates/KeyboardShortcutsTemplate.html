@@ -1,16 +1,16 @@
 <div id="keyboard-shortcuts-header" class="header-window">
-    <span class="title">Keyboard shortcuts</span>
+    <span class="title" data-i18n="window.keyboard_shortcuts">Keyboard shortcuts</span>
     <button id="keyboard-shortcuts-close-button" class="close-button">X</button>
 </div>
-<div class="settings-body" style="display:flex; justify-content: center; align-items: center">
-    <div class="settings-small-item-text">
-        <p><b>SPACE</b> - play on/off</p>
-        <p><b>Control or Cmd + C/X/V</b> - copy/cut/paste selected region.
-            Paste can be done on another selected track.</p>
-        <p><b>DEL or BACKSPACE on a selected region</b> - deletes the region.</p>
-        <p><b>S on a selected region</b> - split region in two separate regions.</p>
-        <p><b>M on many selected regions</b> - merge the regions.</p>
-        <p><b>Double click on the loop handle</b> - turn loop mode on/off.</p>
-        <p><b>Shift while dragging region/playhead/loop handle</b> - bypass grid snapping if snapping is on.</p>
+<div class="settings-body" style="display:flex; flex-direction: column; height: 400px; width: 500px; padding: 10px;">
+    <div id="keyboard-shortcuts-list"
+        style="flex: 1; overflow-y: auto; width: 100%; border: 1px solid #444; margin-bottom: 10px;">
+        <!-- List items will be injected here -->
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div id="keyboard-shortcuts-error" style="color: #ff6b6b; font-size: 12px;"></div>
+        <button id="keyboard-shortcuts-reset-btn" class="settings-btn" style="padding: 5px 10px;"
+            data-i18n="window.reset_shortcuts">Reset to
+            Default</button>
     </div>
 </div>
