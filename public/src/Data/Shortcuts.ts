@@ -7,7 +7,7 @@ export interface ShortcutDefinition {
     id: string;
     description: string; // i18n key
     defaultKeys: KeyCombo[];
-    category: "global" | "editor" | "transport" | "tools";
+    category: "global" | "editor" | "transport" | "tools" | "pianoroll";
     readonly?: boolean;
 }
 
@@ -127,5 +127,41 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
         description: "shortcut.deselect",
         defaultKeys: [{ key: "Escape" }],
         category: "editor"
+    },
+    {
+        id: "pianoroll.moveLeft",
+        description: "shortcut.pianoroll_move_left",
+        defaultKeys: [{ key: "ArrowLeft" }],
+        category: "pianoroll"
+    },
+    {
+        id: "pianoroll.moveRight",
+        description: "shortcut.pianoroll_move_right",
+        defaultKeys: [{ key: "ArrowRight" }],
+        category: "pianoroll"
+    },
+    {
+        id: "pianoroll.moveUp",
+        description: "shortcut.pianoroll_move_up",
+        defaultKeys: [{ key: "ArrowUp" }],
+        category: "pianoroll"
+    },
+    {
+        id: "pianoroll.moveDown",
+        description: "shortcut.pianoroll_move_down",
+        defaultKeys: [{ key: "ArrowDown" }],
+        category: "pianoroll"
+    },
+    {
+        id: "pianoroll.moveOctaveUp",
+        description: "shortcut.pianoroll_move_octave_up",
+        defaultKeys: [{ key: "ArrowUp", modifiers: ["Shift"] }],
+        category: "pianoroll"
+    },
+    {
+        id: "pianoroll.moveOctaveDown",
+        description: "shortcut.pianoroll_move_octave_down",
+        defaultKeys: [{ key: "ArrowDown", modifiers: ["Shift"] }],
+        category: "pianoroll"
     }
 ];

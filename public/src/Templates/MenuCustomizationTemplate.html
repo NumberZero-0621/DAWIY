@@ -1,0 +1,53 @@
+<div id="menu-custom-header" class="header-window">
+    <span class="title" data-i18n="window.menu_customization">Menu Customization</span>
+    <button id="menu-custom-close-button" class="close-button">X</button>
+</div>
+<div class="settings-body" style="overflow-y: auto; max-height: 400px;">
+    <p data-i18n="menu.customization_instruction">Drag items to reorder. Check to show in menu.</p>
+    <ul id="menu-custom-list" class="menu-custom-list" style="list-style-type: none; padding: 0;">
+        <!-- Items will be injected here by JS -->
+    </ul>
+    <div class="settings-item">
+        <button id="menu-custom-reset-btn" type="button" class="btn-danger" data-i18n="window.reset_shortcuts">Reset to
+            Default</button>
+    </div>
+</div>
+<style>
+    .menu-custom-item {
+        background-color: #333;
+        margin-bottom: 5px;
+        padding: 10px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        cursor: move;
+        border: 1px solid #444;
+    }
+
+    .menu-custom-item.dragging {
+        background-color: #555;
+        border: 1px dashed #888;
+        opacity: 0.5;
+    }
+
+    .menu-custom-checkbox {
+        margin-right: 15px;
+        transform: scale(1.2);
+        cursor: pointer;
+    }
+
+    .menu-custom-label {
+        color: #eee;
+        flex-grow: 1;
+        user-select: none;
+    }
+
+    .btn-danger {
+        background-color: #d9534f;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background-color: #c9302c;
+    }
+</style>

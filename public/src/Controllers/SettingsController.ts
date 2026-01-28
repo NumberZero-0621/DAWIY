@@ -172,26 +172,86 @@ export default class SettingsController {
         this.view.closeBtn.onclick = () => this.view.settingsWindow.hidden = true
         this.view.latencyBtn.onclick = () => {
             this.app.latencyView.openWindow();
-
-            const settingsRect = this.view.settingsWindow.getBoundingClientRect();
-            const latencyRect = this.app.latencyView.LatencyWindow.getBoundingClientRect();
-
-            const targetX = settingsRect.right + 20;
-            const targetY = settingsRect.top;
-
-            const deltaX = targetX - latencyRect.left;
-            const deltaY = targetY - latencyRect.top;
-
-            this.app.latencyView.setPosition(
-                this.app.latencyView.xOffset + deltaX,
-                this.app.latencyView.yOffset + deltaY
-            );
+            this.openChildWindow(this.app.latencyView);
         }
         this.view.loginBtn.onclick = () => {
             this.app.projectController.openLoginWindow();
-            this.view.settingsWindow.hidden = true; // Close settings after opening login
+            this.openChildWindow(this.app.projectView);
+        }
+        if (this.view.menuCustomizationBtn) {
+            this.view.menuCustomizationBtn.onclick = () => {
+                this.app.menuCustomizationView.openWindow();
+                this.openChildWindow(this.app.menuCustomizationView);
+            }
+        }
+        if (this.view.keyboardShortcutsBtn) {
+            this.view.keyboardShortcutsBtn.onclick = () => {
+                this.app.keyboardShortcutsView.openWindow();
+                this.app.shortcutController.refreshUI();
+                this.openChildWindow(this.app.keyboardShortcutsView);
+            }
         }
     }
+
+    /**
+     * Opens a child window positioned relative to the settings window.
+     * Checks other potential child windows to apply an offset if they are already open.
+     */
+    private openChildWindow(windowToOpen: any) {
+        // "any" type used temporarily because different views have slight differences in properties if not unified by interface,
+        // but DraggableWindow usually has resizableWindow.
+        // Let's assume passed object has resizableWindow (DraggableWindow).
+
+        const settingsRect = this.view.settingsWindow.getBoundingClientRect();
+        const targetRect = windowToOpen.resizableWindow.getBoundingClientRect();
+
+        // Base Target Position (Right of Settings)
+        let targetX = settingsRect.right + 20;
+        let targetY = settingsRect.top;
+
+        // Check for other visible windows to apply offset
+        let offsetCount = 0;
+
+        // List of windows that might be open and taking up space
+        const potentialWindows = [
+            this.app.latencyView,
+            this.app.latencyView,
+            this.app.keyboardShortcutsView,
+            this.app.projectView,
+            this.app.menuCustomizationView
+        ];
+
+        for (const otherWindow of potentialWindows) {
+            // If it's not the window we are trying to open, and it is visible
+            if (otherWindow !== windowToOpen && !otherWindow.resizableWindow.hidden) {
+                // Check if it is roughly in the "child window zone"
+                // Simple check: is it visible?
+                offsetCount++;
+            }
+        }
+
+        // Apply Logic:
+        // 0 other windows -> No offset
+        // 1 other window -> Offset 1 step
+        // 2 other windows -> Offset 2 steps
+        const OFFSET_X = 30;
+        const OFFSET_Y = 30;
+
+        targetX += (offsetCount * OFFSET_X);
+        targetY += (offsetCount * OFFSET_Y);
+
+        const deltaX = targetX - targetRect.left;
+        const deltaY = targetY - targetRect.top;
+
+        windowToOpen.setPosition(
+            windowToOpen.xOffset + deltaX,
+            windowToOpen.yOffset + deltaY
+        );
+
+        // Bring to front
+        this.app.hostController.focus(windowToOpen);
+    }
+
 
     public updateLoginStatus(isLoggedIn: boolean) {
         this.view.loginBtn.innerText = isLoggedIn ? t("menu.logout") : t("settings.login");

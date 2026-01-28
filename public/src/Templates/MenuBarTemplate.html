@@ -3,16 +3,16 @@
         aria-expanded="false">
         <i class="menu-icon"></i>
     </a>
-    <div class="dropdown-menu dropright" aria-labelledby="dropdownMenuButton">
-        <div class="dropright">
+    <div class="dropdown-menu dropright" id="main-hamburger-menu" aria-labelledby="dropdownMenuButton">
+        <div class="dropright" id="menu-container-select-demo">
             <a class="dropdown-item dropdown-toggle" type="button" id="dropdownSubMenuButton" data-toggle="dropdown"
                 aria-haspopup="true" aria-expanded="false" data-i18n="menu.select_demo">Select Demo Project</a>
             <div id="songs-container" class="dropdown-menu songs" aria-labelledby="dropdownSubMenuButton"></div>
         </div>
 
-        <div class="dropdown-divider"></div>
+        <div class="dropdown-divider" id="menu-divider-1"></div>
 
-        <div class="dropright">
+        <div class="dropright" id="menu-container-load-project">
             <a class="dropdown-item dropdown-toggle" type="button" id="loadProjectSubMenuButton" data-toggle="dropdown"
                 aria-haspopup="true" aria-expanded="false" data-i18n="menu.load_project">Load project</a>
             <div class="dropdown-menu" aria-labelledby="loadProjectSubMenuButton">
@@ -20,7 +20,7 @@
                 <a class="dropdown-item" id="load-dawproject" data-i18n="menu.load_dawproject">dawproject</a>
             </div>
         </div>
-        <div class="dropright">
+        <div class="dropright" id="menu-container-save-project">
             <a class="dropdown-item dropdown-toggle" type="button" id="saveProjectSubMenuButton" data-toggle="dropdown"
                 aria-haspopup="true" aria-expanded="false" data-i18n="menu.save_project">Save project</a>
             <div class="dropdown-menu" aria-labelledby="saveProjectSubMenuButton">
@@ -29,7 +29,7 @@
             </div>
         </div>
 
-        <div class="dropright">
+        <div class="dropright" id="menu-container-export-project">
             <a class="dropdown-item dropdown-toggle" type="button" id="exportSubMenuButton" data-toggle="dropdown"
                 aria-haspopup="true" aria-expanded="false" data-i18n="menu.export_project">Render/Export project</a>
             <div class="dropdown-menu" aria-labelledby="exportSubMenuButton">
@@ -38,7 +38,7 @@
             </div>
         </div>
 
-        <div class="dropright">
+        <div class="dropright" id="menu-container-import">
             <a class="dropdown-item dropdown-toggle" type="button" id="importSubMenuButton" data-toggle="dropdown"
                 aria-haspopup="true" aria-expanded="false" data-i18n="menu.import">Import</a>
             <div class="dropdown-menu" aria-labelledby="importSubMenuButton">
@@ -50,22 +50,22 @@
         <input id="new-midi-track-input" type="file" accept=".mid, .midi" multiple style="display: none">
         <input id="dawproject-input" type="file" accept=".dawproject" style="display: none">
 
-        <div class="dropdown-divider advanced"></div>
-
-        <a class="dropdown-item" id="keyboard-shortcuts-btn" data-i18n="menu.keyboard_shortcuts">Keyboard
-            shortcuts</a>
-
-        <div class="dropdown-divider advanced"></div>
+        <div class="dropdown-divider advanced" id="menu-divider-2"></div>
 
 
-        <a class="dropdown-item" id="settings-btn" data-i18n="menu.settings">Settings</a>
-        <a class="dropdown-item" id="dawiy-plugin-btn" data-i18n="menu.dawiy_plugin">DAWIY Plugin</a>
+        <div id="menu-container-settings">
+            <a class="dropdown-item" id="settings-btn" data-i18n="menu.settings">Settings</a>
+        </div>
+        <div id="menu-container-dawiy-plugin">
+            <a class="dropdown-item" id="dawiy-plugin-btn" data-i18n="menu.dawiy_plugin">DAWIY Plugin</a>
+        </div>
 
-        <div class="dropdown-divider advanced"></div>
+        <div class="dropdown-divider advanced" id="menu-divider-3"></div>
 
 
-
-        <a class="dropdown-item" id="about-btn" data-i18n="menu.about">About</a>
+        <div id="menu-container-about">
+            <a class="dropdown-item" id="about-btn" data-i18n="menu.about">About</a>
+        </div>
     </div>
 
     <div id="back-btn" class="menu-item">

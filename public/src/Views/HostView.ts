@@ -93,7 +93,7 @@ export default class HostView {
     aboutWindow = document.getElementById("about-window") as HTMLDivElement
 
 
-    keyboardShortcutsBtn = document.getElementById("keyboard-shortcuts-btn") as HTMLDivElement;
+
     keyboardShortcutsCloseBtn = document.getElementById("keyboard-shortcuts-close-button") as HTMLDivElement;
     keyboardShortcutsWindow = document.getElementById("keyboard-shortcuts-window") as HTMLDivElement;
 

@@ -31,6 +31,7 @@ import AutomationView from "./Views/AutomationView";
 import EditorView from "./Views/Editor/EditorView";
 import KeyboardShortcutsView from "./Views/KeyboardShortcutsView";
 import LatencyView from "./Views/LatencyView";
+import MenuCustomizationView from "./Views/MenuCustomizationView";
 import PluginsView from "./Views/PluginsView";
 import ProjectView from "./Views/ProjectView";
 import SettingsView from "./Views/SettingsView";
@@ -76,6 +77,7 @@ export default class App {
     projectView: ProjectView;
     editorView: EditorView;
     aboutView: AboutView;
+    menuCustomizationView: MenuCustomizationView;
 
     keyboardShortcutsView: KeyboardShortcutsView;
 
@@ -102,6 +104,7 @@ export default class App {
         this.aboutView = new AboutView();
 
         this.keyboardShortcutsView = new KeyboardShortcutsView();
+        this.menuCustomizationView = new MenuCustomizationView(this);
 
         this.editorController = new EditorController(this);
         this.waveformController = new WaveformController(this);
@@ -127,7 +130,7 @@ export default class App {
         this.shortcutController = new ShortcutController(this);
 
         this.hostController.addDraggableWindow(this.pluginsView, this.latencyView, this.settingsView,
-            this.projectView, this.aboutView, this.keyboardShortcutsView, this.dawiyPluginView);
+            this.projectView, this.aboutView, this.keyboardShortcutsView, this.dawiyPluginView, this.menuCustomizationView);
 
         this.undoManager = new UndoManager();
         const old = this.undoManager.add.bind(this.undoManager)

@@ -99,6 +99,13 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "shortcut.redo": "Redo",
         "shortcut.tool_select": "Select Tool",
         "shortcut.tool_pen": "Pen Tool",
+        "shortcut.pianoroll_move_left": "Move Note Left",
+        "shortcut.pianoroll_move_right": "Move Note Right",
+        "shortcut.pianoroll_move_up": "Move Note Up",
+        "shortcut.pianoroll_move_down": "Move Note Down",
+        "shortcut.pianoroll_move_octave_up": "Move Note Octave Up",
+        "shortcut.pianoroll_move_octave_down": "Move Note Octave Down",
+        "category.pianoroll": "Piano Roll",
         "shortcut.zoom_in": "Zoom In",
         "shortcut.zoom_out": "Zoom Out",
         "shortcut.split": "Split Region",
@@ -108,7 +115,10 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "shortcut.cut": "Cut",
         "shortcut.paste": "Paste",
         "shortcut.select_all": "Select All",
-        "shortcut.deselect": "Deselect All"
+        "shortcut.deselect": "Deselect All",
+        "menu.customize_menu": "Menu Customization",
+        "window.menu_customization": "Menu Customization",
+        "menu.customization_instruction": "Drag items to reorder. Check to show in menu."
     },
     "ja": {
         "loading": "読み込み中",
@@ -204,6 +214,13 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "shortcut.redo": "やり直す",
         "shortcut.tool_select": "選択ツール",
         "shortcut.tool_pen": "ペンツール",
+        "shortcut.pianoroll_move_left": "ノートを左に移動",
+        "shortcut.pianoroll_move_right": "ノートを右に移動",
+        "shortcut.pianoroll_move_up": "ノートを上に移動（半音）",
+        "shortcut.pianoroll_move_down": "ノートを下に移動（半音）",
+        "shortcut.pianoroll_move_octave_up": "ノートを上に移動（オクターブ）",
+        "shortcut.pianoroll_move_octave_down": "ノートを下に移動（オクターブ）",
+        "category.pianoroll": "ピアノロール",
         "shortcut.zoom_in": "拡大",
         "shortcut.zoom_out": "縮小",
         "shortcut.split": "分割",
@@ -213,7 +230,10 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "shortcut.cut": "切り取り",
         "shortcut.paste": "貼り付け",
         "shortcut.select_all": "すべて選択",
-        "shortcut.deselect": "選択解除"
+        "shortcut.deselect": "選択解除",
+        "menu.customize_menu": "メニューカスタマイズ",
+        "window.menu_customization": "メニューカスタマイズ",
+        "menu.customization_instruction": "ドラッグして並べ変え、チェックで表示/非表示を切り替え"
     }
 };
 

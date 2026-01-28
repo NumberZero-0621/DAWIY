@@ -8,6 +8,7 @@ import SettingsTemplate from "./Templates/SettingsTemplate.html";
 import LoadingOverlayTemplate from "./Templates/LoadingOverlayTemplate.html";
 import MenuBarTemplate from "./Templates/MenuBarTemplate.html";
 import AppTemplate from "./Templates/AppTemplate.html";
+import MenuCustomizationTemplate from "./Templates/MenuCustomizationTemplate.html";
 
 export default class TemplateLoader {
 
@@ -22,7 +23,9 @@ export default class TemplateLoader {
         this.inject("keyboard-shortcuts-window", KeyboardShortcutsTemplate);
         this.inject("project-window", ProjectTemplate);
         this.inject("plugin-window", PluginWindowTemplate);
+        this.inject("plugin-window", PluginWindowTemplate);
         this.inject("dawiy-plugin-window", DawiyPluginTemplate);
+        this.inject("menu-customization-window", MenuCustomizationTemplate);
     }
 
     private static inject(id: string, html: string) {

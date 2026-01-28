@@ -722,10 +722,17 @@ export default class PianoRollController {
 
         window.addEventListener("keyup", (e) => {
             if (!this._isVisible) return;
-            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+
+            const checkActionKeys = (actionIds: string[]) => {
+                return actionIds.some(id =>
+                    this._app.shortcutController.getShortcuts(id).some(s => s.key.toLowerCase() === e.key.toLowerCase())
+                );
+            };
+
+            if (checkActionKeys(["pianoroll.moveLeft", "pianoroll.moveRight"])) {
                 this.stopNoteArrowRepeat();
             }
-            if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            if (checkActionKeys(["pianoroll.moveUp", "pianoroll.moveDown", "pianoroll.moveOctaveUp", "pianoroll.moveOctaveDown"])) {
                 this.stopNoteVerticalArrowRepeat();
             }
         }, true);
@@ -748,24 +755,8 @@ export default class PianoRollController {
                 }
             }
 
-            if (this.hasSelection() && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.ctrlKey && !e.metaKey) {
-                const direction = e.key === "ArrowRight" ? 1 : -1;
-                this.handleNoteArrowPress(direction);
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                return;
-            }
-
-            if (this.hasSelection() && (e.key === "ArrowUp" || e.key === "ArrowDown") && !e.ctrlKey && !e.metaKey) {
-                const step = e.shiftKey ? 12 : 1;
-                const shift = e.key === "ArrowUp" ? step : -step;
-                this.handleNoteVerticalArrowPress(shift);
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                return;
-            }
-
-            if (e.key === "Escape") {
+            // Keyboard Shortcuts
+            if (this._app.shortcutController.isTriggered("editor.deselect", e)) {
                 this._app.contextMenuController.hide();
                 if (this._creationState) {
                     this._creationState.ghost.destroy();
@@ -778,8 +769,56 @@ export default class PianoRollController {
                 return;
             }
 
+            // Move Left
+            if (this.hasSelection() && this._app.shortcutController.isTriggered("pianoroll.moveLeft", e)) {
+                this.handleNoteArrowPress(-1);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return;
+            }
+
+            // Move Right
+            if (this.hasSelection() && this._app.shortcutController.isTriggered("pianoroll.moveRight", e)) {
+                this.handleNoteArrowPress(1);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return;
+            }
+
+            // Move Up
+            if (this.hasSelection() && this._app.shortcutController.isTriggered("pianoroll.moveUp", e)) {
+                this.handleNoteVerticalArrowPress(1);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return;
+            }
+
+            // Move Down
+            if (this.hasSelection() && this._app.shortcutController.isTriggered("pianoroll.moveDown", e)) {
+                this.handleNoteVerticalArrowPress(-1);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return;
+            }
+
+            // Move Octave Up
+            if (this.hasSelection() && this._app.shortcutController.isTriggered("pianoroll.moveOctaveUp", e)) {
+                this.handleNoteVerticalArrowPress(12);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return;
+            }
+
+            // Move Octave Down
+            if (this.hasSelection() && this._app.shortcutController.isTriggered("pianoroll.moveOctaveDown", e)) {
+                this.handleNoteVerticalArrowPress(-12);
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return;
+            }
+
             // Delete
-            if (e.key === "Delete" || e.key === "Backspace") {
+            if (this._app.shortcutController.isTriggered("editor.delete", e)) {
                 this._app.contextMenuController.hide();
                 this.deleteSelectedNotes();
                 e.preventDefault();
@@ -788,7 +827,7 @@ export default class PianoRollController {
             }
 
             // Copy
-            if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+            if (this._app.shortcutController.isTriggered("edit.copy", e)) {
                 this._app.contextMenuController.hide();
                 this.copySelectedNotes();
                 e.preventDefault();
@@ -797,7 +836,7 @@ export default class PianoRollController {
             }
 
             // Cut
-            if ((e.ctrlKey || e.metaKey) && e.key === "x") {
+            if (this._app.shortcutController.isTriggered("edit.cut", e)) {
                 this._app.contextMenuController.hide();
                 this.cutSelectedNotes();
                 e.preventDefault();
@@ -806,7 +845,7 @@ export default class PianoRollController {
             }
 
             // Paste
-            if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+            if (this._app.shortcutController.isTriggered("edit.paste", e)) {
                 this._app.contextMenuController.hide();
                 this.pasteNotes();
                 e.preventDefault();
@@ -814,24 +853,24 @@ export default class PianoRollController {
                 return;
             }
 
-            // Zoom In (Ctrl + Right Arrow)
-            if ((e.ctrlKey || e.metaKey) && e.key === "ArrowRight") {
+            // Zoom In
+            if (this._app.shortcutController.isTriggered("editor.zoomIn", e)) {
                 this.handleZoom(1.5);
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 return;
             }
 
-            // Zoom Out (Ctrl + Left Arrow)
-            if ((e.ctrlKey || e.metaKey) && e.key === "ArrowLeft") {
+            // Zoom Out
+            if (this._app.shortcutController.isTriggered("editor.zoomOut", e)) {
                 this.handleZoom(1 / 1.5);
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 return;
             }
 
-            // Select All (Ctrl + A)
-            if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+            // Select All
+            if (this._app.shortcutController.isTriggered("edit.selectAll", e)) {
                 this._app.contextMenuController.hide();
                 this.selectAllNotes();
                 e.preventDefault();

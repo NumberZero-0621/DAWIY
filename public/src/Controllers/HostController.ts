@@ -67,9 +67,104 @@ export default class HostController {
     console.log("Initial Metronome State: " + (this._app.host.metronomeOn ? "On" : "Off"));
     this._view.updateMetronomeBtn(false);
 
+    this.refreshHamburgerMenu(); // Initial render based on config
+
     this._app.host.onPlayHeadMove.add((playhead) => {
       // TODO Move the metronome to the new playhead position
     })
+  }
+
+  public refreshHamburgerMenu() {
+    import("../Utils/MenuConfig").then(({ MenuConfig }) => {
+      const config = MenuConfig.load();
+      const hamburgerMenu = document.getElementById("main-hamburger-menu");
+      if (!hamburgerMenu) return;
+
+      // Dividers handling (simple approach: keep them static or manage them dynamically too)
+      // For now, let's just reorder the known containers.
+      // We need to detach them first or just appendChild/insertBefore to move them.
+
+      const fragment = document.createDocumentFragment();
+      const dividers = {
+        div1: document.getElementById("menu-divider-1"),
+        div2: document.getElementById("menu-divider-2"),
+        div3: document.getElementById("menu-divider-3")
+      };
+
+      // Helper to append item
+      const appendItem = (id: string, domId: string) => {
+        const el = document.getElementById(domId);
+        if (el) {
+          if (config.find(c => c.id === id)?.visible) {
+            el.style.display = ""; // Reset display
+            fragment.appendChild(el);
+          } else {
+            el.style.display = "none"; // Hide but keep in DOM (moved to end later?) or just don't append?
+            // If we don't append, it's removed from view but we need reference.
+            // Better to append but hide.
+            fragment.appendChild(el);
+          }
+        }
+      };
+
+      // Custom logic to interleave dividers if needed.
+      // Based on original order:
+      // select_demo
+      // DIVIDER 1
+      // load_project
+      // save_project
+      // export_project
+      // import
+      // DIVIDER 2
+      // settings
+      // dawiy_plugin
+      // DIVIDER 3
+      // about
+
+      // If we strictly follow user order, dividers become tricky.
+      // Requirement: "そのウィンドウでは各メニューをドラッグアンドドロップすることができ、それによって実際のハンバーガーメニューでのメニューの並び順も変更することが出来る"
+      // This implies full reordering. Dividers might look weird or should be removed/moved.
+      // Let's assume dividers separate "groups" originally, but if user reorders, groups might dissolve.
+      // For simplicity/robustness: Remove fixed dividers if order is customized?
+      // Or just ignore dividers for the reordered list and append them at the end or remove them.
+      // Let's hide dividers if order is not default? Or just remove them for now to simplify.
+
+      // Better: Just append items in config order.
+      config.forEach(item => {
+        const el = document.getElementById(item.domId);
+        if (el) {
+          if (item.visible) {
+            el.style.display = "";
+            fragment.appendChild(el);
+          } else {
+            el.style.display = "none";
+            fragment.appendChild(el);
+          }
+        }
+      });
+
+      // Append others (inputs etc)
+      const inputs = [
+        document.getElementById("new-track-input"),
+        document.getElementById("new-midi-track-input"),
+        document.getElementById("dawproject-input")
+      ];
+      inputs.forEach(el => { if (el) fragment.appendChild(el); });
+
+      // Put fragment content back to menu
+      hamburgerMenu.innerHTML = ""; // Be careful with event listeners...
+      // wait, clearing innerHTML destroys elements and their listeners if they were not moved.
+      // Since we got references via getElementById, if we move them they remain alive.
+      // But if we clear innerHTML, we might lose things we didn't capture.
+      // Safe way: appendChild moves the element.
+
+      hamburgerMenu.appendChild(fragment);
+
+      // Hide dividers for now as they don't fit into the sortable logic easily without being sortable themselves.
+      Object.values(dividers).forEach(d => {
+        if (d) d.style.display = "none";
+      });
+    });
   }
 
   /**
@@ -557,11 +652,7 @@ export default class HostController {
       this._view.aboutWindow.hidden = true;
     })
 
-    this._view.keyboardShortcutsBtn.addEventListener("click", () => {
-      this._view.keyboardShortcutsWindow.hidden = false;
-      this._app.shortcutController.refreshUI();
-      this.focus(this._app.keyboardShortcutsView);
-    })
+
     this._view.keyboardShortcutsCloseBtn.addEventListener("click", () => {
       this._view.keyboardShortcutsWindow.hidden = true;
     })
