@@ -15,7 +15,7 @@ export class MIDINote {
      */
     constructor(
         public readonly note: number,
-        public readonly velocity: number,
+        public velocity: number,
         public readonly channel: number,
         public readonly duration: number,
     ) { }

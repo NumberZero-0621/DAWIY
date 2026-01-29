@@ -89,7 +89,9 @@ export default class EditorView extends Application {
      * The center of the viewport. Used to store where the center of the current viewport size is.
      * @private
      */
-    private _originalCenter : { x: number, y: number };
+    private _originalCenter: { x: number, y: number };
+
+    public onResize: (() => void)[] = [];
 
     constructor() {
         super({
@@ -100,6 +102,13 @@ export default class EditorView extends Application {
 
         this.width = this.canvasContainer.clientWidth;
         this.height = this.canvasContainer.clientHeight;
+
+        // Use ResizeObserver to detect any layout changes (window resize, plugin rack resize, etc.)
+        const observer = new ResizeObserver(() => {
+            this.resizeCanvas();
+        });
+        observer.observe(this.editorDiv);
+        observer.observe(this.canvasContainer);
 
         this.renderer.resize(this.width, this.height);
 
@@ -164,7 +173,7 @@ export default class EditorView extends Application {
         this.rangeSelectionGraphics.beginFill(0xFFFFFF, 0.3);
         this.rangeSelectionGraphics.drawRect(x, 0, width, this.worldHeight);
         this.rangeSelectionGraphics.endFill();
-        
+
         // Also draw timeline part
         this.drawTimelineSelection(x, width);
     }
@@ -205,7 +214,7 @@ export default class EditorView extends Application {
         let target = e.target as HTMLElement;
         if (target !== this.view as HTMLCanvasElement && target !== this.canvasContainer && target !== this.editorDiv && target !== this.horizontalScrollbar && target !== this.verticalScrollbar) return;
         if (e.shiftKey) {
-            this.horizontalScrollbar.customScrollTo(e.deltaX*2);
+            this.horizontalScrollbar.customScrollTo(e.deltaX * 2);
         }
         else {
             this.verticalScrollbar.customScrollTo(e.deltaY);
@@ -249,7 +258,7 @@ export default class EditorView extends Application {
         }
         else {
             this.viewport.y = -scrollValue;
-            
+
             this.playhead.position.y = -this.viewport.y;
             this.playhead.track.position.y = -this.viewport.y;
             this.loop.position.y = -this.viewport.y;
@@ -300,7 +309,7 @@ export default class EditorView extends Application {
         return this.waveforms.find(w => globalY >= w.position.y && globalY <= w.position.y + HEIGHT_TRACK)
     }
 
-    public getWaveformById(trackId: number) : WaveformView | undefined {
+    public getWaveformById(trackId: number): WaveformView | undefined {
         return this.waveforms.find(w => w.trackId === trackId);
     }
 
@@ -309,16 +318,16 @@ export default class EditorView extends Application {
      * the canvas and the automation div.
      */
     public resizeCanvas(): Promise<void> {
-        return new Promise(resolve=>{ 
+        return new Promise(resolve => {
             requestAnimationFrame(() => {
                 this.stage.scale.x = 1
                 let scrollbarThickness = this.horizontalScrollbar.SCROLL_THICKNESS
                 this.width += (this.editorDiv.clientWidth - this.width) - scrollbarThickness
                 this.height += (this.editorDiv.clientHeight - this.height) - scrollbarThickness
 
-                let tracksHeight = this.waveforms.length * HEIGHT_TRACK + HEIGHT_NEW_TRACK +4
+                let tracksHeight = this.waveforms.length * HEIGHT_TRACK + HEIGHT_NEW_TRACK + 4
                 this.worldHeight = Math.max(tracksHeight, this.height)
-                this.worldWidth = Math.max((MAX_DURATION_SEC*1000) / RATIO_MILLS_BY_PX, this.width)
+                this.worldWidth = Math.max((MAX_DURATION_SEC * 1000) / RATIO_MILLS_BY_PX, this.width)
 
                 this._originalCenter = { x: this.width / 2, y: this.height / 2 }
 
@@ -336,6 +345,9 @@ export default class EditorView extends Application {
                 this.playhead.resize()
                 this.loop.resize()
                 this.grid.resize()
+                this.grid.resize()
+
+                this.onResize.forEach(cb => cb());
                 resolve()
             })
         })
@@ -382,8 +394,8 @@ export default class EditorView extends Application {
      * @param track - The track that contains the regions.
      */
     public stretchRegions(track: Track): Promise<void> {
-        return new Promise(resolve=>{
-            requestAnimationFrame(()=> {
+        return new Promise(resolve => {
+            requestAnimationFrame(() => {
                 let waveFormView = this.waveforms.find(wave => wave.trackId === track.id);
                 if (!waveFormView) return
                 for (let regionView of waveFormView.regionViews) {
@@ -391,7 +403,7 @@ export default class EditorView extends Application {
                     //if (!track.audioBuffer) return;
                     let region = track.getRegionById(regionView.id);
                     if (region) {
-                        regionView.stretch(region.duration/1000, region.start, region.start);
+                        regionView.stretch(region.duration / 1000, region.start, region.start);
                     }
                     regionView.redrawSoon(track.color, region);
                 }

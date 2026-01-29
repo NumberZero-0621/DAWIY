@@ -95,9 +95,47 @@ export default class PianoRollController {
     private _isMovingLoop: boolean = false;
     private _loopDragOffset: number = 0;
 
+    // Velocity Change State
+    private _isChangingVelocity: boolean = false;
+    private _velocityChangeState: {
+        note: MIDINote;
+        initialVelocities: Map<MIDINote, { velocity: number, globalStart: number }>;
+        initialY: number;
+        minStart: number;
+        maxStart: number;
+        draggedStart: number;
+        draggedInitialVelocity: number;
+    } | null = null;
+
+    private _isSelectingVelocity: boolean = false;
+    private _velocitySelectionStart: { x: number, y: number } = { x: 0, y: 0 };
+    private _velocitySelectionInitialNotes: Set<MIDINote> | null = null;
+    private _visuallyHighlightedNotes = new Set<MIDINote>();
+
+    // Double Click State
+    private _lastVelocityBarClickTime: number = 0;
+    private _lastClickedVelocityNote: MIDINote | null = null;
+    private _velocityDragPending: boolean = false;
+
+
+    // Velocity Resize State
+    private _isResizingVelocity: boolean = false;
+    private _velocityResizeState: {
+        initialY: number;
+        initialHeight: number;
+    } | null = null;
+
+    // Sticky Velocity
+    private _lastUsedVelocity: number = 100;
+
     constructor(app: App) {
         this._app = app;
         this._view = new PianoRollView();
+
+        // Listen to layout changes (Plugin Rack resize, Window resize)
+        this._app.editorView.onResize.push(() => {
+            this.resize();
+        });
 
         // Hide by default
         this._view.visible = false;
@@ -243,7 +281,7 @@ export default class PianoRollController {
                 for (const item of this._arrowMoveState!.notes) {
                     const newGlobalStart = Math.max(0, (item.region.start + item.initialStart) + distanceMs);
                     this._deleteNoteInternal(item.region, item.note, item.initialStart);
-                    const addedNote = this._addNoteInternal(item.initialNote, newGlobalStart, item.note.duration);
+                    const addedNote = this._addNoteInternal(item.initialNote, newGlobalStart, item.note.duration, item.note.velocity);
                     if (addedNote) newSelection.add(addedNote);
                 }
                 this._selectedNotes = newSelection;
@@ -320,7 +358,7 @@ export default class PianoRollController {
                     const globalStart = item.region.start + item.initialStart;
 
                     this._deleteNoteInternal(item.region, item.note, item.initialStart);
-                    const addedNote = this._addNoteInternal(newNoteVal, globalStart, item.note.duration);
+                    const addedNote = this._addNoteInternal(newNoteVal, globalStart, item.note.duration, item.note.velocity);
                     if (addedNote) newSelection.add(addedNote);
                 }
                 this._selectedNotes = newSelection;
@@ -395,19 +433,6 @@ export default class PianoRollController {
 
         let width = this._app.editorView.screen.width;
         let height = this._app.editorView.screen.height;
-
-        // NEW LOGIC: Add the hidden height of the plugin panel
-        // We want the piano roll to fill the space "behind" the plugin panel.
-        // The plugin panel takes up space in the layout, shrinking the editor view.
-        // We calculate how much space it's taking and add it back to the height passed to the view.
-
-        const pluginEditor = document.getElementById("plugin-editor");
-        if (pluginEditor) {
-            const currentPluginHeight = pluginEditor.clientHeight;
-            const collapsedHeight = 25; // From PluginsView.ts
-            const hiddenHeight = Math.max(0, currentPluginHeight - collapsedHeight);
-            height += hiddenHeight;
-        }
 
         // Check for Audio Loop Browser (Sidebar)
         const browser = this._app.hostView.audioLoopBrowserDiv;
@@ -503,6 +528,13 @@ export default class PianoRollController {
             this._app.editorView.snapResolution,
             this._app.editorView.snapTriplet
         );
+        this._view.drawVelocityGrid(
+            Math.max(trackDuration, 300000),
+            timeSig,
+            TEMPO,
+            this._app.editorView.snapResolution,
+            this._app.editorView.snapTriplet
+        );
         this._view.drawNotes(this._track, color, this._selectedNotes);
         this.redrawLoop();
     }
@@ -517,7 +549,7 @@ export default class PianoRollController {
     private viewportAnimationLoop() {
         if (!this._isVisible) return;
 
-        const isActive = this._isDragging || this._isResizing || this._isSelecting || this._creationState || this._isDraggingPlayhead || this._timelinePointerDown || this._isMovingLoop;
+        const isActive = this._isDragging || this._isResizing || this._isSelecting || this._creationState || this._isDraggingPlayhead || this._timelinePointerDown || this._isMovingLoop || this._isChangingVelocity;
 
         if (!isActive) {
             this.scrollingLeft = false;
@@ -670,10 +702,74 @@ export default class PianoRollController {
                     this._app.hostController.setLoop([start * RATIO_MILLS_BY_PX, end * RATIO_MILLS_BY_PX]);
                     this.redrawLoop();
                 }
+
+
             }
         }
 
         this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
+    }
+
+    private updateVelocityPreview() {
+        if (!this._isChangingVelocity || !this._velocityChangeState) return;
+
+        const globalPos = this._lastMousePos;
+        const dy = globalPos.y - this._velocityChangeState.initialY;
+        const dVel = -Math.round(dy);
+
+        const { initialVelocities, draggedStart, minStart, maxStart, draggedInitialVelocity } = this._velocityChangeState;
+        const isShift = isKeyPressed("Shift");
+        const isCtrl = isKeyPressed("Control") || isKeyPressed("Meta") || isKeyPressed("Command");
+
+        const targetDraggedVel = Math.max(0, Math.min(127, draggedInitialVelocity + dVel));
+        let ratio = 1.0;
+        if (draggedInitialVelocity > 0) ratio = targetDraggedVel / draggedInitialVelocity;
+
+        const velocityBarsContainer = (this._view.velocityContainer.getChildByName("bars") as Container);
+        if (velocityBarsContainer && this._track) {
+            const color = parseInt(this._track.color.replace("#", ""), 16);
+
+            for (const bar of velocityBarsContainer.children as any[]) {
+                if (bar.velocityData) {
+                    const entry = initialVelocities.get(bar.velocityData.note);
+                    if (entry) {
+                        const { velocity: initial, globalStart } = entry;
+                        let newVel = initial;
+
+                        if (isCtrl) {
+                            let weight = 0;
+                            if (globalStart === draggedStart) weight = 1;
+                            else if (globalStart < draggedStart) {
+                                const dist = draggedStart - globalStart;
+                                const maxDist = draggedStart - minStart;
+                                if (maxDist > 0) weight = Math.max(0, 1 - (dist / maxDist));
+                            } else {
+                                const dist = globalStart - draggedStart;
+                                const maxDist = maxStart - draggedStart;
+                                if (maxDist > 0) weight = Math.max(0, 1 - (dist / maxDist));
+                            }
+                            const localRatio = 1 + (ratio - 1) * weight;
+                            newVel = initial * localRatio;
+                        } else if (isShift) {
+                            newVel = initial * ratio;
+                        } else {
+                            newVel = initial + dVel;
+                        }
+
+                        newVel = Math.round(Math.max(0, Math.min(127, newVel)));
+
+                        this._view.previewVelocityBar(
+                            bar,
+                            newVel,
+                            color,
+                            true, // isSelected
+                            this._view.VELOCITY_HEIGHT,
+                            initial
+                        );
+                    }
+                }
+            }
+        }
     }
 
     private checkIfScrollingNeeded(globalX: number) {
@@ -707,6 +803,14 @@ export default class PianoRollController {
     public hasClipboard(): boolean { return this._clipboard.length > 0; }
 
     private bindEvents() {
+        // Velocity Modifier Listeners
+        window.addEventListener("keydown", (e) => {
+            if (this._isChangingVelocity) this.updateVelocityPreview();
+        });
+        window.addEventListener("keyup", (e) => {
+            if (this._isChangingVelocity) this.updateVelocityPreview();
+        });
+
         // Window Resize
         window.addEventListener("resize", () => {
             if (this._isVisible) this.resize();
@@ -1020,7 +1124,121 @@ export default class PianoRollController {
         };
 
         this._view.background.on("pointerdown", handleBackgroundClick);
+
         this._view.contentContainer.on("pointerdown", handleBackgroundClick);
+
+        this._view.velocityResizeHandle.on("pointerdown", (e: FederatedPointerEvent) => {
+            this._isResizingVelocity = true;
+            this._velocityResizeState = {
+                initialY: e.global.y,
+                initialHeight: this._view.VELOCITY_HEIGHT
+            };
+            e.stopPropagation();
+            this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
+        });
+
+        this._view.velocityContainer.interactive = true;
+        this._view.velocityContainer.on("pointerdown", (e: FederatedPointerEvent) => {
+            // Check target for velocityData
+            const target = e.target as any;
+            const originalEvent = e.originalEvent as unknown as MouseEvent;
+            const isModifier = originalEvent.shiftKey || originalEvent.ctrlKey || originalEvent.metaKey;
+
+            // 1. Velocity Bar Click (Edit)
+            if (target.velocityData) {
+                const clickedNote = target.velocityData.note;
+
+                // Selection Logic for Velocity Bar
+                if (!this._selectedNotes.has(clickedNote)) {
+                    if (!isModifier) {
+                        this._selectedNotes.clear();
+                    }
+                    this._selectedNotes.add(clickedNote);
+                    this.redraw();
+                } else {
+                    // If already selected:
+                    if (isModifier) {
+                        // If Ctrl click on selected, maybe deselect?
+                        // For now keep simple: Do nothing, just prepare to drag group
+                    }
+                }
+
+                if (originalEvent.detail === 2 || (Date.now() - this._lastVelocityBarClickTime < 500 && this._lastClickedVelocityNote === clickedNote)) {
+                    this.executeWithUndo(() => {
+                        this._selectedNotes.forEach(n => n.velocity = 100);
+                        this._lastUsedVelocity = 100;
+                        this.redraw();
+                    });
+                    this._lastVelocityBarClickTime = 0; // Reset
+                    this._lastClickedVelocityNote = null;
+                    e.stopPropagation();
+                    return;
+                }
+
+                this._lastVelocityBarClickTime = Date.now();
+                this._lastClickedVelocityNote = clickedNote;
+
+                this._velocityDragPending = true;
+                this._isChangingVelocity = false;
+
+                // Capture initial velocities for ALL selected notes
+                const initialVelocities = new Map<MIDINote, { velocity: number, globalStart: number }>();
+                let minStart = Infinity;
+                let maxStart = -Infinity;
+                let draggedStart = 0;
+
+                const velocityBarsContainer = (this._view.velocityContainer.getChildByName("bars") as Container);
+                if (velocityBarsContainer) {
+                    for (const bar of velocityBarsContainer.children as any[]) {
+                        if (bar.velocityData) {
+                            if (this._selectedNotes.has(bar.velocityData.note)) {
+                                const globalStart = bar.velocityData.region.start + bar.velocityData.start;
+                                initialVelocities.set(bar.velocityData.note, {
+                                    velocity: bar.velocityData.note.velocity,
+                                    globalStart: globalStart
+                                });
+                                if (globalStart < minStart) minStart = globalStart;
+                                if (globalStart > maxStart) maxStart = globalStart;
+
+                                if (bar.velocityData.note === clickedNote) {
+                                    draggedStart = globalStart;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                this._velocityChangeState = {
+                    note: clickedNote,
+                    initialVelocities: initialVelocities,
+                    initialY: e.global.y,
+                    minStart: minStart,
+                    maxStart: maxStart,
+                    draggedStart: draggedStart,
+                    draggedInitialVelocity: clickedNote.velocity
+                };
+                e.stopPropagation();
+                this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
+            }
+            // 2. Background Click (Selection)
+            else {
+                // Initialize Selection State
+                if (!isModifier) {
+                    this._selectedNotes.clear();
+                    this.redraw();
+                    this._velocitySelectionInitialNotes = new Set();
+                } else {
+                    this._velocitySelectionInitialNotes = new Set(this._selectedNotes);
+                }
+                this._visuallyHighlightedNotes = new Set(this._velocitySelectionInitialNotes);
+
+                this._isSelectingVelocity = true;
+                const localPos = this._view.velocityContainer.toLocal(e.global);
+                this._velocitySelectionStart = { x: localPos.x, y: localPos.y };
+                e.stopPropagation();
+                this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
+            }
+        });
 
         this._view.timelineContainer.on("pointerdown", (e: FederatedPointerEvent) => {
             this._app.contextMenuController.hide();
@@ -1172,6 +1390,9 @@ export default class PianoRollController {
                         this.redraw();
                     }
                     this._lastClickedNote = { note: clickedNote, globalStart: clickedGlobalStart };
+
+                    // Update Sticky Velocity on single selection
+                    this._lastUsedVelocity = clickedNote.velocity;
                 }
 
                 if (e.button !== 0) return; // Only start drag on Left Click
@@ -1258,6 +1479,81 @@ export default class PianoRollController {
             this._lastMousePos.copyFrom(e.global);
             this.checkIfScrollingNeeded(e.global.x);
 
+            if (this._isResizingVelocity && this._velocityResizeState) {
+                const dy = e.global.y - this._velocityResizeState.initialY;
+                // Dragging UP (negative dy) increases height
+                let newHeight = this._velocityResizeState.initialHeight - dy;
+
+                newHeight = Math.max(this._view.VELOCITY_MIN_HEIGHT, Math.min(this._view.VELOCITY_MAX_HEIGHT, newHeight));
+
+                this._view.previewVelocityLayoutWithScale(newHeight, this._velocityResizeState.initialHeight);
+                return;
+            }
+
+            if (this._isSelectingVelocity) {
+                const localPos = this._view.velocityContainer.toLocal(e.global);
+                const x = Math.min(this._velocitySelectionStart.x, localPos.x);
+                const y = Math.min(this._velocitySelectionStart.y, localPos.y);
+                const w = Math.abs(this._velocitySelectionStart.x - localPos.x);
+                const h = Math.abs(this._velocitySelectionStart.y - localPos.y);
+
+                this._view.drawVelocitySelectionBox(x, y, w, h);
+
+                // Visual Highlight Update only (Performance optimized)
+                const velocityBarsContainer = (this._view.velocityContainer.getChildByName("bars") as Container);
+                if (velocityBarsContainer) {
+                    const children = velocityBarsContainer.children as any[];
+                    const trackColor = this._track ? parseInt(this._track.color.replace("#", ""), 16) : 0xFF0000;
+                    const initialSelection = this._velocitySelectionInitialNotes || new Set();
+
+                    for (const bar of children) {
+                        if (bar.velocityData) {
+                            const note = bar.velocityData.note;
+                            const barGlobalPos = bar.getGlobalPosition();
+                            const barLocal = this._view.velocityContainer.toLocal(barGlobalPos);
+
+                            // Visual Bounds
+                            const capX = barLocal.x - 4;
+                            const capY = barLocal.y; // Top of bar
+
+                            const isIntersecting = (x < capX + 8 && x + w > capX && y < capY + 2 && y + h > capY);
+                            const shouldHighlight = isIntersecting || initialSelection.has(note);
+                            const wasHighlighted = this._visuallyHighlightedNotes.has(note);
+
+                            if (shouldHighlight !== wasHighlighted) {
+                                this._view.previewVelocityBar(
+                                    bar,
+                                    note.velocity,
+                                    trackColor,
+                                    shouldHighlight,
+                                    this._view.VELOCITY_HEIGHT,
+                                    note.velocity
+                                );
+
+                                this._view.previewNoteHighlight(note, shouldHighlight, trackColor);
+
+                                if (shouldHighlight) this._visuallyHighlightedNotes.add(note);
+                                else this._visuallyHighlightedNotes.delete(note);
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (this._velocityDragPending && this._velocityChangeState) {
+                const dy = e.global.y - this._velocityChangeState.initialY;
+                if (Math.abs(dy) > 3) {
+                    this._isChangingVelocity = true;
+                    this._velocityDragPending = false;
+                }
+            }
+
+            if (this._isChangingVelocity && this._velocityChangeState) {
+                this.updateVelocityPreview();
+                return;
+            }
+
             // Update Cursor Style if hovering over notes
             if (!this._isDragging && !this._isResizing && !this._isSelecting && !this._isDraggingPlayhead && !this._creationState) {
                 const target = e.target as any;
@@ -1271,6 +1567,26 @@ export default class PianoRollController {
                     } else {
                         target.cursor = "pointer";
                     }
+                }
+            }
+
+
+            // Update Cursor Style for Velocity Resize Handle (Manual check as simple hitTest might be insufficient)
+            const globalY = e.global.y;
+            const velocityY = this._view.velocityContainer.getGlobalPosition().y;
+
+            // Check if within handle area (assuming handle is at top of velocity container)
+            // The handle is drawn at y=0 inside velocityContainer, height 10 (centered at line).
+            // But actually it's drawn from 0 to -5 and 5.
+            if (!this._isDragging && !this._isResizing && !this._isSelecting && !this._isDraggingPlayhead && !this._creationState && !this._isResizingVelocity) {
+                const localPos = this._view.velocityContainer.toLocal(e.global);
+                // Handle is drawn rect(0, -5, width, 10) in PianoRollView
+                if (localPos.y >= -5 && localPos.y <= 5) {
+                    this._view.velocityResizeHandle.cursor = "ns-resize";
+                    this._app.editorView.canvasContainer.style.cursor = "ns-resize";
+                } else {
+                    this._view.velocityResizeHandle.cursor = "default";
+                    this._app.editorView.canvasContainer.style.cursor = "default";
                 }
             }
 
@@ -1563,8 +1879,125 @@ export default class PianoRollController {
         });
 
         const handlePointerUp = (e: FederatedPointerEvent) => {
+            this._velocityDragPending = false;
             this.stopPreview();
             cancelAnimationFrame(this.viewportAnimationLoopId);
+
+            if (this._isResizingVelocity && this._velocityResizeState) {
+                // Apply final resize
+                const dy = e.global.y - this._velocityResizeState.initialY;
+                let newHeight = this._velocityResizeState.initialHeight - dy;
+
+                newHeight = Math.max(this._view.VELOCITY_MIN_HEIGHT, Math.min(this._view.VELOCITY_MAX_HEIGHT, newHeight));
+
+                this._view.VELOCITY_HEIGHT = newHeight;
+                this.resize();
+                this.redraw();
+
+                this._isResizingVelocity = false;
+                this._velocityResizeState = null;
+                return;
+            }
+
+            if (this._isChangingVelocity && this._velocityChangeState) {
+                // Apply final velocity
+                const dy = e.global.y - this._velocityChangeState.initialY;
+                const dVel = -Math.round(dy);
+
+                const { initialVelocities, draggedStart, minStart, maxStart, draggedInitialVelocity } = this._velocityChangeState;
+                const isShift = (e.originalEvent as unknown as MouseEvent).shiftKey;
+                const isCtrl = (e.originalEvent as unknown as MouseEvent).ctrlKey || (e.originalEvent as unknown as MouseEvent).metaKey;
+
+                const targetDraggedVel = Math.max(0, Math.min(127, draggedInitialVelocity + dVel));
+                let ratio = 1.0;
+                if (draggedInitialVelocity > 0) ratio = targetDraggedVel / draggedInitialVelocity;
+
+                let changed = false;
+
+                this.executeWithUndo(() => {
+                    this._velocityChangeState!.initialVelocities.forEach((entry, note) => {
+                        const { velocity: initial, globalStart } = entry;
+                        let newVel = initial;
+
+                        if (isCtrl) {
+                            let weight = 0;
+                            if (globalStart === draggedStart) weight = 1;
+                            else if (globalStart < draggedStart) {
+                                const dist = draggedStart - globalStart;
+                                const maxDist = draggedStart - minStart;
+                                if (maxDist > 0) weight = Math.max(0, 1 - (dist / maxDist));
+                            } else {
+                                const dist = globalStart - draggedStart;
+                                const maxDist = maxStart - draggedStart;
+                                if (maxDist > 0) weight = Math.max(0, 1 - (dist / maxDist));
+                            }
+                            const localRatio = 1 + (ratio - 1) * weight;
+                            newVel = initial * localRatio;
+                        } else if (isShift) {
+                            newVel = initial * ratio;
+                        } else {
+                            newVel = initial + dVel;
+                        }
+
+                        newVel = Math.round(Math.max(0, Math.min(127, newVel)));
+
+                        if (newVel !== initial) {
+                            note.velocity = newVel;
+                            changed = true;
+                        }
+                    });
+
+                    if (changed) {
+                        // Update sticky velocity to the primary note's new velocity
+                        this._lastUsedVelocity = this._velocityChangeState!.note.velocity;
+                        this.redraw();
+                    } else {
+                        // Reset visuals if no change
+                        this.redraw();
+                    }
+                });
+
+                this._isChangingVelocity = false;
+                this._velocityChangeState = null;
+                return;
+            }
+
+            if (this._isSelectingVelocity) {
+                // Finalize Selection
+                const localPos = this._view.velocityContainer.toLocal(e.global);
+                const x = Math.min(this._velocitySelectionStart.x, localPos.x);
+                const y = Math.min(this._velocitySelectionStart.y, localPos.y);
+                const w = Math.abs(this._velocitySelectionStart.x - localPos.x);
+                const h = Math.abs(this._velocitySelectionStart.y - localPos.y);
+
+                this._selectedNotes = new Set(this._velocitySelectionInitialNotes || []);
+
+                const velocityBarsContainer = (this._view.velocityContainer.getChildByName("bars") as Container);
+                if (velocityBarsContainer) {
+                    const children = velocityBarsContainer.children as any[];
+                    for (const bar of children) {
+                        if (bar.velocityData) {
+                            const barGlobalPos = bar.getGlobalPosition();
+                            const barLocal = this._view.velocityContainer.toLocal(barGlobalPos);
+                            const capX = barLocal.x - 4;
+                            const capY = barLocal.y;
+
+                            if (x < capX + 8 && x + w > capX && y < capY + 2 && y + h > capY) {
+                                this._selectedNotes.add(bar.velocityData.note);
+                            }
+                        }
+                    }
+                    this.redraw();
+                }
+
+                this._isSelectingVelocity = false;
+                this._view.clearVelocitySelectionBox();
+                this._velocitySelectionInitialNotes = null;
+                this._visuallyHighlightedNotes.clear();
+                return;
+            }
+
+
 
             if (this._isMovingLoop) {
                 this._isMovingLoop = false;
@@ -1625,7 +2058,8 @@ export default class PianoRollController {
                     duration = 100; // Default short duration
                 }
 
-                this.addNote(this._creationState.note, startTime, duration);
+                // Use sticky velocity
+                this.addNote(this._creationState.note, startTime, duration, this._lastUsedVelocity);
 
                 this._creationState.ghost.destroy();
                 this._creationState = null;
@@ -1674,7 +2108,7 @@ export default class PianoRollController {
 
                         // Apply change
                         this._deleteNoteInternal(item.region, item.note, item.initialStart);
-                        const added = this._addNoteInternal(item.note.note, newStart, newDuration);
+                        const added = this._addNoteInternal(item.note.note, newStart, newDuration, item.note.velocity);
                         if (added) newSelection.add(added);
                     }
                     this._selectedNotes = newSelection;
@@ -1725,7 +2159,7 @@ export default class PianoRollController {
                             if (!isCopy) {
                                 this._deleteNoteInternal(item.region, item.note, oldLocalStart);
                             }
-                            const addedNote = this._addNoteInternal(newNoteVal, newGlobalStart, item.duration);
+                            const addedNote = this._addNoteInternal(newNoteVal, newGlobalStart, item.duration, item.note.velocity);
                             if (addedNote) newSelection.add(addedNote);
                         }
                         this._selectedNotes = newSelection;
@@ -1880,16 +2314,16 @@ export default class PianoRollController {
         this._app.doIt(true, redo, undo);
     }
 
-    private addNote(noteVal: number, globalStart: number, duration: number = 500) {
+    private addNote(noteVal: number, globalStart: number, duration: number = 500, velocity: number = 100) {
         this.executeWithUndo(() => {
-            this._addNoteInternal(noteVal, globalStart, duration);
+            this._addNoteInternal(noteVal, globalStart, duration, velocity);
         });
     }
 
     private moveNoteWithUndo(oldRegion: MIDIRegion, oldNote: MIDINote, oldLocalStart: number, newNoteVal: number, newGlobalStart: number, duration: number) {
         this.executeWithUndo(() => {
             this._deleteNoteInternal(oldRegion, oldNote, oldLocalStart);
-            const addedNote = this._addNoteInternal(newNoteVal, newGlobalStart, duration);
+            const addedNote = this._addNoteInternal(newNoteVal, newGlobalStart, duration, oldNote.velocity);
             if (addedNote) {
                 this._selectedNotes.clear();
                 this._selectedNotes.add(addedNote);
@@ -1942,7 +2376,7 @@ export default class PianoRollController {
             this._selectedNotes.clear();
             this._clipboard.forEach(item => {
                 const newStart = currentPlayhead + item.startOffset;
-                const newNote = this._addNoteInternal(item.note.note, newStart, item.note.duration);
+                const newNote = this._addNoteInternal(item.note.note, newStart, item.note.duration, item.note.velocity);
                 if (newNote) this._selectedNotes.add(newNote);
             });
         });
@@ -1986,7 +2420,7 @@ export default class PianoRollController {
     }
 
     // Internal methods that modify state without Undo (Undo handled by wrapper)
-    private _addNoteInternal(noteVal: number, globalStart: number, duration: number): MIDINote | null {
+    private _addNoteInternal(noteVal: number, globalStart: number, duration: number, velocity: number): MIDINote | null {
         if (!this._track) return null;
 
         let targetRegion: MIDIRegion | null = null;
@@ -2032,7 +2466,7 @@ export default class PianoRollController {
         let createdNote: MIDINote | null = null;
 
         if (targetRegion && localStart >= 0) {
-            createdNote = new MIDINote(noteVal, 100, 0, duration);
+            createdNote = new MIDINote(noteVal, velocity, 0, duration);
             if (localStart + duration > targetRegion.duration) {
                 targetRegion.midi.duration = localStart + duration;
             }
@@ -2106,6 +2540,8 @@ export default class PianoRollController {
             });
             this._lastPreviewedNote = noteVal;
         }
+
+
     }
 
     private stopPreview() {
