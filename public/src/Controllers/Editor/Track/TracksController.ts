@@ -22,7 +22,7 @@ import RegionRecorderManager from "../../Recording/Recorders/RegionRecorderManag
 /**
  * Class that controls the tracks view. It creates, removes and manages the tracks. It also defines the listeners for the tracks.
  */
-export default class TracksController{
+export default class TracksController {
 
   /** The app instance. */
   private _app: App;
@@ -37,10 +37,10 @@ export default class TracksController{
   private _oldVolume: number = 0.5;
   private _oldBalance = 1;
 
-  private readonly track_list= new ObservableArray<Track>()
+  private readonly track_list = new ObservableArray<Track>()
 
   /** The currents tracks ordered by their position in the editor */
-  public get tracks(): ReadOnlyObservableArray<Track> { return this.track_list}
+  public get tracks(): ReadOnlyObservableArray<Track> { return this.track_list }
 
 
   constructor(app: App) {
@@ -51,33 +51,33 @@ export default class TracksController{
   }
 
 
-  
+
   /** -~- Selection -~- */
-  private _selectedSoundProvider: SoundProvider|null = null
-  readonly afterSelectedChange=new Set<(preivous:SoundProvider|null, selected: SoundProvider|null)=>void>()
+  private _selectedSoundProvider: SoundProvider | null = null
+  readonly afterSelectedChange = new Set<(preivous: SoundProvider | null, selected: SoundProvider | null) => void>()
 
   /** Select an SoundProvider (A track or the host) */
-  public select(soundProvider: SoundProvider|null){
-    if(this._selectedSoundProvider===soundProvider)return
-    if(this._selectedSoundProvider){
+  public select(soundProvider: SoundProvider | null) {
+    if (this._selectedSoundProvider === soundProvider) return
+    if (this._selectedSoundProvider) {
       this._selectedSoundProvider.element.unSelect()
     }
-    
-    if(soundProvider){
+
+    if (soundProvider) {
       soundProvider.element.select()
     }
-    this._selectedSoundProvider=soundProvider
-    this.afterSelectedChange.forEach(it=>it(this._selectedSoundProvider,soundProvider))
+    this._selectedSoundProvider = soundProvider
+    this.afterSelectedChange.forEach(it => it(this._selectedSoundProvider, soundProvider))
   }
 
   /** Get the selected SoundProvider */
-  public get selected(){ return this._selectedSoundProvider }
+  public get selected() { return this._selectedSoundProvider }
 
   /** Get the selected SoundProvider if it is a track. */
-  public get selectedTrack(){ return this._selectedSoundProvider instanceof Track ? this._selectedSoundProvider : null }
+  public get selectedTrack() { return this._selectedSoundProvider instanceof Track ? this._selectedSoundProvider : null }
 
 
-  
+
   /**
    * Add a track and Initializes its view.
    * It also initializes the waveforms and the automations.
@@ -86,8 +86,8 @@ export default class TracksController{
    */
   public async addTrack(track: Track) {
     // Check if already exists
-    if(this.track_list.includes(track))crashOnDebug("TracksController - addTrack - Track already exists!")
-    
+    if (this.track_list.includes(track)) crashOnDebug("TracksController - addTrack - Track already exists!")
+
     await track.init()
 
     // Add the track to the list
@@ -121,15 +121,14 @@ export default class TracksController{
         clearInterval(id);
       }
     }, 100);
-    track.recorders=new RegionRecorderManager({app:this._app,track})
+    track.recorders = new RegionRecorderManager({ app: this._app, track })
     track.recorders.connect(track.audioInputNode)
     this.bindTrackEvents(track);
-    this.setColor(track,getRandomColor())
-    
-    this._app.waveformController.initializeWaveform(track);
-    this._app.automationView.initializeAutomation(track.id);
+    this.setColor(track, getRandomColor())
 
-    if(this.tracks.find(it=>it.isSolo))track.isSoloMuted=true
+    this._app.waveformController.initializeWaveform(track);
+
+    if (this.tracks.find(it => it.isSolo)) track.isSoloMuted = true
   }
 
   /**
@@ -139,12 +138,11 @@ export default class TracksController{
    */
   public removeTrack(track: Track): void {
     // Remove from the lists
-    const index=this.track_list.indexOf(track)
-    if(index>=0){
-      this.track_list.splice(index,1)
-      this._app.pluginsController.connectPlugin(track,null);
+    const index = this.track_list.indexOf(track)
+    if (index >= 0) {
+      this.track_list.splice(index, 1)
+      this._app.pluginsController.connectPlugin(track, null);
       this._view.removeTrack(track.element);
-      this._app.automationView.removeAutomationBpf(track.id);
       this._app.waveformController.removeWaveformOfTrack(track);
       track.dispose()
     }
@@ -157,8 +155,8 @@ export default class TracksController{
    * @returns the track with the given id if it exists, undefined otherwise.
    */
   public getTrackById(id: number): Track | undefined {
-    for(let track of this.track_list){
-      if(track.id===id)return track
+    for (let track of this.track_list) {
+      if (track.id === id) return track
     }
     return undefined
   }
@@ -170,9 +168,9 @@ export default class TracksController{
    */
   public clearTracks(): void {
     for (let track of [...this.tracks]) this.removeTrack(track)
-    if(this.track_list.length!=0)crashOnDebug("TracksControllers - clearAllTracks - There is remaining tracks!")
-    this.track_list.length=0
-    this.trackIdCount=1
+    if (this.track_list.length != 0) crashOnDebug("TracksControllers - clearAllTracks - There is remaining tracks!")
+    this.track_list.length = 0
+    this.trackIdCount = 1
   }
 
   /**
@@ -183,13 +181,13 @@ export default class TracksController{
    * @private
    */
   private async createEmptyTrack(): Promise<Track> {
-    let track = new Track(new TrackElement(),audioCtx,this._app.host.hostGroupId)
-    track.element.name=`Track ${this.trackNameCounter++}`
+    let track = new Track(new TrackElement(), audioCtx, this._app.host.hostGroupId)
+    track.element.name = `Track ${this.trackNameCounter++}`
     await this.addTrack(track)
     return track;
   }
 
-  private trackNameCounter=1
+  private trackNameCounter = 1
 
   /**
    * Creates a new empty track and add it to the track view.
@@ -219,14 +217,14 @@ export default class TracksController{
       // Create the track
       let track = await this.createEmptyTrack();
       track.element.name = file.name;
-      track.element.progress(0,1)
+      track.element.progress(0, 1)
 
       // Load the file
       let audioArrayBuffer = await file.arrayBuffer();
       let audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer);
       let operableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
       operableAudioBuffer = operableAudioBuffer.makeStereo();
-      this._app.regionsController.addRegion(track, new SampleRegion(operableAudioBuffer,0))
+      this._app.regionsController.addRegion(track, new SampleRegion(operableAudioBuffer, 0))
 
       // Finish the progress
       track.element.progressDone();
@@ -244,33 +242,33 @@ export default class TracksController{
    */
   public async createTrackWithMidiFile(file: File): Promise<Track[] | undefined> {
     if (file.name.endsWith(".mid") || file.name.endsWith(".midi") || file.type === "audio/midi" || file.type === "audio/x-midi") {
-      
+
       try {
         // Load the file
         let arrayBuffer = await file.arrayBuffer();
         let importedTracks = await parseMidiFile(arrayBuffer);
-        
+
         const createdTracks: Track[] = [];
 
         if (importedTracks.length === 0) {
-             console.warn("No tracks found in MIDI file");
-             return undefined;
+          console.warn("No tracks found in MIDI file");
+          return undefined;
         }
 
         for (const imported of importedTracks) {
-            // Create the track
-            let track = await this.createEmptyTrack();
-            track.element.name = imported.name || file.name;
-            
-            this._app.regionsController.addRegion(track, new MIDIRegion(imported.midi, 0));
-            createdTracks.push(track);
+          // Create the track
+          let track = await this.createEmptyTrack();
+          track.element.name = imported.name || file.name;
+
+          this._app.regionsController.addRegion(track, new MIDIRegion(imported.midi, 0));
+          createdTracks.push(track);
         }
-        
+
         return createdTracks;
 
       } catch (e) {
-         console.warn("Failed to parse MIDI file", e);
-         return undefined;
+        console.warn("Failed to parse MIDI file", e);
+        return undefined;
       }
     } else {
       console.warn("File type not supported");
@@ -292,24 +290,24 @@ export default class TracksController{
    * @private
    */
   private bindEvents(): void {
-    registerOnKeyDown(e=>{
-      if(e=="p"){
-        (async ()=>{
-          if(!this.selectedTrack)return
-          let graph= await this.selectedTrack.track_graph.instantiate(audioCtx, this._app.host.groupId)
+    registerOnKeyDown(e => {
+      if (e == "p") {
+        (async () => {
+          if (!this.selectedTrack) return
+          let graph = await this.selectedTrack.track_graph.instantiate(audioCtx, this._app.host.groupId)
           graph.connect(audioCtx.destination)
-          graph.playhead=0
-          graph.isPlaying=true
-          setTimeout(()=>{
-            graph.isPlaying=false
+          graph.playhead = 0
+          graph.isPlaying = true
+          setTimeout(() => {
+            graph.isPlaying = false
             graph.dispose()
-          },5000)
+          }, 5000)
         })()
       }
     })
 
     this._view.newTrackDiv.addEventListener("click", () => {
-      const track=this._app.tracksController.createEmptyTrack()
+      const track = this._app.tracksController.createEmptyTrack()
     });
   }
 
@@ -326,8 +324,8 @@ export default class TracksController{
       let oldSelectedTrack = this.selectedTrack
       let newSelectedTrack = track
       this._app.doIt(true,
-        ()=> this.select(newSelectedTrack),
-        ()=> this.select(oldSelectedTrack),
+        () => this.select(newSelectedTrack),
+        () => this.select(oldSelectedTrack),
       )
     });
 
@@ -335,15 +333,15 @@ export default class TracksController{
     track.element.muteBtn.addEventListener("click", () => {
       let initialMute = track.isMuted
       this._app.doIt(true,
-        ()=> track.isMuted = !initialMute,
-        ()=> track.isMuted = initialMute,
+        () => track.isMuted = !initialMute,
+        () => track.isMuted = initialMute,
       )
     });
 
     // TRACK VOLUME
     track.element.volumeSlider.addEventListener("input", (evt) => {
       const newVolume = track.element.volume / 100
-      track.volume=newVolume;
+      track.volume = newVolume;
     });
     track.element.volumeSlider.addEventListener("mousedown", (evt) => {
       this._oldVolume = track.volume;
@@ -352,14 +350,14 @@ export default class TracksController{
       const newVolume = track.element.volume / 100
       let oldV = this._oldVolume;
       this._app.doIt(true,
-        ()=> track.volume = newVolume,
-        ()=> track.volume = oldV,
+        () => track.volume = newVolume,
+        () => track.volume = oldV,
       );
     });
 
     // TRACK BALANCE
     track.element.balanceSlider.addEventListener("input", () => {
-      track.balance= track.element.balance
+      track.balance = track.element.balance
     });
     track.element.balanceSlider.addEventListener("mousedown", (evt) => {
       this._oldBalance = track.balance;
@@ -368,16 +366,16 @@ export default class TracksController{
       const newBalance = track.element.balance;
       let oldB = this._oldBalance;
       this._app.doIt(true,
-        ()=> track.balance = newBalance,
-        ()=> track.balance = oldB,
+        () => track.balance = newBalance,
+        () => track.balance = oldB,
       );
     });
 
     // TRACK FX/PLUGINS
     track.element.fxBtn.addEventListener("click", () => {
       this._app.doIt(true,
-        ()=> this._app.pluginsController.fxButtonClicked(track),
-        ()=> this._app.pluginsController.fxButtonClicked(track),
+        () => this._app.pluginsController.fxButtonClicked(track),
+        () => this._app.pluginsController.fxButtonClicked(track),
       )
     });
   }
@@ -407,8 +405,8 @@ export default class TracksController{
     track.element.soloBtn.addEventListener("click", () => {
       let initialSolo = track.isSolo;
       this._app.doIt(true,
-        ()=> this.setSolo(track, !initialSolo),
-        ()=> this.setSolo(track, initialSolo),
+        () => this.setSolo(track, !initialSolo),
+        () => this.setSolo(track, initialSolo),
       )
     });
 
@@ -418,60 +416,60 @@ export default class TracksController{
       let newColor = getRandomColor()
 
       this._app.doIt(true,
-        ()=> this.setColor(track, newColor),
-        ()=> this.setColor(track, oldColor),
+        () => this.setColor(track, newColor),
+        () => this.setColor(track, oldColor),
       )
     })
 
     // TRACK MONITOR
     track.element.monitoringBtn.addEventListener("click", () => {
-      const oldValue=track.monitored
+      const oldValue = track.monitored
       this._app.doIt(true,
-        ()=> track.monitored=!oldValue,
-        ()=> track.monitored=oldValue,
+        () => track.monitored = !oldValue,
+        () => track.monitored = oldValue,
       );
     })
-    
+
     // TRACK 
-    const that=this
+    const that = this
 
     /** HELPER METHOD TO REGISTER ARM BUTTON */
-    const recorderButtons: [(t:TrackElement,b:boolean)=>void, CRecorderFactory<any>][] =[]
-    function linkArmButton(recorder: CRecorderFactory<any>, button: Element, setter: (track:TrackElement,value:boolean)=>void){
+    const recorderButtons: [(t: TrackElement, b: boolean) => void, CRecorderFactory<any>][] = []
+    function linkArmButton(recorder: CRecorderFactory<any>, button: Element, setter: (track: TrackElement, value: boolean) => void) {
       track.recorders.get(recorder)
       button.addEventListener("click", () => {
-        const initialArm= that._app.recorderController.isArmed(track, recorder)
-        const toDisarm= recorderButtons.filter(([_,r])=>that._app.recorderController.isArmed(track,r))
+        const initialArm = that._app.recorderController.isArmed(track, recorder)
+        const toDisarm = recorderButtons.filter(([_, r]) => that._app.recorderController.isArmed(track, r))
         console.log(toDisarm)
         that._app.doIt(true,
-          ()=> {
+          () => {
             that._app.recorderController.toggleArm(track, recorder, !initialArm)
-            if(ARE_RECORDER_EXCLUSIVE && !initialArm){ // Disarm already armeds recorders
-              for(const [set,r] of toDisarm){
+            if (ARE_RECORDER_EXCLUSIVE && !initialArm) { // Disarm already armeds recorders
+              for (const [set, r] of toDisarm) {
                 that._app.recorderController.toggleArm(track, r, false)
-                set(track.element,false)
+                set(track.element, false)
               }
             }
-            setter(track.element,!initialArm)
+            setter(track.element, !initialArm)
             ZOOM_LEVEL
           },
-          ()=> {
+          () => {
             that._app.recorderController.toggleArm(track, recorder, initialArm)
-            if(ARE_RECORDER_EXCLUSIVE && !initialArm){
-              for(const [e,r] of toDisarm){
+            if (ARE_RECORDER_EXCLUSIVE && !initialArm) {
+              for (const [e, r] of toDisarm) {
                 that._app.recorderController.toggleArm(track, r, true)
-                setter(track.element,false)
+                setter(track.element, false)
               }
             }
-            setter(track.element,initialArm)
+            setter(track.element, initialArm)
           }
         );
       })
-      recorderButtons.push([setter,recorder])
+      recorderButtons.push([setter, recorder])
     }
 
-    linkArmButton(RecorderController.SAMPLE_RECORDER, track.element.armBtn, (t,v)=>t.isSampleArmed=v)
-    linkArmButton(RecorderController.MIDI_RECORDER, track.element.midiBtn, (t,v)=>t.isMidiArmed=v)
+    linkArmButton(RecorderController.SAMPLE_RECORDER, track.element.armBtn, (t, v) => t.isSampleArmed = v)
+    linkArmButton(RecorderController.MIDI_RECORDER, track.element.midiBtn, (t, v) => t.isMidiArmed = v)
 
     /*const {SAMPLE_RECORDER} = RecorderController
     this._app.recorderController.getRecorder(track, SAMPLE_RECORDER)
@@ -490,43 +488,43 @@ export default class TracksController{
     })*/
 
     // TRACK MODE STEREO or (MONO to STEREO)
-    const {SAMPLE_RECORDER}=RecorderController
+    const { SAMPLE_RECORDER } = RecorderController
     track.element.modeBtn.addEventListener("click", async () => {
-      const recorder= await track.recorders.get(SAMPLE_RECORDER)
-      let initialStereo= recorder.isStereo
+      const recorder = await track.recorders.get(SAMPLE_RECORDER)
+      let initialStereo = recorder.isStereo
       this._app.doIt(true,
-        ()=> recorder.isStereo = !initialStereo,
-        ()=> recorder.isStereo = initialStereo,
+        () => recorder.isStereo = !initialStereo,
+        () => recorder.isStereo = initialStereo,
       )
     })
 
     // TRACK LEFT INPUT
     track.element.leftBtn.addEventListener("click", async () => {
-      const recorder= await track.recorders.get(SAMPLE_RECORDER)
-      let initialLeft= recorder.left
+      const recorder = await track.recorders.get(SAMPLE_RECORDER)
+      let initialLeft = recorder.left
       this._app.doIt(true,
-        ()=> recorder.left = !initialLeft,
-        ()=> recorder.left = initialLeft,
+        () => recorder.left = !initialLeft,
+        () => recorder.left = initialLeft,
       )
     })
 
     // TRACK RIGHT INPUT
     track.element.rightBtn.addEventListener("click", async () => {
-      const recorder= await track.recorders.get(SAMPLE_RECORDER)
-      let initialRight= recorder.right
+      const recorder = await track.recorders.get(SAMPLE_RECORDER)
+      let initialRight = recorder.right
       this._app.doIt(true,
-        ()=> recorder.right = !initialRight,
-        ()=> recorder.right = initialRight,
+        () => recorder.right = !initialRight,
+        () => recorder.right = initialRight,
       )
     })
 
     // TRACK MERGE LEFT/RIGHT
     track.element.mergeBtn.addEventListener("click", async () => {
-      const recorder= await track.recorders.get(SAMPLE_RECORDER)
-      let initialMerge= recorder.isMerged
+      const recorder = await track.recorders.get(SAMPLE_RECORDER)
+      let initialMerge = recorder.isMerged
       this._app.doIt(true,
-        ()=> recorder.isMerged = !initialMerge,
-        ()=> recorder.isMerged = initialMerge,
+        () => recorder.isMerged = !initialMerge,
+        () => recorder.isMerged = initialMerge,
       )
     })
 
@@ -549,7 +547,7 @@ export default class TracksController{
    * @param string - The new color
    */
   public setColor(track: Track, color: string): void {
-    track.color=color
+    track.color = color
     this._app.editorView.changeWaveFormColor(track);
     this._app.pianoRollController.redraw();
   }
@@ -561,18 +559,18 @@ export default class TracksController{
    */
   private setSolo(track: Track, soloValue: boolean) {
     // When soloed, mute every non-soloed track
-    if(soloValue){
-      this.tracks.forEach(it=>{
-        if(!it.isSolo)it.isSoloMuted=true
+    if (soloValue) {
+      this.tracks.forEach(it => {
+        if (!it.isSolo) it.isSoloMuted = true
       })
-      track.isSolo=true
+      track.isSolo = true
     }
     // When unsoloed, unmute every solo-muted track if there is no more soloed track
-    if(!soloValue){
-      track.isSolo=false
-      let soloedTrack = this.tracks.find(it=>it.isSolo)
-      if(!soloedTrack)this.tracks.forEach(it=>it.isSoloMuted=false)
-      if(soloedTrack)track.isSoloMuted=true
+    if (!soloValue) {
+      track.isSolo = false
+      let soloedTrack = this.tracks.find(it => it.isSolo)
+      if (!soloedTrack) this.tracks.forEach(it => it.isSoloMuted = false)
+      if (soloedTrack) track.isSoloMuted = true
     }
   }
 }

@@ -1,4 +1,5 @@
 import TrackElement from "../Components/Editor/TrackElement";
+import AutomationTrackElement from "../Components/Editor/AutomationTrackElement";
 
 /**
  * Class that is responsible for the view of the tracks.
@@ -14,9 +15,9 @@ export default class TracksView {
      * @param trackElement
      * @param position - The position to add the track at. Default is the end of the track view.
      */
-    public addTrack(trackElement: TrackElement, position:number=this.trackContainerDiv.children.length-3): void {
+    public addTrack(trackElement: TrackElement, position: number = this.trackContainerDiv.children.length - 3): void {
         console.log("Adding track at position: " + position);
-        this.trackContainerDiv.children[position+1].before(trackElement);
+        this.trackContainerDiv.children[position + 1].before(trackElement);
     }
     /**
      * Removes a TrackElement from the track view.
@@ -24,5 +25,22 @@ export default class TracksView {
      */
     public removeTrack(el: TrackElement): void {
         el.remove();
+    }
+
+    /**
+     * Adds the automation track element right after the track element.
+     * @param trackElement The track element to append the automation track after.
+     * @param automationTrackElement The automation track element to add.
+     */
+    public addAutomationTrack(trackElement: TrackElement, automationTrackElement: AutomationTrackElement): void {
+        trackElement.after(automationTrackElement);
+    }
+
+    /**
+     * Removes the automation track element.
+     * @param automationTrackElement The automation track element to remove.
+     */
+    public removeAutomationTrack(automationTrackElement: AutomationTrackElement): void {
+        automationTrackElement.remove();
     }
 }

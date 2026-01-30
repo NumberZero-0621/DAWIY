@@ -1,13 +1,15 @@
 import { FederatedPointerEvent, Point, Graphics } from "pixi.js";
 import App, { crashOnDebug } from "../../../App";
 import { MIDI } from "../../../Audio/MIDI/MIDI";
-import { RATIO_MILLS_BY_PX, TEMPO } from "../../../Env";
+import { HEIGHT_AUTOMATION, RATIO_MILLS_BY_PX, TEMPO } from "../../../Env";
+import AutomationRegion from "../../../Models/Region/AutomationRegion";
 import MIDIRegion from "../../../Models/Region/MIDIRegion";
 import Region, { RegionOf, RegionType } from "../../../Models/Region/Region";
 import SampleRegion from "../../../Models/Region/SampleRegion";
 import Track from "../../../Models/Track/Track";
 import { isKeyPressed, registerOnKeyDown, registerOnKeyUp } from "../../../Utils/keys";
 import EditorView from "../../../Views/Editor/EditorView";
+import AutomationRegionView from "../../../Views/Editor/Region/AutomationRegionView";
 import MIDIRegionView from "../../../Views/Editor/Region/MIDIRegionView";
 import RegionView from "../../../Views/Editor/Region/RegionView";
 import SampleRegionView from "../../../Views/Editor/Region/SampleRegionView";
@@ -23,7 +25,8 @@ export default class RegionController {
 
     private static regionViewFactories: { [key: RegionType<any>]: ((editor: EditorView, from: RegionOf<any>) => RegionView<any>) } = {
         [MIDIRegion.TYPE]: (editor, region) => new MIDIRegionView(editor, region as MIDIRegion),
-        [SampleRegion.TYPE]: (editor, region) => new SampleRegionView(editor, region as SampleRegion)
+        [SampleRegion.TYPE]: (editor, region) => new SampleRegionView(editor, region as SampleRegion),
+        [AutomationRegion.TYPE]: (editor, region) => new AutomationRegionView(editor, region as AutomationRegion)
     }
 
     public regionIdCounter: number;
@@ -89,6 +92,12 @@ export default class RegionController {
         initialDuration: number;
     } | null = null;
     private readonly RESIZE_ZONE = 5;
+
+    // Automation Drag State
+    private draggedAutomationPoint: {
+        region: AutomationRegion,
+        pointIndex: number
+    } | null = null;
 
     doIt
 
@@ -405,7 +414,7 @@ export default class RegionController {
                 }
                 this._initialSelection = new Set(this.selection.selecteds);
             } else if (App.TOOL_MODE === "PEN") {
-                const globalY = e.data.global.y + this._editorView.viewport.top;
+                const globalY = e.data.global.y;
                 const waveform = this._editorView.getWaveformAtPos(globalY);
                 if (waveform) {
                     this._targetTrack = this._app.tracksController.getTrackById(waveform.trackId)!;
@@ -426,6 +435,10 @@ export default class RegionController {
         });
 
         this._editorView.viewport.on("pointermove", (e) => {
+            if (this.draggedAutomationPoint) {
+                this.handleAutomationPointDrag(e);
+                return;
+            }
             this.lastGlobalPos.copyFrom(e.data.global);
             this.checkIfScrollingNeeded(e.data.global.x);
 
@@ -495,6 +508,11 @@ export default class RegionController {
         });
 
         this._editorView.viewport.on("pointerup", (e) => {
+            if (this.draggedAutomationPoint) {
+                this.draggedAutomationPoint = null;
+                // Add undo/redo point here if desired
+                return;
+            }
             this.handlePointerUp();
             this.scrollingLeft = false;
             this.scrollingRight = false;
@@ -539,7 +557,15 @@ export default class RegionController {
     private handlePointerDown(e: FederatedPointerEvent, regionView: RegionView<any>): void {
         this.lastGlobalPos.copyFrom(e.global);
         this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
+
         const region = this._app.tracksController.getTrackById(regionView.trackId)?.getRegionById(regionView.id) as RegionOf<any>
+
+        // Automation Interaction
+        if (region instanceof AutomationRegion) {
+            this.handleAutomationPointerDown(e, region, regionView as AutomationRegionView);
+            return;
+        }
+
         let regionToDeselect: RegionOf<any> | null = null;
 
         if (region) {
@@ -795,8 +821,6 @@ export default class RegionController {
         let parentWaveform = view.parent as WaveformView;
         // Adjust globalY relative to viewport content (scrolling Y might be an issue if implemented, but usually tracks scroll vertically)
         // Here globalY is screen coordinate. Waveform y is relative to container.
-        // Assuming vertical scrolling is handled by container moving.
-        // But we need to find which waveform is under globalY.
 
         // The original code used globalY + viewport.top to check against waveform Y.
         let y = globalY + this._editorView.viewport.top;
@@ -837,6 +861,72 @@ export default class RegionController {
 
             this.moveRegion(item.region, itemNewTrack, itemNewX);
         }
+    }
+
+    private handleAutomationPointerDown(e: FederatedPointerEvent, region: AutomationRegion, view: AutomationRegionView) {
+        const local = view.toLocal(e.global);
+        const height = HEIGHT_AUTOMATION;
+
+        // Find closest point
+        let closestIndex = -1;
+        let minDist = 10; // Hit radius
+
+        for (let i = 0; i < region.points.length; i++) {
+            const p = region.points[i];
+            const px = p.time / RATIO_MILLS_BY_PX;
+            const py = (1 - p.value) * height;
+            const dist = Math.sqrt((local.x - px) ** 2 + (local.y - py) ** 2);
+            if (dist < minDist) {
+                minDist = dist;
+                closestIndex = i;
+            }
+        }
+
+        if (closestIndex !== -1) {
+            // Drag existing point
+            this.draggedAutomationPoint = { region, pointIndex: closestIndex };
+        } else {
+            // Add new point
+            const time = Math.max(0, local.x * RATIO_MILLS_BY_PX);
+            const value = Math.max(0, Math.min(1, 1 - (local.y / height)));
+            const newPoint = { time, value, curve: 0 };
+
+            region.points.push(newPoint);
+            // Sort points
+            region.points.sort((a, b) => a.time - b.time);
+
+            closestIndex = region.points.indexOf(newPoint);
+            this.draggedAutomationPoint = { region, pointIndex: closestIndex };
+        }
+
+        view.redraw("", region);
+        e.stopPropagation();
+    }
+
+    private handleAutomationPointDrag(e: FederatedPointerEvent) {
+        if (!this.draggedAutomationPoint) return;
+
+        const { region, pointIndex } = this.draggedAutomationPoint;
+        const view = this.getView(region);
+        if (!view) return;
+
+        const local = view.toLocal(e.data.global);
+        const height = HEIGHT_AUTOMATION;
+
+        // Calculate new values
+        let newTime = Math.max(0, local.x * RATIO_MILLS_BY_PX);
+        let newValue = Math.max(0, Math.min(1, 1 - (local.y / height)));
+
+        // Update point
+        region.points[pointIndex].time = newTime;
+        region.points[pointIndex].value = newValue;
+
+        // Maintain Sort Order
+        const pointObj = region.points[pointIndex];
+        region.points.sort((a, b) => a.time - b.time);
+        this.draggedAutomationPoint.pointIndex = region.points.indexOf(pointObj);
+
+        view.redraw("", region);
     }
 
     private handlePointerMove(e: FederatedPointerEvent): void {

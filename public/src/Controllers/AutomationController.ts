@@ -1,196 +1,238 @@
 import App from "../App";
-import { MAX_DURATION_SEC, RATIO_MILLS_BY_PX } from "../Env";
-import SoundProvider from "../Models/Track/SoundProvider";
+import AutomationTrackElement from "../Components/Editor/AutomationTrackElement";
+import { MAX_DURATION_SEC } from "../Env";
+import AutomationRegion from "../Models/Region/AutomationRegion";
 import Track from "../Models/Track/Track";
 import AutomationView from "../Views/AutomationView";
-import { audioCtx } from "../index";
 
 
-/**
- * //TODO Correct: Automation don't stop and start when they should, they don't stop when they should. (With any root WAM that is not the pedalboard.)
- * Controller for the automation menu. This controller is responsible for applying all the automations to the tracks.
- */
 export default class AutomationController {
 
-    /**
-     * Route Application.
-     */
     private _app: App;
-    /**
-     * View of the automation menu.
-     */
     private _view: AutomationView;
-    /**
-     * Boolean to know if the automation menu is opened or not.
-     */
-    private _automationOpened: boolean = false;
 
     constructor(app: App) {
         this._app = app;
         this._view = this._app.automationView;
-        this.bindEvents();
+        // bindEvents removed as menu is no longer used
     }
 
     /**
-     * Applies all automations to the track and opens the automation menu.
-     * @param track - The track to apply the automations.
+     * Toggles automation visibility.
+     * If visible, adds AutomationTrackElement and populates dropdown.
      */
-    public async openAutomationMenu(track: Track): Promise<void> {
-        this._view.clearMenu();
-        await this.updateAutomations(track);
-        this._view.openAutomationMenu(track);
-        this._automationOpened = true;
-    }
-
-    /**
-     * Update all the parameters of the associated plugin and create the automation menu.
-     *
-     * @param track - The track to update the automations.
-     */
-    public async updateAutomations(track: SoundProvider): Promise<void> {
-        let plugin = track.plugin;
-        if (plugin?.instance) {
-            let params = await plugin.instance?._audioNode.getParameterInfo();
-            
-            track.automation.updateAutomation(params);
-            this._view.clearMenu();
-
-            this._view.createItem("Hide Automation", "hide-automation", () => {
-                this._view.hideBpf(track.id);
-            });
-            this._view.createItem("Clear All Automations", "clear-all", () => {
-                this._view.hideBpf(track.id);
-                track.automation.clearAllAutomation(params);
-                track.plugin?.instance?._audioNode.clearEvents();
-            })
-            for (let param in params) {
-                
-                let active = false;
-                let bpf = track.automation.getBpfOfParam(param);
-                if (bpf !== undefined && bpf.points.length > 0) {
-                    active = true;
-                }
-                this._view.createItem(
-                    params[param].label,
-                    // @ts-ignore
-                    params[param].nodeId,
-                    () => {
-                        let bpf = track.automation.getBpfOfParam(param);
-                        if (bpf !== undefined) {
-                            bpf.setSizeBPF(this._app.editorView.worldWidth);
-                            this._view.mountBpf(track.id, bpf);
-                        }
-                        else {
-                            console.warn("There is no bpf associated with the track "+track.id);
-                        }
-                    },
-                    active
-                );
+    public async toggleAutomationVisibility(track: Track, visible: boolean) {
+        if (track.isAutomationOpened === visible) {
+            // Check if UI is consistent (element exists?)
+            const existingEl = document.getElementById("automation-track-" + track.id);
+            if (visible && !existingEl) {
+                // Fallthrough to recreate
+            } else {
+                return;
             }
         }
+
+        track.isAutomationOpened = visible;
+
+        if (visible) {
+            // 1. Ensure AutomationRegion exists
+            if (!track.automationRegion) {
+                // Default: create new one. ParamId will be set later or default.
+                track.automationRegion = new AutomationRegion(0, MAX_DURATION_SEC * 1000);
+            }
+
+            // 2. Add AutomationRegion to Editor (if not present)
+            if (!track.getRegionById(track.automationRegion.id)) {
+                this._app.regionsController.addRegion(track, track.automationRegion);
+            }
+
+            // 3. Create and Add AutomationTrackElement (Header)
+            let automationTrackElement = document.getElementById("automation-track-" + track.id) as AutomationTrackElement;
+            if (!automationTrackElement) {
+                automationTrackElement = document.createElement("automation-track-element") as AutomationTrackElement;
+                automationTrackElement.id = "automation-track-" + track.id;
+                this._app.tracksView.addAutomationTrack(track.element, automationTrackElement);
+            }
+
+            // 4. Populate Dropdown parameters
+            let plugin = track.plugin;
+            let paramList: { id: string, label: string }[] = [];
+
+            // Default "No Selection" or similar? Or just first param?
+            // User requirement: "Select to load corresponding data".
+
+            if (plugin?.instance) {
+                let params = await plugin.instance._audioNode.getParameterInfo();
+                for (let paramId in params) {
+                    paramList.push({
+                        id: paramId,
+                        label: params[paramId].label || paramId
+                    });
+                }
+            }
+
+            // Set current selection
+            let currentParamId = track.automationRegion.paramId;
+            if (!currentParamId && paramList.length > 0) {
+                currentParamId = paramList[0].id;
+                track.automationRegion.paramId = currentParamId;
+            }
+
+            automationTrackElement.setParameters(paramList, currentParamId);
+
+            // Handle Dropdown Change
+            automationTrackElement.onChange = (newParamId) => {
+                if (track.automationRegion) {
+                    const oldParamId = track.automationRegion.paramId;
+
+                    // 1. Save current points
+                    if (oldParamId) {
+                        // Store the current array of points into the map
+                        track.automationData.set(oldParamId, track.automationRegion.points);
+                    }
+
+                    // 2. Load new points
+                    let newPoints = track.automationData.get(newParamId);
+                    if (!newPoints) {
+                        // Create default points if none exist for this param
+                        newPoints = [
+                            { time: 0, value: 0.5, curve: 0 },
+                            { time: track.automationRegion.duration, value: 0.5, curve: 0 }
+                        ];
+                        // Also store it immediately? Not strictly necessary until we switch away, 
+                        // but good for consistency.
+                        track.automationData.set(newParamId, newPoints);
+                    }
+
+                    // 3. Update Region
+                    track.automationRegion.paramId = newParamId;
+                    track.automationRegion.points = newPoints;
+
+                    // 4. Redraw
+                    const regionView = this._app.editorView.getWaveFormViewById(track.id)?.getRegionViewById(track.automationRegion.id);
+                    if (regionView) {
+                        regionView.redraw("", track.automationRegion);
+                    }
+                }
+            };
+
+        } else {
+            // Hide: Remove Region and Header
+            if (track.automationRegion) {
+                this._app.regionsController.removeRegion(track.automationRegion);
+            }
+
+            const existingEl = document.getElementById("automation-track-" + track.id);
+            if (existingEl && existingEl instanceof AutomationTrackElement) {
+                this._app.tracksView.removeAutomationTrack(existingEl);
+            }
+        }
+
+        this._app.editorView.resizeCanvas();
+    }
+
+    // Compatibility methods (can be empty or removed if not used)
+    public async openAutomationMenu(track: Track): Promise<void> {
+        // Now just toggles visibility
+        this.toggleAutomationVisibility(track, !track.isAutomationOpened);
+    }
+
+    public async updateAutomations(track: Track): Promise<void> {
+        // No-op, handled in toggleAutomationVisibility
     }
 
     /**
-     * Defines all the listeners for the automation menu.
-     */
-    private bindEvents(): void {
-        window.addEventListener("click", (e) => {
-            if (e.target === this._view.automationMenu ) return;
-            if (this._automationOpened) {
-                this._view.closeAutomationMenu();
-                this._automationOpened = false;
-            }
-        });
-        this._app.pluginsView.removePlugin.addEventListener("click", () => {
-            let track = this._app.tracksController.selectedTrack;
-            if (track != undefined) {
-                track.automation.removeAutomation();
-                track.automation.updateAutomation([]);
-                this._view.clearMenu();
-                this._view.hideBpf(track.id);
-            }
-        });
-    }
-
-   
-    /**
-     * Applies all the automations of each track.
-     * It takes in account the playhead position and the time of the host.
+     * Applies all automation points to the plugins.
+     * Should be called on play or seek.
      */
     public applyAllAutomations(): void {
         const tracks = this._app.tracksController.tracks;
-        const time = this._app.host.playhead;
+        const currentTime = this._app.host.audioContext.currentTime;
+        const currentPlayhead = this._app.host.playhead;
 
-        for (let track of tracks) {
-            track.plugin?.instance?._audioNode?.clearEvents();
-            const automation = track.automation;
-            const events = [];
-            for (let bpf of automation.bpfList) {
-                let point = bpf.lastPoint;
-                if (point == null) {
-                    continue;
-                }
-                let list = [];
-                for (let x = 0; x < point[0]; x += 0.1) {
-                    list.push(bpf.getYfromX(x));
-                }
-                let start = AutomationController.getStartingPoint(point[0]*1000, time, list.length);
-                let paramID = bpf.paramID;
-                let t = 0;
-                for (let i = start; i < list.length; i++) {
-                    events.push({ type: 'wam-automation', data: { id: paramID, value: list[i] }, time: audioCtx.currentTime + t })
-                    t += 0.1;
+        for (const track of tracks) {
+            if (!track.plugin?.instance?._audioNode) continue;
+            const audioNode = track.plugin.instance._audioNode;
+
+            // Clear existing events to avoid conflicts/duplicates
+            audioNode.clearEvents();
+
+            // 1. Current Automation (Active Region)
+            if (track.automationRegion && track.automationRegion.paramId) {
+                this.schedulePoints(audioNode, track.automationRegion.paramId, track.automationRegion.points, currentTime, currentPlayhead);
+            }
+
+            // 2. Stored Automations (Other Parameters)
+            for (const [paramId, points] of track.automationData) {
+                // Skip if it's the current one (already handled)
+                if (track.automationRegion && paramId === track.automationRegion.paramId) continue;
+                if (points && points.length > 0) {
+                    this.schedulePoints(audioNode, paramId, points, currentTime, currentPlayhead);
                 }
             }
-            events.sort((a, b) => a.time - b.time);
-            // @ts-ignore
-            track.plugin?.instance?._audioNode?.scheduleEvents(...events);
         }
     }
 
-    /**
-     * Updates the width of the BPF of each track according to ratio of pixels by milliseconds.
-     */
+    private schedulePoints(audioNode: any, paramId: string, points: any[], contextTime: number, currentPlayhead: number) {
+        if (!points || points.length === 0) return;
+
+        const events: any[] = [];
+
+        // Find initial value (point right before or at playhead)
+        // Sort just in case
+        // points.sort((a, b) => a.time - b.time); // Assuming already sorted or expensive?
+        // Let's assume sorted.
+
+        let lastPointVal = points[0].value;
+        let foundPrev = false;
+
+        for (const p of points) {
+            if (p.time <= currentPlayhead) {
+                lastPointVal = p.value;
+                foundPrev = true;
+            } else {
+                // Future point
+                const deltaMs = p.time - currentPlayhead;
+                const schedTime = contextTime + (deltaMs / 1000);
+                events.push({
+                    type: 'automation',
+                    time: schedTime,
+                    data: { id: paramId, value: p.value, normalized: true }
+                });
+            }
+        }
+
+        // Apply initial value immediately if we started past some points
+        if (foundPrev || points[0].time > currentPlayhead) {
+            // If ALL points are in future, we might not want to touch current value? 
+            // But if we have prior points, we MUST separate "setting state" from "scheduling".
+            // WamNode doesn't always support "set value now" via event with time=now?
+            // Usually it does.
+            // But to be safe, we can trigger an event with time = contextTime.
+            events.push({
+                type: 'automation',
+                time: contextTime,
+                data: { id: paramId, value: lastPointVal, normalized: true }
+            });
+        }
+
+        // Sort events by time before scheduling (WAM requirement usually)
+        events.sort((a, b) => a.time - b.time);
+
+        if (events.length > 0) {
+            audioNode.scheduleEvents(events);
+        }
+    }
+
     public updateBPFWidth(): void {
-        const newWidth = (MAX_DURATION_SEC * 1000) / RATIO_MILLS_BY_PX;
-
-        for (const track of this._app.tracksController.tracks) {
-            this._view.updateBPFWidth(track.id, newWidth);
-        }
+        // No-op
     }
 
-    /**
-     * Gets the starting point of the automation according to the current time of the host.
-     *
-     * @param totalDuration - The duration of the automation in ms.
-     * @param currentTime - The current time of the host in ms.
-     * @param totalPoint - The total number of points of the automation.
-     *
-     * @returns The index of the starting point.
-     * @static
-     */
     public static getStartingPoint(totalDuration: number, currentTime: number, totalPoint: number): number {
         const point = (totalPoint * currentTime) / totalDuration;
         const integPoint = Math.floor(point);
         const frac = point - integPoint;
         if (frac < 0.5) return integPoint;
-        else return integPoint+1;
+        else return integPoint + 1;
     }
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

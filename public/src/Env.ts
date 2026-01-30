@@ -2,11 +2,12 @@ export const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:6002";
 export const SONGS_FILE_URL = process.env.SONGS_FILE_URL || "http://localhost:6002";
 
 export let HEIGHT_TRACK = 120; // track 100px height
+export let HEIGHT_AUTOMATION = 100;
 
 export const MAX_DURATION_SEC = 600; // 15 minutes
 export const NUM_CHANNELS = 2;
 export const OFFSET_FIRST_TRACK = 76 // Offset of the first track element in the host.
-export const HEIGHT_NEW_TRACK = 88+16; // 88px height + 16px margin
+export const HEIGHT_NEW_TRACK = 80 + 16; // 80px height + 16px margin
 
 
 
@@ -19,7 +20,7 @@ export const HEIGHT_NEW_TRACK = 88+16; // 88px height + 16px margin
 
 /// RECORDERS ///
 /** If true, it is not possible to record on the same track with multiple recorders. */
-export let ARE_RECORDER_EXCLUSIVE=true
+export let ARE_RECORDER_EXCLUSIVE = true
 
 
 /// TEMPO ////
@@ -52,7 +53,7 @@ export let MAX_ZOOM_LEVEL = 16
  * Value can be 0.25, 0.5, 0.75, 1, 2, 3, 4, 8 etc... a multiplication factor
  * @param newZoomLevel
  */
-export function setZoomLevel(newZoomLevel: number){
+export function setZoomLevel(newZoomLevel: number) {
     ZOOM_LEVEL = newZoomLevel
     updateRatioMsByPixels()
 }
@@ -74,7 +75,7 @@ export let RATIO_MILLS_BY_PX = 0
     See https://docs.google.com/spreadsheets/d/1Vl2cQ2SZ0o8LwL0svlI6l4WJoWmbZN3eeb5q8VLGb7k/edit?usp=sharing
 */
 export const updateRatioMsByPixels = () => {
-    RATIO_MILLS_BY_PX = (RATIO_MILLS_BY_PX_FOR_120_BPM/ZOOM_LEVEL) * 120 / TEMPO;
+    RATIO_MILLS_BY_PX = (RATIO_MILLS_BY_PX_FOR_120_BPM / ZOOM_LEVEL) * 120 / TEMPO;
 }
 
 updateRatioMsByPixels()

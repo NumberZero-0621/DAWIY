@@ -5,6 +5,7 @@ import { ScrollEvent } from "../../Controllers/Editor/EditorController";
 import {
     HEIGHT_NEW_TRACK,
     HEIGHT_TRACK,
+    HEIGHT_AUTOMATION,
     MAX_DURATION_SEC,
     RATIO_MILLS_BY_PX,
     TEMPO
@@ -245,7 +246,6 @@ export default class EditorView extends Application {
 
         if (e.detail.type !== "propagate off") {
             this.trackContainer.scrollTop = scrollValue;
-            this.automationContainer.scrollTop = scrollValue;
         }
 
         if (scrollValue === 0) {
@@ -297,9 +297,6 @@ export default class EditorView extends Application {
 
         wave!.destroy();
         this.waveforms.splice(index, 1);
-        for (let i = index; i < this.waveforms.length; i++) {
-            this.waveforms[i].position.y -= HEIGHT_TRACK;
-        }
         this.resizeCanvas();
     }
 
@@ -325,8 +322,24 @@ export default class EditorView extends Application {
                 this.width += (this.editorDiv.clientWidth - this.width) - scrollbarThickness
                 this.height += (this.editorDiv.clientHeight - this.height) - scrollbarThickness
 
-                let tracksHeight = this.waveforms.length * HEIGHT_TRACK + HEIGHT_NEW_TRACK + 4
+                let tracksHeight = this.waveforms.reduce((acc, wave) => {
+                    let h = HEIGHT_TRACK;
+                    if (wave.track.isAutomationOpened) {
+                        h += HEIGHT_AUTOMATION;
+                    }
+                    return acc + h;
+                }, 0) + HEIGHT_NEW_TRACK + 4 + EditorView.LOOP_HEIGHT + EditorView.PLAYHEAD_HEIGHT
                 this.worldHeight = Math.max(tracksHeight, this.height)
+
+                // Update waveforms positions
+                let currentY = EditorView.LOOP_HEIGHT + EditorView.PLAYHEAD_HEIGHT;
+                for (let wave of this.waveforms) {
+                    wave.position.y = currentY;
+                    currentY += HEIGHT_TRACK;
+                    if (wave.track.isAutomationOpened) {
+                        currentY += HEIGHT_AUTOMATION;
+                    }
+                }
                 this.worldWidth = Math.max((MAX_DURATION_SEC * 1000) / RATIO_MILLS_BY_PX, this.width)
 
                 this._originalCenter = { x: this.width / 2, y: this.height / 2 }
@@ -338,9 +351,6 @@ export default class EditorView extends Application {
 
                 this.canvasContainer.style.width = `${this.width}px`
                 this.canvasContainer.style.height = `${this.height}px`
-
-                this.automationContainer.style.height = `${this.height - EditorView.LOOP_HEIGHT - EditorView.PLAYHEAD_HEIGHT}px`
-                this.automationContainer.style.width = `${this.width}px`
 
                 this.playhead.resize()
                 this.loop.resize()

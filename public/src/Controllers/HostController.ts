@@ -673,18 +673,11 @@ export default class HostController {
 
     // SCROLL SYNC
     const trackDiv = this._app.tracksView.trackContainerDiv;
-    const automationDiv = this._app.automationView.automationContainer;
-    trackDiv.addEventListener("mouseenter", e => this.active = e.target);
-    automationDiv.addEventListener("mouseenter", e => this.active = e.target);
+    trackDiv.addEventListener("mouseenter", (e: MouseEvent) => { this.active = e.target; });
 
     trackDiv.addEventListener("scroll", (e: Event) => {
       if (e.target !== this.active) return
-      automationDiv.scrollTop = trackDiv.scrollTop
       this._app.editorView.verticalScrollbar.customScrollTop(trackDiv.scrollTop)
-    });
-    automationDiv.addEventListener("scroll", (e: Event) => {
-      if (e.target !== this.active) return
-      trackDiv.scrollTop = automationDiv.scrollTop
     });
   }
 

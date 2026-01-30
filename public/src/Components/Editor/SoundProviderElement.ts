@@ -15,6 +15,7 @@ template.innerHTML = /*html*/`
     align-items: center;
     background: rgb(44, 44, 44);
     border: solid 1px black;
+    box-sizing: border-box;
 }
 /* ICONS: Small lightgrey visual elements */
     .icon {
@@ -332,59 +333,59 @@ export default class SoundProviderElement extends HTMLElement {
     isLoading: boolean = false;
     vuMeterDiv: HTMLDivElement;
 
-    private on(id: string, callback?: (element:Element)=>void): HTMLElement|undefined{
-        const fetched=this.shadowRoot?.getElementById(id)
-        if(fetched && callback)callback(fetched)
+    private on(id: string, callback?: (element: Element) => void): HTMLElement | undefined {
+        const fetched = this.shadowRoot?.getElementById(id)
+        if (fetched && callback) callback(fetched)
         return fetched ?? undefined
     }
 
-    private updateMuted(){
-        if(this._isMuted){
+    private updateMuted() {
+        if (this._isMuted) {
             this.muteBtn.classList.remove("_yellow")
-            this.muteBtn.classList.add("_red","_toggled")
+            this.muteBtn.classList.add("_red", "_toggled")
         }
-        else if(this._isSoloMuted){
+        else if (this._isSoloMuted) {
             this.muteBtn.classList.remove("_red")
-            this.muteBtn.classList.add("_yellow","_toggled")
+            this.muteBtn.classList.add("_yellow", "_toggled")
         }
-        else{
-            this.muteBtn.classList.remove("_red","_yellow","_toggled")
+        else {
+            this.muteBtn.classList.remove("_red", "_yellow", "_toggled")
         }
     }
 
-    private _isMuted=false
-    set isMuted(value: boolean){
-        this._isMuted=value
+    private _isMuted = false
+    set isMuted(value: boolean) {
+        this._isMuted = value
         this.updateMuted()
     }
 
-    private _isSoloMuted=false
-    set isSoloMuted(value: boolean){
-        this._isSoloMuted=value
+    private _isSoloMuted = false
+    set isSoloMuted(value: boolean) {
+        this._isSoloMuted = value
         this.updateMuted()
     }
 
     set hasPlugin(value: boolean) { this.fxBtn.classList.toggle("_toggled", value) }
 
-    set name(value:string){ this.trackNameInput.value=value }
-    get name(){ return this.trackNameInput.value ?? "" }
+    set name(value: string) { this.trackNameInput.value = value }
+    get name() { return this.trackNameInput.value ?? "" }
 
-    set volume(value: number){ this.volumeSlider.valueAsNumber=value }
-    get volume(){ return this.volumeSlider.valueAsNumber }
+    set volume(value: number) { this.volumeSlider.valueAsNumber = value }
+    get volume() { return this.volumeSlider.valueAsNumber }
 
-    set balance(value: number){ this.balanceSlider.valueAsNumber=value }
-    get balance(){ return this.balanceSlider.valueAsNumber }
+    set balance(value: number) { this.balanceSlider.valueAsNumber = value }
+    get balance() { return this.balanceSlider.valueAsNumber }
 
-    set color(value: string){ this.colorLine.style.backgroundColor=value }
-    get color(){ return this.colorLine.style.backgroundColor }
+    set color(value: string) { this.colorLine.style.backgroundColor = value }
+    get color() { return this.colorLine.style.backgroundColor }
 
     constructor() {
         super()
-        this.attachShadow({mode: "open"});
+        this.attachShadow({ mode: "open" });
         if (this.shadowRoot !== null) {
             this.shadowRoot.appendChild(template.content.cloneNode(true));
             this.name = "";
-            
+
             this.defineTrackElementListeners();
             this.vuMeterDiv = this.shadowRoot.querySelector("#vu-meter-div") as HTMLDivElement;
 
@@ -392,7 +393,7 @@ export default class SoundProviderElement extends HTMLElement {
                 element.classList.add("hidden")
             })
         }
-        this.name="SoundProvider"
+        this.name = "SoundProvider"
     }
 
     defineTrackElementListeners() {
@@ -407,7 +408,7 @@ export default class SoundProviderElement extends HTMLElement {
 
     }
 
-    getPeakMeterParentElement():HTMLDivElement {
+    getPeakMeterParentElement(): HTMLDivElement {
         return this.vuMeterDiv;
     }
 
@@ -418,15 +419,15 @@ export default class SoundProviderElement extends HTMLElement {
      * @param total The maximum loading advancement in Byte
      * @returns 
      */
-    progress(loaded: number, total:number):void;
+    progress(loaded: number, total: number): void;
     /**
      * Hide every controls of the track and show a loading bar, setting its loading state.
      * If the loading bar is already shown, the loading state is just modified.
      * The loading state is set to 0% with no "MB of MB" text.
      * @returns 
      */
-    progress():void;
-    progress(loaded?: number, total?: number): void{
+    progress(): void;
+    progress(loaded?: number, total?: number): void {
         const shadowRoot = this.shadowRoot;
         if (shadowRoot === null) return;
 
@@ -435,26 +436,26 @@ export default class SoundProviderElement extends HTMLElement {
         const loadingContainer = shadowRoot.getElementById("loading-container")!;
 
         // Show the loading bar
-        if (!this.isLoading){
+        if (!this.isLoading) {
             // Hide the controls.
             shadowRoot.querySelectorAll(".slider, .control-line").forEach((element) => {
 
                 element.classList.add("hidden");
             });
             // Show the loading bar
-            [loadingContainer,progressBarText].forEach((element) => {
+            [loadingContainer, progressBarText].forEach((element) => {
                 element.classList.remove("hidden")
             })
             this.isLoading = true;
         }
 
         // Set the loading state
-        if(loaded !==undefined && total!=undefined){
-            const percent=Math.floor((loaded / total) * 100);
+        if (loaded !== undefined && total != undefined) {
+            const percent = Math.floor((loaded / total) * 100);
             loadingBar.style.width = `${percent}%`;
             progressBarText.textContent = `${(loaded / (1024 * 1024)).toFixed(2)} MB of ${(total / (1024 * 1024)).toFixed(2)} MB`;
         }
-        else{
+        else {
             loadingBar.style.width = "0%";
             progressBarText.textContent = "";
         }
@@ -471,13 +472,13 @@ export default class SoundProviderElement extends HTMLElement {
         const loadingContainer = shadowRoot.getElementById("loading-container")!;
 
         // Hide the loading bar
-        if (this.isLoading){
+        if (this.isLoading) {
             // Show the controls.
             shadowRoot.querySelectorAll(".slider, .control-line").forEach((element) => {
                 element.classList.remove("hidden");
             });
             // Hide the loading bar
-            [loadingContainer,progressBarText].forEach((element) => {
+            [loadingContainer, progressBarText].forEach((element) => {
                 element.classList.add("hidden")
             })
             this.isLoading = false;
@@ -503,7 +504,7 @@ export default class SoundProviderElement extends HTMLElement {
 
     get controls() { return this.shadowRoot?.getElementById("track-controls1") as HTMLDivElement }
     get controls2() { return this.shadowRoot?.getElementById("track-controls2") as HTMLDivElement }
-    get styleTag(){ return this.shadowRoot?.getElementById("style") as HTMLStyleElement}
+    get styleTag() { return this.shadowRoot?.getElementById("style") as HTMLStyleElement }
 }
 
 customElements.define("sound-provider-element", SoundProviderElement)

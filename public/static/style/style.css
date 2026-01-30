@@ -121,6 +121,7 @@ body {
     background-color: rgb(23, 23, 26);
     min-height: 100%;
     overflow-y: scroll;
+    padding-bottom: 15px;
     -ms-overflow-style: none;
     /* IE and Edge */
     scrollbar-width: none;

@@ -26,6 +26,11 @@ export default class WaveformView extends Container {
     public color: string;
 
     /**
+     * The track associated with this waveform.
+     */
+    public track: Track;
+
+    /**
      * The main editor of the application.
      */
     private _editorView: EditorView;
@@ -35,6 +40,7 @@ export default class WaveformView extends Container {
         this._editorView = editor;
         this.trackId = track.id;
         this.color = track.color;
+        this.track = track;
 
 
         this.regionViews = [];
@@ -91,7 +97,7 @@ export default class WaveformView extends Container {
         let pos = Array.from(trackContainer.children).filter(e => e instanceof TrackElement).indexOf(track.element);
 
         this.position.x = 0;
-        this.position.y = pos*HEIGHT_TRACK+25;
+        this.position.y = pos * HEIGHT_TRACK + 25;
     }
 
 }

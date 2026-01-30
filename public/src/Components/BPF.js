@@ -36,7 +36,7 @@ export default class BPF extends HTMLElement {
 
 
         this.handleMouseMove = () => {
-            this.setState({ghostPoint: undefined});
+            this.setState({ ghostPoint: undefined });
         };
         /**
          * @param {MouseEvent} e
@@ -45,7 +45,7 @@ export default class BPF extends HTMLElement {
             if (e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
             e.stopPropagation();
             this.dragged = false;
-            const {points} = this.state;
+            const { points } = this.state;
             /** @type {SVGSVGElement} */
             const svg = e.currentTarget;
             let {
@@ -55,12 +55,12 @@ export default class BPF extends HTMLElement {
             // top += 0.025 * height;
             // width *= 0.95;
             height *= 0.95;
-            const normalizedX = (e.clientX - left) / width;
-            const normalizedY = 1 - (e.clientY - top) / height;
+            const normalizedX = Math.max(0, Math.min(1, (e.clientX - left) / width));
+            const normalizedY = Math.max(0, Math.min(1, 1 - (e.clientY - top) / height));
             const [x, y] = this.denormalizePoint(normalizedX, normalizedY);
-            const {index: $point, point} = this.getInsertPoint(x, y);
+            const { index: $point, point } = this.getInsertPoint(x, y);
             points.splice($point, 0, point);
-            this.setState({points: points.slice()});
+            this.setState({ points: points.slice() });
         };
         /**
          * @param {MouseEvent} e
@@ -75,14 +75,14 @@ export default class BPF extends HTMLElement {
                 return;
             }
             line.style.cursor = 'unset';
-            const {domain} = this.state;
+            const { domain } = this.state;
             const svg = line.parentElement.parentElement;
-            let {left, width} = svg.getBoundingClientRect();
+            let { left, width } = svg.getBoundingClientRect();
             // left += 0.025 * width;
             // width *= 0.95;
-            const normalizedX = (e.clientX - left) / width;
-            const {point} = this.getInsertPoint(normalizedX * domain);
-            this.setState({ghostPoint: point});
+            const normalizedX = Math.max(0, Math.min(1, (e.clientX - left) / width));
+            const { point } = this.getInsertPoint(normalizedX * domain);
+            this.setState({ ghostPoint: point });
         };
         /**
          * @param {MouseEvent} e
@@ -93,7 +93,7 @@ export default class BPF extends HTMLElement {
             this.mouseDown = true;
             /** @type {SVGLineElement} */
             const line = e.currentTarget;
-            const {points, domain, range} = this.state;
+            const { points, domain, range } = this.state;
             const svg = line.parentElement.parentElement;
             let {
                 left, top, width, height,
@@ -106,7 +106,7 @@ export default class BPF extends HTMLElement {
                 const i = +line.getAttribute('values');
                 const prev = points[i];
                 const next = points[i + 1];
-                const {clientY} = e;
+                const { clientY } = e;
                 if (!prev) return;
                 /**
                  * @param {MouseEvent} e
@@ -125,7 +125,7 @@ export default class BPF extends HTMLElement {
                         points[i + 1] = next.slice();
                         points[i + 1][1] = Math.min(rangeMax, Math.max(rangeMin, next[1] - delta));
                     }
-                    this.setState({points: points.slice()});
+                    this.setState({ points: points.slice() });
                 };
                 const handleMouseUp = () => {
                     e.stopPropagation();
@@ -136,14 +136,14 @@ export default class BPF extends HTMLElement {
                 document.addEventListener('mousemove', handleMouseMove);
                 document.addEventListener('mouseup', handleMouseUp);
             } else {
-                const normalizedX = (e.clientX - left) / width;
-                const {index: $point, point} = this.getInsertPoint(normalizedX * domain);
+                const normalizedX = Math.max(0, Math.min(1, (e.clientX - left) / width));
+                const { index: $point, point } = this.getInsertPoint(normalizedX * domain);
                 const limits = [
                     (points.length ? points[$point - 1][0] / domain : 0) * width + left,
                     points[$point] ? points[$point][0] / domain * width + left : left + width,
                 ];
                 points.splice($point, 0, point);
-                this.setState({points: points.slice()});
+                this.setState({ points: points.slice() });
                 /**
                  * @param {MouseEvent} e
                  */
@@ -153,11 +153,11 @@ export default class BPF extends HTMLElement {
                     this.dragged = true;
                     const clientX = Math.max(limits[0], Math.min(limits[1], e.clientX));
                     const clientY = Math.max(top, Math.min(top + height, e.clientY));
-                    const normalized = [(clientX - left) / width, 1 - (clientY - top) / height];
+                    const normalized = [Math.max(0, Math.min(1, (clientX - left) / width)), Math.max(0, Math.min(1, 1 - (clientY - top) / height))];
                     const [x, y] = this.denormalizePoint(...normalized);
                     const point = [x, y, 0];
                     points[$point] = point;
-                    this.setState({points: points.slice()});
+                    this.setState({ points: points.slice() });
                 };
                 const handleMouseUp = () => {
                     e.stopPropagation();
@@ -177,7 +177,7 @@ export default class BPF extends HTMLElement {
         this.handleMouseDownCircle = (e) => {
             e.stopPropagation();
             this.dragged = false;
-            const {points, domain} = this.state;
+            const { points, domain } = this.state;
             /** @type {SVGCircleElement} */
             const circle = e.currentTarget;
             /** @type {SVGSVGElement} */
@@ -208,11 +208,11 @@ export default class BPF extends HTMLElement {
                 this.dragged = true;
                 const clientX = Math.max(limits[0], Math.min(limits[1], e.shiftKey || Math.abs(circleX - e.clientX) > 5 ? e.clientX : circleX));
                 const clientY = Math.max(top, Math.min(top + height, e.shiftKey || Math.abs(circleY - e.clientY) > 5 ? e.clientY : circleY));
-                const normalized = [(clientX - left) / width, 1 - (clientY - top) / height];
+                const normalized = [Math.max(0, Math.min(1, (clientX - left) / width)), Math.max(0, Math.min(1, 1 - (clientY - top) / height))];
                 const [x, y] = this.denormalizePoint(...normalized);
                 const point = [x, y, 0];
                 points[i] = point;
-                this.setState({points: points.slice()});
+                this.setState({ points: points.slice() });
             };
             const handleMouseUp = () => {
                 e.stopPropagation();
@@ -231,14 +231,14 @@ export default class BPF extends HTMLElement {
             if (this.dragged) return;
             const circle = e.currentTarget;
             const i = +circle.getAttribute('values');
-            const {points} = this.state;
+            const { points } = this.state;
             points.splice(i, 1);
-            this.setState({points: points.slice()});
+            this.setState({ points: points.slice() });
         };
-        this._root = this.attachShadow({mode: 'open'});
+        this._root = this.attachShadow({ mode: 'open' });
         this._svg = this._root.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg');
         this._svg.setAttribute('width', '100%');
-        this._svg.setAttribute('height', '120px');
+        this._svg.setAttribute('height', '100%');
         this._svg.style.backgroundColor = 'none';
         this._svg.style.zIndex = 10;
         this._svg.addEventListener('mousemove', this.handleMouseMove);
@@ -268,7 +268,7 @@ export default class BPF extends HTMLElement {
     }
 
     get normalizedPoints() {
-        const {domain, range, points} = this.state;
+        const { domain, range, points } = this.state;
         let [rangeMin, rangeMax] = range;
         if (rangeMin > rangeMax) [rangeMin, rangeMax] = [rangeMax, rangeMin];
         const rangeInterval = rangeMax - rangeMin;
@@ -276,7 +276,7 @@ export default class BPF extends HTMLElement {
     }
 
     get normalizedDefault() {
-        const {range, defaultValue} = this.state;
+        const { range, defaultValue } = this.state;
         let [rangeMin, rangeMax] = range;
         if (rangeMin > rangeMax) [rangeMin, rangeMax] = [rangeMax, rangeMin];
         const rangeInterval = rangeMax - rangeMin;
@@ -285,7 +285,7 @@ export default class BPF extends HTMLElement {
 
     get lastPoint() {
         if (this.state.points.length > 0) {
-            return this.state.points[this.state.points.length-1];
+            return this.state.points[this.state.points.length - 1];
         }
         return null;
     }
@@ -297,19 +297,19 @@ export default class BPF extends HTMLElement {
             const prevRange = this.state.range;
             const range = name === 'min' ? [Math.max(-128, value), this.state.range[1]] : [this.state.range[0], Math.min(128, value)];
             const points = this.state.points.map((p) => [p[0], scaleClip(p[1], prevRange[0], prevRange[1], range[0], range[1]), p[2]]);
-            this.setState({points, range});
+            this.setState({ points, range });
         } else if (name === 'domain') {
             const prevDomain = this.state.domain;
             const domain = value;
             const points = this.state.points.map((p) => [scaleClip(p[0], 0, prevDomain, 0, domain), p[1], p[2]]);
-            this.setState({points, domain});
+            this.setState({ points, domain });
         } else if (name === 'default') {
-            this.setState({defaultValue: value});
+            this.setState({ defaultValue: value });
         }
     }
 
     setSizeBPF(size) {
-        this._svg.setAttribute("width", size+"px");
+        this._svg.setAttribute("width", size + "px");
     }
 
     /**
@@ -318,18 +318,18 @@ export default class BPF extends HTMLElement {
      */
     async apply(wamNode, wamParamId) {
         const audioCtx = wamNode.context;
-        const {currentTime} = audioCtx;
+        const { currentTime } = audioCtx;
         wamNode.clearEvents();
         const currentValue = (await wamNode.getParameterValues(false, wamParamId))[wamParamId].value;
         wamNode.scheduleEvents({
             type: 'wam-automation',
-            data: {id: wamParamId, value: currentValue},
+            data: { id: wamParamId, value: currentValue },
             time: currentTime
         });
         for (let t = 0; t < this.domain; t += 0.01) {
             const value = this.getYfromX(t);
 
-            wamNode.scheduleEvents({type: 'wam-automation', data: {id: wamParamId, value}, time: currentTime + t});
+            wamNode.scheduleEvents({ type: 'wam-automation', data: { id: wamParamId, value }, time: currentTime + t });
         }
     }
 
@@ -337,13 +337,13 @@ export default class BPF extends HTMLElement {
      * @param {Partial<State>} state
      */
     setState(state) {
-        const {ghostPoint} = state;
+        const { ghostPoint } = state;
         for (const key in state) {
             this.state[key] = state[key];
         }
         this.state.range = [Math.max(-128, this.state.range[0]), Math.min(128, this.state.range[1])];
-        const {domain, points} = this.state;
-        const {normalizedPoints} = this;
+        const { domain, points } = this.state;
+        const { normalizedPoints } = this;
         if (ghostPoint) {
             const point = this.normalizePoint(ghostPoint[0], ghostPoint[1]);
             const x = `${point[0] * 100}%`;
@@ -622,7 +622,7 @@ export default class BPF extends HTMLElement {
      * @returns {number}
      */
     getYfromX(x) {
-        const {points, defaultValue} = this.state;
+        const { points, defaultValue } = this.state;
         let $point = 0;
         let prev = points[0];
         /** @type {TBPFPoint} */
@@ -647,7 +647,7 @@ export default class BPF extends HTMLElement {
      * @returns {{ index: number; point: TBPFPoint }}
      */
     getInsertPoint(x, yIn, e = 0) {
-        const {points, defaultValue} = this.state;
+        const { points, defaultValue } = this.state;
         let $point = 0;
         let prev = points[0];
         /** @type {TBPFPoint} */
@@ -658,13 +658,13 @@ export default class BPF extends HTMLElement {
             prev = next;
             $point++;
         }
-        if (typeof yIn === 'number') return {index: $point, point: [x, yIn, e]};
-        if (prev === next) return {index: $point, point: [x, prev ? prev[1] : defaultValue, e]};
+        if (typeof yIn === 'number') return { index: $point, point: [x, yIn, e] };
+        if (prev === next) return { index: $point, point: [x, prev ? prev[1] : defaultValue, e] };
         const exponent = prev[2] || 0;
         const normalizedX = (x - prev[0]) / (next[0] - prev[0]);
         const normalizedY = normExp(normalizedX, exponent);
         const y = prev[1] + normalizedY * (next[1] - prev[1]);
-        return {index: $point, point: [x, y, e]};
+        return { index: $point, point: [x, y, e] };
     }
 
     /**
@@ -672,7 +672,7 @@ export default class BPF extends HTMLElement {
      * @param {number} y
      */
     normalizePoint(x, y) {
-        const {domain, range} = this.state;
+        const { domain, range } = this.state;
         let [rangeMin, rangeMax] = range;
         if (rangeMin > rangeMax) [rangeMin, rangeMax] = [rangeMax, rangeMin];
         const rangeInterval = rangeMax - rangeMin;
@@ -684,7 +684,7 @@ export default class BPF extends HTMLElement {
      * @param {number} y
      */
     denormalizePoint(x, y) {
-        const {domain, range} = this.state;
+        const { domain, range } = this.state;
         let [rangeMin, rangeMax] = range;
         if (rangeMin > rangeMax) [rangeMin, rangeMax] = [rangeMax, rangeMin];
         const rangeInterval = rangeMax - rangeMin;

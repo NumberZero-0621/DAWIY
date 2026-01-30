@@ -23,14 +23,14 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
     private _wave: Graphics;
 
     /** The background of the region, borders included. */
-    private _background: Graphics;
-    
+    protected _background: Graphics;
+
     /** The mask of the region. */
-    private _customMask: Graphics;
+    protected _customMask: Graphics;
 
     /** The contained region  */
-    private region_width: number;
-    
+    protected region_width: number;
+
 
 
     constructor(editor: EditorView, region: REGION) {
@@ -75,9 +75,9 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
      * @param region 
      * @param start 
      */
-    protected abstract drawContent(target: Graphics, color: string, region: REGION, from: number, to :number): void
+    protected abstract drawContent(target: Graphics, color: string, region: REGION, from: number, to: number): void
 
-    public redraw(color: string, region: REGION){
+    public redraw(color: string, region: REGION) {
         this.region_width = region.width
         this._wave.position.x = 0;
         this.drawBackground()
@@ -93,7 +93,7 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
      * @param start 
      * @param from 
      */
-    public draw(color: string, region: REGION, start: number=0, from: number=region.duration){
+    public draw(color: string, region: REGION, start: number = 0, from: number = region.duration) {
         this.region_width = region.width
         this._wave.position.x = 0;
         this.drawBackground()
@@ -107,26 +107,26 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
     /** Is the region selected or not. Use to draw the current border of the background. */
     public set isSelected(value: boolean) {
         this._isSelected = value
-        if(value)this._isSubSelected = false
+        if (value) this._isSubSelected = false
         this.drawBackground();
     }
 
-    public get isSelected(){ return this._isSelected }
+    public get isSelected() { return this._isSelected }
 
-    private _isSelected=false
+    private _isSelected = false
 
 
     /** Is the region secondary selected or not. Use to draw the current border of the background. */
     public set isSubSelected(value: boolean) {
         this._isSubSelected = value
-        if(value)this._isSelected = false
+        if (value) this._isSelected = false
         this.drawBackground()
     }
 
-    public get isSubSelected(){ return this._isSubSelected }
+    public get isSubSelected() { return this._isSubSelected }
 
-    private _isSubSelected=false
-    
+    private _isSubSelected = false
+
 
     /**
      * Updates the region view to simulate trimming/extending without stretching the content.
@@ -138,10 +138,10 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
     public stretch(duration: number, start: number, originalStart: number): void {
         this.scale.x = 1;
         const newWidth = (duration * 1000) / RATIO_MILLS_BY_PX;
-        
+
         // Update position
         this.position.x = start / RATIO_MILLS_BY_PX;
-        
+
         // Shift content to counter-act the position change, keeping it stationary in world space
         // if start > originalStart (shrunk from left), we moved right. Content must move left.
         // offset = originalStart - start. 
@@ -158,7 +158,7 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
         this.updateMask();
     }
 
-    private updateMask(): void {
+    protected updateMask(): void {
         this._customMask.clear();
         this._customMask.beginFill(0x000000);
         this._customMask.drawRect(0, 0, this.region_width, HEIGHT_TRACK);
@@ -166,15 +166,15 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
     }
 
     /** Draws the background of the region. It will check if the region is selected or not to draw the border. */
-    private drawBackground(): void {
+    protected drawBackground(): void {
         let color
-        if(this.isSelected) color = 0xffffff
-        else if(this.isSubSelected) color = 0xffaa00
+        if (this.isSelected) color = 0xffffff
+        else if (this.isSubSelected) color = 0xffaa00
         else color = 0x000000
         this._background.clear();
         this._background.beginFill(0xffffff, 0.3);
-        this._background.lineStyle({width: 1, color: color});
-        this._background.drawRect(0, 0, this.region_width, HEIGHT_TRACK-1);
+        this._background.lineStyle({ width: 1, color: color });
+        this._background.drawRect(0, 0, this.region_width, HEIGHT_TRACK - 1);
     }
 
     /**
