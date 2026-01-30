@@ -73,7 +73,7 @@ export default class PianoRollView extends Container {
         this.contentContainer.addChild(this.notesContainer);
 
         this.velocityContainer = new Container();
-        this.velocityContainer.interactive = true;
+        this.velocityContainer.eventMode = 'static';
         this.addChild(this.velocityContainer); // Separate from contentContainer to handle its own Y position
 
         this.velocityBackground = new Graphics();
@@ -94,16 +94,16 @@ export default class PianoRollView extends Container {
 
 
         this.velocityResizeHandle = new Graphics();
-        this.velocityResizeHandle.interactive = true;
+        this.velocityResizeHandle.eventMode = 'static';
         this.velocityResizeHandle.cursor = "ns-resize";
         this.velocityContainer.addChild(this.velocityResizeHandle);
 
         this.timelineContainer = new Container();
-        this.timelineContainer.interactive = true;
+        this.timelineContainer.eventMode = 'static';
         this.contentContainer.addChild(this.timelineContainer); // Scrolls X, Fixed Y logic in updateScroll
 
         this.loopBackground = new Graphics();
-        this.loopBackground.interactive = true;
+        this.loopBackground.eventMode = 'static';
         this.contentContainer.addChild(this.loopBackground);
 
         this.loopOverlay = new Graphics();
@@ -111,21 +111,21 @@ export default class PianoRollView extends Container {
         this.contentContainer.addChild(this.loopOverlay);
 
         this.loopContainer = new Container();
-        this.loopContainer.interactive = true;
+        this.loopContainer.eventMode = 'static';
         this.contentContainer.addChild(this.loopContainer);
 
         this.loopBar = new Graphics();
-        this.loopBar.interactive = true;
+        this.loopBar.eventMode = 'static';
         this.loopBar.cursor = "grab";
         this.loopContainer.addChild(this.loopBar);
 
         this.loopHandleLeft = new Graphics();
-        this.loopHandleLeft.interactive = true;
+        this.loopHandleLeft.eventMode = 'static';
         this.loopHandleLeft.cursor = "w-resize";
         this.loopContainer.addChild(this.loopHandleLeft);
 
         this.loopHandleRight = new Graphics();
-        this.loopHandleRight.interactive = true;
+        this.loopHandleRight.eventMode = 'static';
         this.loopHandleRight.cursor = "e-resize";
         this.loopContainer.addChild(this.loopHandleRight);
 
@@ -150,7 +150,7 @@ export default class PianoRollView extends Container {
         this.addChild(this.keysContainer); // Keys stay fixed on X axis
 
         this.closeButton = new Container();
-        this.closeButton.interactive = true;
+        this.closeButton.eventMode = 'static';
         this.closeButton.cursor = "pointer";
         this.addChild(this.closeButton);
 
@@ -608,7 +608,7 @@ export default class PianoRollView extends Container {
                     // But we might need to link them.
 
                     // Add Interactivity
-                    rect.interactive = true;
+                    rect.eventMode = 'static';
                     rect.cursor = "pointer"; // Change cursor to hand
                     // @ts-ignore
                     rect.noteData = { note, start, region, w, h };
@@ -757,7 +757,7 @@ export default class PianoRollView extends Container {
 
             bar.position.set(x, this.VELOCITY_HEIGHT - displayH);
 
-            bar.interactive = true;
+            bar.eventMode = 'static';
             bar.cursor = "ns-resize";
             // @ts-ignore
             bar.velocityData = { note, region, start };

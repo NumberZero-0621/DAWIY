@@ -257,12 +257,22 @@ export default class Loader {
 
     loadTrackRegions(track: Track, regions: ProjectData['tracks'][0]['regions'], contents: (id: string) => XMLHttpRequest) {
         let loadedRegions = 0;
-        let totalSize = new Map();
-        let totalLoaded = 0;
+        let totalSize = new Map<XMLHttpRequest, number>();
+        let loadedSize = new Map<XMLHttpRequest, number>();
+
+        const checkCompletion = () => {
+            loadedRegions++;
+            if (loadedRegions === regions.length) {
+                track.element.progressDone();
+            }
+        }
 
         for (let region of regions) {
             const decoder = regionLoaders[region.type]?.loader
-            if (!decoder) continue
+            if (!decoder) {
+                checkCompletion();
+                continue;
+            }
 
             let xhr = contents(region.content_name)
             xhr.responseType = "arraybuffer"
@@ -270,52 +280,53 @@ export default class Loader {
             // Loading
             xhr.onprogress = (event) => {
                 if (event.lengthComputable) {
-                    totalLoaded -= totalSize.get(xhr) || 0;  // remove old value
-                    totalLoaded = Math.max(totalLoaded, 0);  // prevent negative values
-                    totalSize.set(xhr, event.total);  // update total size
-                    totalLoaded += event.loaded;  // update loaded size
+                    totalSize.set(xhr, event.total);
+                    loadedSize.set(xhr, event.loaded);
 
                     let totalSizeSum = Array.from(totalSize.values()).reduce((a, b) => a + b, 0);
+                    let totalLoadedSum = Array.from(loadedSize.values()).reduce((a, b) => a + b, 0);
 
                     if (track.deleted) {
                         xhr.abort();
                         return;
                     }
 
-                    track.element.progress(totalLoaded, totalSizeSum);
+                    track.element.progress(totalLoadedSum, totalSizeSum);
                 }
             };
 
             // Finish Loading
             xhr.onload = async () => {
                 if (xhr.status == 200) {
-                    loadedRegions++;
-
                     let audioArrayBuffer = xhr.response as ArrayBuffer
-                    let newRegion = await decoder(audioArrayBuffer)
+                    try {
+                        let newRegion = await decoder(audioArrayBuffer)
+                        if (track.deleted) {
+                            return; // Abort/return but don't checkCompletion as we are "deleted"
+                        }
 
-                    if (track.deleted) {
-                        xhr.abort();
-                        return;
-                    }
-
-                    newRegion.start = region.start;
-                    this._app.regionsController.addRegion(track, newRegion);
-
-                    // All regions have been loaded, call progressDone
-                    if (loadedRegions === regions.length) {
-                        track.element.progressDone();
+                        newRegion.start = region.start;
+                        this._app.regionsController.addRegion(track, newRegion);
+                    } catch (e) {
+                        console.error("Failed to decode region", e);
                     }
                 } else {
                     console.error('An error occurred fetching the track region:', xhr.statusText);
                 }
+                checkCompletion();
             };
 
             xhr.onerror = () => {
                 console.error('An error occurred fetching the track region');
+                checkCompletion();
             };
 
-            xhr.send();
+            try {
+                xhr.send();
+            } catch (e) {
+                console.error("Failed to send XHR", e);
+                checkCompletion();
+            }
         }
     }
 

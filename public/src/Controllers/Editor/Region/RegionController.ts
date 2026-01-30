@@ -96,7 +96,8 @@ export default class RegionController {
     // Automation Drag State
     private draggedAutomationPoint: {
         region: AutomationRegion,
-        pointIndex: number
+        pointIndex: number,
+        originalPoints: { time: number, value: number, curve: number }[]
     } | null = null;
 
     doIt
@@ -509,8 +510,39 @@ export default class RegionController {
 
         this._editorView.viewport.on("pointerup", (e) => {
             if (this.draggedAutomationPoint) {
+                const { region, originalPoints } = this.draggedAutomationPoint;
+                const newPoints = JSON.parse(JSON.stringify(region.points)); // Deep copy current state
+                const track = this._app.tracksController.getTrackById(region.trackId);
+                const view = this.getView(region);
+
+                // Check if actually changed
+                const isDifferent = JSON.stringify(originalPoints) !== JSON.stringify(newPoints);
+
+                if (isDifferent && track && view) {
+                    this.doIt(true,
+                        () => {
+                            region.points = newPoints;
+                            // Need to update track.automationData as well if paramId matches??
+                            // In toggleAutomationVisibility, we see automationData being updated from points.
+                            // However, applyAllAutomations reads from region.points for the current param.
+                            // So updating region.points is primary.
+                            // But better to keep data consistent if we switch params later.
+                            if (region.paramId) {
+                                track.automationData.set(region.paramId, newPoints);
+                            }
+                            view.redraw("", region);
+                        },
+                        () => {
+                            region.points = originalPoints;
+                            if (region.paramId) {
+                                track.automationData.set(region.paramId, originalPoints);
+                            }
+                            view.redraw("", region);
+                        }
+                    );
+                }
+
                 this.draggedAutomationPoint = null;
-                // Add undo/redo point here if desired
                 return;
             }
             this.handlePointerUp();
@@ -882,9 +914,11 @@ export default class RegionController {
             }
         }
 
+        const originalPoints = JSON.parse(JSON.stringify(region.points));
+
         if (closestIndex !== -1) {
             // Drag existing point
-            this.draggedAutomationPoint = { region, pointIndex: closestIndex };
+            this.draggedAutomationPoint = { region, pointIndex: closestIndex, originalPoints };
         } else {
             // Add new point
             const time = Math.max(0, local.x * RATIO_MILLS_BY_PX);
@@ -896,7 +930,7 @@ export default class RegionController {
             region.points.sort((a, b) => a.time - b.time);
 
             closestIndex = region.points.indexOf(newPoint);
-            this.draggedAutomationPoint = { region, pointIndex: closestIndex };
+            this.draggedAutomationPoint = { region, pointIndex: closestIndex, originalPoints };
         }
 
         view.redraw("", region);
