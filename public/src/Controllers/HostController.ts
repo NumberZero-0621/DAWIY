@@ -647,6 +647,11 @@ export default class HostController {
       this.focus(this._app.dawiyPluginView);
     })
 
+    this._view.wamPluginBtn.addEventListener("click", () => {
+      this._app.wamPluginController.openWindow();
+      this.focus(this._app.wamPluginView);
+    })
+
     this._view.aboutBtn.addEventListener("click", () => {
       this._view.aboutWindow.hidden = false;
       this.focus(this._app.aboutView);

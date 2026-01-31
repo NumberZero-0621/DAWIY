@@ -1,0 +1,44 @@
+<div id="wam-plugin-header" class="header-window">
+    <span class="title" data-i18n="menu.wam_plugin">WAM Plugin</span>
+    <button id="wam-plugin-close-button" class="close-button">X</button>
+</div>
+<div class="settings-body" id="wam-plugin-body"
+    style="padding: 0; display: flex; flex-direction: column; height: calc(100% - 30px);">
+    <!-- Plugin Manager UI -->
+    <div class="plugin-manager-container"
+        style="flex-grow: 1; display: flex; flex-direction: column; padding: 10px; overflow: hidden;">
+
+        <!-- Tabs -->
+        <div class="pm-filters"
+            style="display: flex; gap: 10px; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 10px;">
+            <button id="wp-filter-installed" class="btn btn-sm btn-outline-light active"
+                style="border: none; border-bottom: 2px solid transparent; border-radius: 0;"
+                data-i18n="plugin.filter.installed">Installed</button>
+
+            <button id="wp-filter-available" class="btn btn-sm btn-outline-secondary"
+                style="border: none; border-radius: 0;" data-i18n="plugin.filter.available">Available</button>
+
+            <div style="flex-grow: 1;"></div>
+        </div>
+
+        <!-- List View -->
+        <div class="pm-list" id="wp-list" style="flex-grow: 1; overflow-y: auto; padding-right: 5px;">
+            <!-- Plugin Items injected here -->
+        </div>
+
+        <!-- Import URL UI -->
+        <div class="pm-footer" style="padding-top:10px; border-top:1px solid #444; margin-top: auto;">
+            <div class="input-group input-group-sm">
+                <input type="text" id="wp-import-url" class="form-control" placeholder="https://..."
+                    style="background: #222; color: #fff; border-color: #555;">
+                <div class="input-group-append">
+                    <button class="btn btn-outline-secondary" type="button" id="wp-import-btn"
+                        data-i18n="plugin.action.import_url">Import URL</button>
+                </div>
+            </div>
+            <small style="color: #888;" data-i18n="plugin.wam.import_instruction">Enter a direct URL to a
+                descriptor.json or index.js to install a custom
+                WAM.</small>
+        </div>
+    </div>
+</div>

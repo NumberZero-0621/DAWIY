@@ -1,4 +1,5 @@
 /** @typedef {import('../api').WamProcessor} IWamProcessor */
+// @ts-nocheck
 /** @typedef {import('../api').WamEnv} IWamEnv */
 /** @typedef {import('../api').WamGroup} IWamGroup */
 /** @typedef {import('../api').WamEvent} WamEvent */
@@ -11,7 +12,7 @@ const initializeWamEnv = (apiVersion) => {
 	/** @type {AudioWorkletGlobalScope} */
 	// @ts-ignore
 	const audioWorkletGlobalScope = globalThis;
-	if (audioWorkletGlobalScope.AudioWorkletProcessor 
+	if (audioWorkletGlobalScope.AudioWorkletProcessor
 		&& audioWorkletGlobalScope.webAudioModules) return; // already initialized
 
 	/** @type {Map<string, any>} */
@@ -19,12 +20,14 @@ const initializeWamEnv = (apiVersion) => {
 
 	/** @type {Map<string, IWamGroup>} */
 	const groups = new Map();
-	
+
 	/**
 	 * @implements {IWamEnv}
 	 */
 	class WamEnv {
-		constructor() {}
+		constructor() {
+			this.modulationTarget = {};
+		}
 
 		get apiVersion() {
 			return apiVersion;

@@ -10,6 +10,9 @@ export default class DawiyPluginView extends DraggableWindow {
     filterInstalledBtn = document.getElementById("pm-filter-installed") as HTMLButtonElement;
     filterNotInstalledBtn = document.getElementById("pm-filter-not-installed") as HTMLButtonElement;
 
+    disableAllBtn = document.getElementById("pm-disable-all") as HTMLButtonElement;
+    enableAllBtn = document.getElementById("pm-enable-all") as HTMLButtonElement;
+
     listContainer = document.getElementById("pm-list") as HTMLDivElement;
 
     addManualBtn = document.getElementById("pm-add-manual-btn") as HTMLButtonElement;

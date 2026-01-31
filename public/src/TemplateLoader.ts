@@ -9,6 +9,7 @@ import LoadingOverlayTemplate from "./Templates/LoadingOverlayTemplate.html";
 import MenuBarTemplate from "./Templates/MenuBarTemplate.html";
 import AppTemplate from "./Templates/AppTemplate.html";
 import MenuCustomizationTemplate from "./Templates/MenuCustomizationTemplate.html";
+import WamPluginTemplate from "./Templates/WamPluginTemplate.html";
 
 export default class TemplateLoader {
 
@@ -25,6 +26,7 @@ export default class TemplateLoader {
         this.inject("plugin-window", PluginWindowTemplate);
         this.inject("plugin-window", PluginWindowTemplate);
         this.inject("dawiy-plugin-window", DawiyPluginTemplate);
+        this.inject("wam-plugin-window", WamPluginTemplate);
         this.inject("menu-customization-window", MenuCustomizationTemplate);
     }
 

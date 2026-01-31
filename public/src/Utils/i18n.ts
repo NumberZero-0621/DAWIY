@@ -4,9 +4,9 @@ const STORAGE_KEY = "wam_studio_lang";
 
 export let CURRENT_LANGUAGE: Language = (localStorage.getItem(STORAGE_KEY) as Language) || "en";
 
-const DICTIONARY: Record<Language, Record<string, string>> = {
+export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
     "en": {
-        "loading": "Loading",
+        "loading": "Loading...",
         "menu.select_demo": "Select Demo Project",
         "menu.load_project": "Load project",
         "menu.load_wam": "WAM-Studio",
@@ -24,6 +24,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "menu.calibrate_latency": "Calibrate latency compensation",
         "menu.settings": "Settings",
         "menu.dawiy_plugin": "DAWIY Plugin",
+        "menu.wam_plugin": "WAM Plugin",
         "menu.login": "Login (Administrator)",
         "menu.logout": "Log out (Administrator)",
 
@@ -59,6 +60,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "settings.input_device": "Input Device",
         "settings.output_device": "Output Device",
         "settings.midi_device": "MIDI Device",
+        "menu.plugins": "Plugins",
         "settings.language": "Language",
         "settings.login": "Login (Administrator)",
         "settings.latency_btn": "Calibrate Latency Compensation",
@@ -135,7 +137,41 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "context.curve_step": "Step",
         "context.curve_fast": "Fast",
         "context.curve_slow": "Slow",
-        "context.clear_envelope": "Clear Envelope"
+        "context.clear_envelope": "Clear Envelope",
+        "plugin.filter.installed": "Installed",
+        "plugin.filter.available": "Available",
+        "plugin.action.import_url": "Import URL",
+        "plugin.action.install": "Install",
+        "plugin.status.installed": "Installed",
+        "plugin.wam.no_plugins": "No plugins found.",
+        "plugin.wam.already_installed": "WAM already installed.",
+        "plugin.wam.uninstall_confirm": "Are you sure you want to remove this WAM?",
+        "plugin.wam.uninstalled_message": "WAM Uninstalled.",
+        "plugin.wam.import_instruction": "Enter a direct URL to a descriptor.json or index.js to install a custom WAM.",
+
+        "plugin.utility.creator": "Creator Utility",
+        "plugin.action.disable_all": "Disable All",
+        "plugin.action.enable_all": "Enable All",
+        "plugin.creator.package_title": "Package (Drag & Drop)",
+        "plugin.creator.drop_instruction": "Drop Folder or File",
+        "plugin.creator.auto_zip_hint": "Auto-zips as *DAWIYPlugin.zip (Recursively packs folders)",
+        "plugin.creator.manual_title": "Generate Manually",
+        "plugin.creator.label_name": "Plugin Name",
+        "plugin.creator.label_class": "Class Name",
+        "plugin.creator.label_group": "Group",
+        "plugin.creator.label_desc": "Description",
+        "plugin.creator.btn_generate": "Generate",
+        "plugin.install.manual_btn": "Install Plugin from ZIP / File",
+        "plugin.action.disable": "Disable",
+        "plugin.action.enable": "Enable",
+        "plugin.action.uninstall": "Uninstall",
+        "plugin.group.General": "General",
+        "plugin.group.Analyzer": "Analyzer",
+        "plugin.group.Effect": "Effect",
+        "plugin.group.Instrument": "Instrument",
+        "plugin.group.Utility": "Utility",
+        "plugin.group.Generator": "Generator",
+        "plugin.group.Tools": "Tools"
     },
     "ja": {
         "loading": "読み込み中",
@@ -156,6 +192,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "menu.calibrate_latency": "レイテンシー補正を調整",
         "menu.settings": "設定",
         "menu.dawiy_plugin": "DAWIYプラグイン",
+        "menu.wam_plugin": "WAMプラグイン",
         "menu.login": "ログイン（管理者用）",
         "menu.logout": "ログアウト",
 
@@ -191,6 +228,7 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "settings.input_device": "入力デバイス",
         "settings.output_device": "出力デバイス",
         "settings.midi_device": "MIDIデバイス",
+        "menu.plugins": "プラグイン",
         "settings.language": "言語",
         "settings.login": "ログイン（管理者用）",
         "settings.latency_btn": "レイテンシー補正を調整",
@@ -267,7 +305,41 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "context.curve_step": "ジャンプ",
         "context.curve_fast": "ファースト",
         "context.curve_slow": "スロー",
-        "context.clear_envelope": "エンベロープをクリア"
+        "context.clear_envelope": "エンベロープをクリア",
+        "plugin.filter.installed": "インストール済み",
+        "plugin.filter.available": "利用可能",
+        "plugin.action.import_url": "URLからインポート",
+        "plugin.action.install": "インストール",
+        "plugin.status.installed": "インストール済み",
+        "plugin.wam.no_plugins": "プラグインは見つかりませんでした。",
+        "plugin.wam.already_installed": "WAMは既にインストールされています。",
+        "plugin.wam.uninstall_confirm": "このWAMを削除してもよろしいですか？",
+        "plugin.wam.uninstalled_message": "WAMをアンインストールしました。",
+        "plugin.wam.import_instruction": "カスタムWAMをインストールするには、descriptor.json または index.js への直接URLを入力してください。",
+
+        "plugin.utility.creator": "クリエイターツール",
+        "plugin.action.disable_all": "すべて無効化",
+        "plugin.action.enable_all": "すべて有効化",
+        "plugin.creator.package_title": "パッケージ化 (ドラッグ＆ドロップ)",
+        "plugin.creator.drop_instruction": "フォルダまたはファイルをドロップ",
+        "plugin.creator.auto_zip_hint": "自動的にZIP化されます (ディレクトリも梱包)",
+        "plugin.creator.manual_title": "手動生成",
+        "plugin.creator.label_name": "プラグイン名",
+        "plugin.creator.label_class": "クラス名",
+        "plugin.creator.label_group": "グループ",
+        "plugin.creator.label_desc": "説明",
+        "plugin.creator.btn_generate": "生成",
+        "plugin.install.manual_btn": "ファイルからインストール (ZIP/JS/TS)",
+        "plugin.action.disable": "無効化",
+        "plugin.action.enable": "有効化",
+        "plugin.action.uninstall": "アンインストール",
+        "plugin.group.General": "一般",
+        "plugin.group.Analyzer": "アナライザー",
+        "plugin.group.Effect": "エフェクト",
+        "plugin.group.Instrument": "インストゥルメント",
+        "plugin.group.Utility": "ユーティリティ",
+        "plugin.group.Generator": "ジェネレーター",
+        "plugin.group.Tools": "ツール"
     }
 };
 
@@ -275,10 +347,35 @@ export function t(key: string): string {
     return DICTIONARY[CURRENT_LANGUAGE][key] || key;
 }
 
+export function resolveGroupKey(localizedName: string): string {
+    const dict = DICTIONARY[CURRENT_LANGUAGE as Language];
+    if (!dict) return localizedName;
+
+    // Search for a key starting with "plugin.group." that has the same value
+    for (const key in dict) {
+        if (key.startsWith("plugin.group.") && dict[key] === localizedName) {
+            // Return the part after "plugin.group."
+            return key.replace("plugin.group.", "");
+        }
+    }
+    // Also check standard English keys if we are in another language?
+    // Actually, if the input IS the English key (e.g. "General"), we should support that too.
+    // But this function defines "reverse lookup".
+
+    return localizedName;
+}
+
+export const AVAILABLE_LANGUAGES: { code: Language; name: string }[] = [
+    { code: "en", name: "English" },
+    { code: "ja", name: "日本語" }
+];
+
 export function setLanguage(lang: Language) {
-    CURRENT_LANGUAGE = lang;
-    localStorage.setItem(STORAGE_KEY, lang);
-    updateDOM();
+    if (AVAILABLE_LANGUAGES.some((l: { code: string; }) => l.code === lang)) {
+        CURRENT_LANGUAGE = lang;
+        localStorage.setItem(STORAGE_KEY, lang);
+        updateDOM();
+    }
 }
 
 export function updateDOM() {

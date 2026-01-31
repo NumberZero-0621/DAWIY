@@ -74,6 +74,7 @@ export default class HostView {
 
     settingsBtn = document.getElementById("settings-btn") as HTMLDivElement
     dawiyPluginBtn = document.getElementById("dawiy-plugin-btn") as HTMLDivElement
+    wamPluginBtn = document.getElementById("wam-plugin-btn") as HTMLDivElement
     saveBtn = document.getElementById("save-project") as HTMLDivElement
     saveDawProjectBtn = document.getElementById("save-dawproject") as HTMLDivElement
 

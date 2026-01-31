@@ -4,6 +4,7 @@ import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { IDawiyPlugin } from "../DawiyPlugins/IDawiyPlugin";
 import DawiyPluginLoader from "../Loader/DawiyPluginLoader";
+import { t, resolveGroupKey, DICTIONARY, CURRENT_LANGUAGE } from "../Utils/i18n";
 
 // Declaration for Webpack's require.context is REMOVED (Moved to Loader)
 
@@ -29,6 +30,9 @@ export default class DawiyPluginController {
 
     private pluginLayout: PluginLayoutItem[] = [];
     private LAYOUT_STORAGE_KEY = 'dawiy_plugin_layout';
+    private DISABLED_PLUGINS_KEY = 'dawiy_disabled_plugins';
+
+    private disabledPluginIds: Set<string> = new Set();
 
     private activeExtensionId: string | null = null;
     private currentFilter: 'all' | 'installed' | 'not-installed' = 'all';
@@ -74,6 +78,7 @@ export default class DawiyPluginController {
 
             console.log(`[DawiyPluginController] Synced ${this.installedExtensions.length} plugins from Loader.`);
 
+            this.loadDisabledPlugins();
             this.loadLayout();
             this.reconcileLayout();
             this.refreshBottomPanel();
@@ -137,6 +142,64 @@ export default class DawiyPluginController {
         this.saveLayout();
     }
 
+    private loadDisabledPlugins() {
+        try {
+            const stored = localStorage.getItem(this.DISABLED_PLUGINS_KEY);
+            if (stored) {
+                const ids = JSON.parse(stored);
+                if (Array.isArray(ids)) {
+                    this.disabledPluginIds = new Set(ids);
+                }
+            }
+        } catch (e) {
+            console.warn("Failed to load disabled plugins", e);
+        }
+    }
+
+    private saveDisabledPlugins() {
+        localStorage.setItem(this.DISABLED_PLUGINS_KEY, JSON.stringify(Array.from(this.disabledPluginIds)));
+    }
+
+    public togglePluginDisabled(pluginId: string) {
+        if (this.disabledPluginIds.has(pluginId)) {
+            this.disabledPluginIds.delete(pluginId);
+            this.app.showToast(`Plugin enabled`, false);
+        } else {
+            this.disabledPluginIds.add(pluginId);
+            this.app.showToast(`Plugin disabled`, false);
+        }
+        this.saveDisabledPlugins();
+
+        // Refresh UI
+        this.refreshPluginManagerList(this.currentFilter);
+        this.refreshBottomPanel();
+    }
+
+    public disableAllPlugins() {
+        if (confirm("Disable all plugins in the list?")) {
+            // Only disable currently visible plugins (based on installedExtensions)
+            // or we could disable ALL known plugins. 
+            // Let's just disable all installed extensions for now.
+            this.installedExtensions.forEach(p => {
+                this.disabledPluginIds.add(p.id);
+            });
+            this.saveDisabledPlugins();
+            this.app.showToast("All plugins disabled.", false);
+            this.refreshPluginManagerList(this.currentFilter);
+            this.refreshBottomPanel();
+        }
+    }
+
+    public enableAllPlugins() {
+        if (confirm("Enable all plugins in the list?")) {
+            this.disabledPluginIds.clear(); // Simple clear for "Enable All"
+            this.saveDisabledPlugins();
+            this.app.showToast("All plugins enabled.", false);
+            this.refreshPluginManagerList(this.currentFilter);
+            this.refreshBottomPanel();
+        }
+    }
+
     public createFolder(name: string) {
         const folder: PluginFolder = {
             id: `folder_${Date.now()}`,
@@ -192,6 +255,13 @@ export default class DawiyPluginController {
         this.view.filterInstalledBtn.onclick = () => this.filterPlugins('installed');
         this.view.filterNotInstalledBtn.onclick = () => this.filterPlugins('not-installed');
 
+        if (this.view.disableAllBtn) {
+            this.view.disableAllBtn.onclick = () => this.disableAllPlugins();
+        }
+        if (this.view.enableAllBtn) {
+            this.view.enableAllBtn.onclick = () => this.enableAllPlugins();
+        }
+
         this.view.addManualBtn.onclick = () => {
             this.view.addManualInput.click();
         }
@@ -210,7 +280,14 @@ export default class DawiyPluginController {
 
         // Creator UI
         if (this.view.filterCreatorBtn) {
-            this.view.filterCreatorBtn.onclick = () => this.showCreator();
+            this.view.filterCreatorBtn.onclick = () => {
+                // If already in creator mode (active), toggle back to 'all' list
+                if (this.view.filterCreatorBtn.classList.contains('active')) {
+                    this.filterPlugins('all');
+                } else {
+                    this.showCreator();
+                }
+            };
         }
         if (this.view.creatorCancelBtn) {
             this.view.creatorCancelBtn.onclick = () => this.hideCreator();
@@ -317,11 +394,25 @@ export default class DawiyPluginController {
         this.view.listContainer.style.display = 'none';
         this.view.creatorContainer.style.display = 'block';
 
-        // Reset active state of other filters
-        this.view.filterAllBtn.classList.remove('active');
-        this.view.filterInstalledBtn.classList.remove('active');
         this.view.filterNotInstalledBtn.classList.remove('active');
         this.view.filterCreatorBtn.classList.add('active');
+
+        // Populate suggestions
+        const suggestionList = document.getElementById('pm-creator-group-suggestions') as HTMLDataListElement;
+        if (suggestionList) {
+            suggestionList.innerHTML = '';
+            // Get all keys starting with plugin.group.
+            const dict = DICTIONARY[CURRENT_LANGUAGE];
+            if (dict) {
+                Object.keys(dict).forEach(key => {
+                    if (key.startsWith('plugin.group.')) {
+                        const option = document.createElement('option');
+                        option.value = dict[key];
+                        suggestionList.appendChild(option);
+                    }
+                });
+            }
+        }
     }
 
     private hideCreator() {
@@ -337,7 +428,10 @@ export default class DawiyPluginController {
         const name = this.view.creatorNameInput.value.trim();
         const className = this.view.creatorClassInput.value.trim();
         const desc = this.view.creatorDescInput.value.trim();
-        const group = this.view.creatorGroupInput.value.trim() || "General";
+        let group = this.view.creatorGroupInput.value.trim() || "General";
+
+        // Reverse localization for Group
+        group = resolveGroupKey(group);
 
         if (!name || !className) {
             this.app.showToast("Plugin Name and Class Name are required.", true);
@@ -529,7 +623,9 @@ export default class ${className} extends DawiyPluginBase {
 
             const header = document.createElement('h3');
             header.className = 'pm-group-header';
-            header.textContent = groupName;
+            const key = `plugin.group.${groupName}`;
+            const translated = t(key);
+            header.textContent = translated !== key ? translated : groupName;
             header.style.marginTop = '10px';
             header.style.marginBottom = '5px';
             header.style.color = '#ddd';
@@ -538,15 +634,27 @@ export default class ${className} extends DawiyPluginBase {
             groupContainer.appendChild(header);
 
             groups[groupName].forEach(p => {
+                const isDisabled = this.disabledPluginIds.has(p.id);
                 const item = document.createElement('div');
                 item.className = 'pm-item';
+                item.style.opacity = isDisabled ? '0.6' : '1';
+
+                const disableText = isDisabled ? t('plugin.action.enable') : t('plugin.action.disable');
+                const uninstallText = t('plugin.action.uninstall');
+
                 item.innerHTML = `
                     <div class="pm-item-info">
-                        <div class="pm-item-name">${p.name}</div>
+                        <div class="pm-item-name">
+                            ${p.name} 
+                            ${isDisabled ? '<span style="font-size: 0.8em; color: #ff6b6b; margin-left: 10px;">(Disabled)</span>' : ''}
+                        </div>
                         <div class="pm-item-desc">${p.description || 'No description provided.'}</div>
                     </div>
                     <div class="pm-item-action">
-                        <button class="pm-install-btn installed" id="uninstall-btn-${p.id}">Uninstall</button>
+                        <button class="pm-install-btn" id="disable-btn-${p.id}" style="margin-right: 5px; background: ${isDisabled ? '#28a745' : '#ffc107'}; color: #222;">
+                            ${disableText}
+                        </button>
+                        <button class="pm-install-btn installed" id="uninstall-btn-${p.id}">${uninstallText}</button>
                     </div>
                 `;
                 groupContainer.appendChild(item);
@@ -556,9 +664,14 @@ export default class ${className} extends DawiyPluginBase {
 
             // Bind events for this group's items
             groups[groupName].forEach(p => {
-                const btn = groupContainer.querySelector(`#uninstall-btn-${p.id}`) as HTMLElement;
-                if (btn) {
-                    btn.onclick = () => this.uninstallPlugin(p);
+                const uniBtn = groupContainer.querySelector(`#uninstall-btn-${p.id}`) as HTMLElement;
+                if (uniBtn) {
+                    uniBtn.onclick = () => this.uninstallPlugin(p);
+                }
+
+                const disBtn = groupContainer.querySelector(`#disable-btn-${p.id}`) as HTMLElement;
+                if (disBtn) {
+                    disBtn.onclick = () => this.togglePluginDisabled(p.id);
                 }
             });
         });
@@ -602,6 +715,10 @@ export default class ${className} extends DawiyPluginBase {
             items.forEach(item => {
                 if (typeof item === 'string') {
                     // It's a plugin ID
+
+                    // Filter disabled plugins
+                    if (this.disabledPluginIds.has(item)) return;
+
                     const ext = this.installedExtensions.find(e => e.id === item);
                     if (!ext) return;
 

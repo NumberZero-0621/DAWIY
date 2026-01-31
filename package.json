@@ -9,6 +9,7 @@
     "tonal": "^6.4.2"
   },
   "devDependencies": {
+    "@types/node": "^25.1.0",
     "concurrently": "^8.2.2"
   }
 }

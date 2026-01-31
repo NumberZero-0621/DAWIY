@@ -12,10 +12,18 @@
         <div class="pm-filters"
             style="display: flex; gap: 10px; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 10px;">
             <button id="pm-filter-all" class="btn btn-sm btn-outline-light active"
-                style="border: none; border-bottom: 2px solid transparent; border-radius: 0;">Installed</button>
+                style="border: none; border-bottom: 2px solid transparent; border-radius: 0;"
+                data-i18n="plugin.filter.installed">Installed</button>
             <div style="flex-grow: 1;"></div>
+
+            <button id="pm-disable-all" class="btn btn-sm btn-outline-danger" style="margin-right: 5px;"
+                data-i18n="plugin.action.disable_all">Disable All</button>
+            <button id="pm-enable-all" class="btn btn-sm btn-outline-success" style="margin-right: 5px;"
+                data-i18n="plugin.action.enable_all">Enable All</button>
+
             <button id="pm-filter-creator" class="btn btn-sm btn-outline-secondary"
-                style="border: none; border-radius: 4px;"> <i class="bi bi-tools"></i> Creator Utility</button>
+                style="border: none; border-radius: 4px;"> <i class="bi bi-tools"></i> <span
+                    data-i18n="plugin.utility.creator">Creator Utility</span></button>
 
             <!-- Hidden buttons for compatibility (or to subsequently remove from Controller) -->
             <button id="pm-filter-installed" style="display:none;"></button>
@@ -33,8 +41,8 @@
                 <div class="row">
                     <!-- Drag & Drop Zone -->
                     <div class="col-md-6" style="border-right: 1px solid #444;">
-                        <h6
-                            style="color:#aaa; border-bottom: 2px solid #0c85d0; padding-bottom: 5px; margin-bottom: 15px;">
+                        <h6 style="color:#aaa; border-bottom: 2px solid #0c85d0; padding-bottom: 5px; margin-bottom: 15px;"
+                            data-i18n="plugin.creator.package_title">
                             Package (Drag & Drop)</h6>
                         <div id="pm-creator-dropzone" style="
                             border: 2px dashed #555; 
@@ -47,8 +55,10 @@
                             background: rgba(0,0,0,0.2);
                             ">
                             <i class="bi bi-box-seam" style="font-size: 40px; color: #0c85d0;"></i>
-                            <div style="margin-top:15px; font-weight:bold; color: #ddd;">Drop Folder or File</div>
-                            <div style="font-size:0.85em; color:#888; margin-top: 5px;">
+                            <div style="margin-top:15px; font-weight:bold; color: #ddd;"
+                                data-i18n="plugin.creator.drop_instruction">Drop Folder or File</div>
+                            <div style="font-size:0.85em; color:#888; margin-top: 5px;"
+                                data-i18n="plugin.creator.auto_zip_hint">
                                 Auto-zips as <code>*DAWIYPlugin.zip</code><br>
                                 (Recursively packs folders)
                             </div>
@@ -57,40 +67,44 @@
 
                     <!-- Manual Generation Form -->
                     <div class="col-md-6">
-                        <h6
-                            style="color:#aaa; border-bottom: 2px solid #0c85d0; padding-bottom: 5px; margin-bottom: 15px;">
+                        <h6 style="color:#aaa; border-bottom: 2px solid #0c85d0; padding-bottom: 5px; margin-bottom: 15px;"
+                            data-i18n="plugin.creator.manual_title">
                             Generate Manually</h6>
 
                         <div class="mb-2">
-                            <label style="font-size: 0.8em; color: #888;">Plugin Name</label>
+                            <label style="font-size: 0.8em; color: #888;" data-i18n="plugin.creator.label_name">Plugin
+                                Name</label>
                             <input type="text" id="pm-creator-name" class="form-control form-control-sm"
                                 style="background: #222; border: 1px solid #444; color: white;" placeholder="My Plugin">
                         </div>
 
                         <div class="row">
                             <div class="col-6 mb-2">
-                                <label style="font-size: 0.8em; color: #888;">Class Name</label>
+                                <label style="font-size: 0.8em; color: #888;"
+                                    data-i18n="plugin.creator.label_class">Class Name</label>
                                 <input type="text" id="pm-creator-classname" class="form-control form-control-sm"
                                     style="background: #222; border: 1px solid #444; color: white;"
                                     placeholder="MyPlugin">
                             </div>
                             <div class="col-6 mb-2">
-                                <label style="font-size: 0.8em; color: #888;">Group</label>
-                                <input type="text" id="pm-creator-group" class="form-control form-control-sm"
-                                    style="background: #222; border: 1px solid #444; color: white;"
-                                    placeholder="General">
+                                <label for="pm-creator-group" data-i18n="plugin.creator.label_group">Group</label>
+                                <input type="text" id="pm-creator-group" class="form-control"
+                                    style="background: #333; color: white; border: 1px solid #444;"
+                                    list="pm-creator-group-suggestions">
+                                <datalist id="pm-creator-group-suggestions"></datalist>
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label style="font-size: 0.8em; color: #888;">Description</label>
+                            <label style="font-size: 0.8em; color: #888;"
+                                data-i18n="plugin.creator.label_desc">Description</label>
                             <input type="text" id="pm-creator-desc" class="form-control form-control-sm"
                                 style="background: #222; border: 1px solid #444; color: white;"
                                 placeholder="Short description...">
                         </div>
 
                         <button id="pm-creator-generate" class="btn btn-primary btn-sm w-100">
-                            <i class="bi bi-magic"></i> Generate
+                            <i class="bi bi-magic"></i> <span data-i18n="plugin.creator.btn_generate">Generate</span>
                         </button>
 
                         <!-- Hidden cancel button for Controller logic compatibility -->
@@ -104,7 +118,8 @@
         <div class="pm-footer" style="padding-top:10px; border-top:1px solid #444; margin-top: auto;">
             <button id="pm-add-manual-btn" class="btn btn-outline-secondary btn-sm w-100"
                 style="color: #ccc; border-color: #555;">
-                <i class="bi bi-upload"></i> Install Plugin from ZIP / File
+                <i class="bi bi-upload"></i> <span data-i18n="plugin.install.manual_btn">Install Plugin from ZIP /
+                    File</span>
             </button>
             <input type="file" id="pm-add-manual-input" accept=".zip,.js,.ts,.json" style="display: none;">
         </div>

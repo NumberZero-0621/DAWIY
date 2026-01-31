@@ -17,7 +17,7 @@ export const DEFAULT_MENU_CONFIG: MenuItemConfig[] = [
     { id: "import", visible: true, order: 3, i18nKey: "menu.import", domId: "menu-container-import" },
     { id: "select_demo", visible: false, order: 4, i18nKey: "menu.select_demo", domId: "menu-container-select-demo" },
     { id: "settings", visible: true, order: 5, i18nKey: "menu.settings", domId: "menu-container-settings" }, // Can't be hidden, logic handled in view
-    { id: "dawiy_plugin", visible: true, order: 6, i18nKey: "menu.dawiy_plugin", domId: "menu-container-dawiy-plugin" },
+    { id: "plugins", visible: true, order: 6, i18nKey: "menu.plugins", domId: "menu-container-plugins" },
     { id: "about", visible: true, order: 7, i18nKey: "menu.about", domId: "menu-container-about" },
 ];
 
@@ -47,8 +47,11 @@ export class MenuConfig {
     }
 
     private static mergeWithDefault(stored: MenuItemConfig[]): MenuItemConfig[] {
-        // Ensure all default items exist in stored config
-        const merged = [...stored];
+        // Filter out stored items that are no longer in DEFAULT_MENU_CONFIG
+        const validStored = stored.filter(s => DEFAULT_MENU_CONFIG.some(d => d.id === s.id));
+
+        // Use validStored as base
+        const merged = [...validStored];
 
         DEFAULT_MENU_CONFIG.forEach(defaultItem => {
             if (!merged.find(item => item.id === defaultItem.id)) {

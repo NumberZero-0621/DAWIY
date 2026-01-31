@@ -1,12 +1,11 @@
 <div id="left-controls">
-    <a class="menu-item main" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true"
-        aria-expanded="false">
+    <a class="menu-item main" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true">
         <i class="menu-icon"></i>
     </a>
     <div class="dropdown-menu dropright" id="main-hamburger-menu" aria-labelledby="dropdownMenuButton">
         <div class="dropright" id="menu-container-select-demo">
             <a class="dropdown-item dropdown-toggle" type="button" id="dropdownSubMenuButton" data-toggle="dropdown"
-                aria-haspopup="true" aria-expanded="false" data-i18n="menu.select_demo">Select Demo Project</a>
+                aria-haspopup="true" data-i18n="menu.select_demo">Select Demo Project</a>
             <div id="songs-container" class="dropdown-menu songs" aria-labelledby="dropdownSubMenuButton"></div>
         </div>
 
@@ -14,7 +13,7 @@
 
         <div class="dropright" id="menu-container-load-project">
             <a class="dropdown-item dropdown-toggle" type="button" id="loadProjectSubMenuButton" data-toggle="dropdown"
-                aria-haspopup="true" aria-expanded="false" data-i18n="menu.load_project">Load project</a>
+                aria-haspopup="true" data-i18n="menu.load_project">Load project</a>
             <div class="dropdown-menu" aria-labelledby="loadProjectSubMenuButton">
                 <a class="dropdown-item" id="load-project" data-i18n="menu.load_wam">WAM-Studio</a>
                 <a class="dropdown-item" id="load-dawproject" data-i18n="menu.load_dawproject">dawproject</a>
@@ -22,7 +21,7 @@
         </div>
         <div class="dropright" id="menu-container-save-project">
             <a class="dropdown-item dropdown-toggle" type="button" id="saveProjectSubMenuButton" data-toggle="dropdown"
-                aria-haspopup="true" aria-expanded="false" data-i18n="menu.save_project">Save project</a>
+                aria-haspopup="true" data-i18n="menu.save_project">Save project</a>
             <div class="dropdown-menu" aria-labelledby="saveProjectSubMenuButton">
                 <a class="dropdown-item" id="save-project" data-i18n="menu.save_wam">WAM-Studio</a>
                 <a class="dropdown-item" id="save-dawproject" data-i18n="menu.save_dawproject">dawproject</a>
@@ -31,7 +30,7 @@
 
         <div class="dropright" id="menu-container-export-project">
             <a class="dropdown-item dropdown-toggle" type="button" id="exportSubMenuButton" data-toggle="dropdown"
-                aria-haspopup="true" aria-expanded="false" data-i18n="menu.export_project">Render/Export project</a>
+                aria-haspopup="true" data-i18n="menu.export_project">Render/Export project</a>
             <div class="dropdown-menu" aria-labelledby="exportSubMenuButton">
                 <a class="dropdown-item" id="export-project" data-i18n="menu.export_audio">Audio</a>
                 <a class="dropdown-item" id="export-midi" data-i18n="menu.export_midi">MIDI</a>
@@ -40,7 +39,7 @@
 
         <div class="dropright" id="menu-container-import">
             <a class="dropdown-item dropdown-toggle" type="button" id="importSubMenuButton" data-toggle="dropdown"
-                aria-haspopup="true" aria-expanded="false" data-i18n="menu.import">Import</a>
+                aria-haspopup="true" data-i18n="menu.import">Import</a>
             <div class="dropdown-menu" aria-labelledby="importSubMenuButton">
                 <a class="dropdown-item" id="import-songs" data-i18n="menu.import_audio">Audio file(s)</a>
                 <a class="dropdown-item" id="import-midi-btn" data-i18n="menu.import_midi">MIDI file</a>
@@ -56,8 +55,13 @@
         <div id="menu-container-settings">
             <a class="dropdown-item" id="settings-btn" data-i18n="menu.settings">Settings</a>
         </div>
-        <div id="menu-container-dawiy-plugin">
-            <a class="dropdown-item" id="dawiy-plugin-btn" data-i18n="menu.dawiy_plugin">DAWIY Plugin</a>
+        <div class="dropright" id="menu-container-plugins">
+            <a class="dropdown-item dropdown-toggle" type="button" id="pluginsSubMenuButton" data-toggle="dropdown"
+                aria-haspopup="true" data-i18n="menu.plugins">Plugins</a>
+            <div class="dropdown-menu" aria-labelledby="pluginsSubMenuButton">
+                <a class="dropdown-item" id="dawiy-plugin-btn" data-i18n="menu.dawiy_plugin">DAWIY Plugin</a>
+                <a class="dropdown-item" id="wam-plugin-btn" data-i18n="menu.wam_plugin">WAM Plugin</a>
+            </div>
         </div>
 
         <div class="dropdown-divider advanced" id="menu-divider-3"></div>
@@ -164,7 +168,7 @@
     </div>
 </div>
 <div id="right-controls">
-    <input id="spanZoomLevel" type="number" min="0.13" max="16" step="0.1" value="1.00"
+    <input id="spanZoomLevel" type="number" min="0.13" max="16" step="0.1" value="1.00" title="Zoom Level"
         style="width: 80px; font-size: 1.2em; background: transparent; color: #d3d3d3; border: 1px solid #555; border-radius: 4px; text-align: center; margin-right: 10px;">
     <div id="zoom-out-btn" class="menu-item">
         <span class="mytooltip">Zoom out</span>
