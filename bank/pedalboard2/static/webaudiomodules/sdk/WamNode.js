@@ -55,7 +55,7 @@ export default class WamNode extends AudioWorkletNode {
 		/** @type {WebAudioModule} */
 		this.module = module;
 		/** @private @type {Set<WamEventType>} */
-		this._supportedEventTypes = new Set(['wam-automation', 'wam-transport', 'wam-midi', 'wam-sysex', 'wam-mpe', 'wam-osc']);
+		this._supportedEventTypes = new Set(['wam-automation', 'wam-transport', 'wam-midi', 'wam-sysex', 'wam-mpe', 'wam-osc', 'wam-info']);
 		/** @private @type {number} */
 		this._messageId = 1;
 		/** @private @type {Record<number, (...args: any[]) => any>} */
@@ -250,8 +250,10 @@ export default class WamNode extends AudioWorkletNode {
 				this.port.postMessage({ id, request });
 			}).then((clearedIds) => {
 				clearedIds.forEach((clearedId) => {
-					this._pendingEvents[clearedId]();
-					delete this._pendingEvents[clearedId];
+					if (typeof this._pendingEvents[clearedId] === 'function') {
+						this._pendingEvents[clearedId]();
+						delete this._pendingEvents[clearedId];
+					}
 				});
 			});
 		}

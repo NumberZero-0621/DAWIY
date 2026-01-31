@@ -80,6 +80,7 @@ export default class EditorView extends Application {
     public selectionBox: Graphics;
     public rangeSelectionGraphics: Graphics;
     public timelineRangeGraphics: Graphics;
+    public separatorsGraphics: Graphics;
 
     public static readonly PLAYHEAD_HEIGHT = 17;
     public static readonly PLAYHEAD_WIDTH = 10;
@@ -148,6 +149,10 @@ export default class EditorView extends Application {
         this.selectionBox = new Graphics();
         this.selectionBox.zIndex = 100; // Above regions
         this.viewport.addChild(this.selectionBox);
+
+        this.separatorsGraphics = new Graphics();
+        this.separatorsGraphics.zIndex = -20; // Below waveforms
+        this.viewport.addChild(this.separatorsGraphics);
 
 
         this.viewport.sortableChildren = true;
@@ -325,19 +330,37 @@ export default class EditorView extends Application {
                 let tracksHeight = this.waveforms.reduce((acc, wave) => {
                     let h = HEIGHT_TRACK;
                     if (wave.track.isAutomationOpened) {
-                        h += HEIGHT_AUTOMATION;
+                        const laneCount = Math.max(1, wave.track.automationRegions.length);
+                        h += HEIGHT_AUTOMATION * laneCount;
                     }
                     return acc + h;
                 }, 0) + HEIGHT_NEW_TRACK + 4 + EditorView.LOOP_HEIGHT + EditorView.PLAYHEAD_HEIGHT
                 this.worldHeight = Math.max(tracksHeight, this.height)
 
                 // Update waveforms positions
+                this.separatorsGraphics.clear();
+                this.separatorsGraphics.lineStyle(2, 0x7b7b7b, 1);
+
                 let currentY = EditorView.LOOP_HEIGHT + EditorView.PLAYHEAD_HEIGHT;
                 for (let wave of this.waveforms) {
                     wave.position.y = currentY;
+                    wave.drawGhostAutomations();
                     currentY += HEIGHT_TRACK;
+
+                    // Draw separator below track
+                    this.separatorsGraphics.moveTo(0, currentY);
+                    this.separatorsGraphics.lineTo(this.worldWidth, currentY);
+
                     if (wave.track.isAutomationOpened) {
-                        currentY += HEIGHT_AUTOMATION;
+                        wave.updateAutomationPositions();
+                        const laneCount = Math.max(1, wave.track.automationRegions.length);
+                        for (let i = 0; i < laneCount; i++) {
+                            currentY += HEIGHT_AUTOMATION;
+
+                            // Draw separator below automation
+                            this.separatorsGraphics.moveTo(0, currentY);
+                            this.separatorsGraphics.lineTo(this.worldWidth, currentY);
+                        }
                     }
                 }
                 this.worldWidth = Math.max((MAX_DURATION_SEC * 1000) / RATIO_MILLS_BY_PX, this.width)

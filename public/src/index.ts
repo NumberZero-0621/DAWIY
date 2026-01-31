@@ -3,6 +3,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import App from './App';
 import { BACKEND_URL } from './Env';
 import BPF from './Components/BPF';
+import AutomationTrackElement from './Components/Editor/AutomationTrackElement';
 import ExportProjectElement from "./Components/Project/ExportProjectElement";
 import LoadProjectElement from "./Components/Project/LoadProjectElement";
 import LoginElement from "./Components/Project/LoginElement";
@@ -49,6 +50,10 @@ customElements.define(
 customElements.define(
     "export-project-element",
     ExportProjectElement
+);
+customElements.define(
+    "automation-track-element",
+    AutomationTrackElement
 );
 
 

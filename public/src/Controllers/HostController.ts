@@ -196,6 +196,9 @@ export default class HostController {
         if (track.plugin && track.plugin.instance) track.plugin.instance?.audioNode?.clearEvents()
       })
 
+      // ストリーミングを停止
+      this._app.automationController.stopAutomationStreaming();
+
       host.pause()
       if (this._app.recorderController.isRecording) this._app.recorderController.stopRecordingAll()
       if (this._timerInterval) clearInterval(this._timerInterval)

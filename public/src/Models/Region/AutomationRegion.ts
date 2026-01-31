@@ -3,7 +3,24 @@ import { RATIO_MILLS_BY_PX } from "../../Env";
 import Region, { RegionOf, RegionType } from "./Region";
 import RegionPlayer from "./RegionPlayer";
 
-export type AutomationPoint = { time: number, value: number, curve: number };
+/**
+ * カーブモード定義
+ * Linear: 直線（デフォルト）
+ * Step: ジャンプ（水平線→垂直ジャンプ）
+ * Fast: ファーストカーブ（最初に急変化、後半ゆるやか）
+ * Slow: スローカーブ（最初ゆるやか、後半に急変化）
+ */
+export enum CurveMode {
+    Linear = 0,
+    Step = 1,
+    Fast = 2,
+    Slow = 3
+}
+
+/**
+ * curve は「このポイントから次のポイントへ」の線のモードを表す
+ */
+export type AutomationPoint = { time: number, value: number, curve: CurveMode };
 
 export default class AutomationRegion extends RegionOf<AutomationRegion> {
 
@@ -13,6 +30,12 @@ export default class AutomationRegion extends RegionOf<AutomationRegion> {
      * The ID of the parameter that this automation controls.
      */
     public paramId: string = "";
+
+    /**
+     * Custom color for this automation lane.
+     * If null, follows the track color.
+     */
+    public color: string | null = null;
 
     /**
      * Points of the automation.
@@ -50,7 +73,10 @@ export default class AutomationRegion extends RegionOf<AutomationRegion> {
      */
     clone(): AutomationRegion {
         const newPoints = this.points.map(p => ({ ...p }));
-        return new AutomationRegion(this.start, this.duration, newPoints);
+        const r = new AutomationRegion(this.start, this.duration, newPoints);
+        r.paramId = this.paramId;
+        r.color = this.color;
+        return r;
     }
 
     emptyAlike(start: number, duration: number): AutomationRegion {

@@ -63,6 +63,11 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
         this.region_width = region.width
         this._wave.position.x = 0;
 
+        // 初期色を保存
+        if (color && color.length > 0) {
+            this._lastColor = color;
+        }
+
         this.drawContent(this._wave, color, region, 0, region.duration)
         this.drawBackground()
         this.updateMask()
@@ -77,13 +82,22 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
      */
     protected abstract drawContent(target: Graphics, color: string, region: REGION, from: number, to: number): void
 
+    /** 最後に使用された色を保存 */
+    private _lastColor: string = "";
+
     public redraw(color: string, region: REGION) {
+        // 色が指定された場合は保存、空の場合は保存された色を使用
+        if (color && color.length > 0) {
+            this._lastColor = color;
+        }
+        const useColor = this._lastColor || color;
+
         this.region_width = region.width
         this._wave.position.x = 0;
         this.drawBackground()
         this.updateMask()
         this._wave.clear()
-        this.drawContent(this._wave, color, region, 0, region.duration)
+        this.drawContent(this._wave, useColor, region, 0, region.duration)
     }
 
     /**

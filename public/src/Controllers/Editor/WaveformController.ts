@@ -82,11 +82,18 @@ export default class WaveformController {
      * @return {WaveformView} - The next waveform if it exists, undefined otherwise.
      */
     public getNextWaveform(waveformView: WaveformView): WaveformView | undefined {
+        let nearest: WaveformView | undefined = undefined;
+        let minDiff = Infinity;
+
         for (let waveform of this._editorView.waveforms) {
-            if (waveform.position.y > waveformView.position.y
-                && waveform.position.y <= waveformView.position.y + waveformView.height) return waveform;
+            if (waveform === waveformView) continue;
+            const diff = waveform.position.y - waveformView.position.y;
+            if (diff > 0 && diff < minDiff) {
+                minDiff = diff;
+                nearest = waveform;
+            }
         }
-        return undefined;
+        return nearest;
     }
 
     /**
@@ -97,10 +104,17 @@ export default class WaveformController {
      * @return {WaveformView} - The previous waveform if it exists, undefined otherwise.
      */
     public getPreviousWaveform(waveformView: WaveformView): WaveformView | undefined {
+        let nearest: WaveformView | undefined = undefined;
+        let minDiff = Infinity;
+
         for (let waveform of this._editorView.waveforms) {
-            if (waveform.position.y < waveformView.position.y
-                && waveform.position.y >= waveformView.position.y - waveformView.height) return waveform;
+            if (waveform === waveformView) continue;
+            const diff = waveformView.position.y - waveform.position.y;
+            if (diff > 0 && diff < minDiff) {
+                minDiff = diff;
+                nearest = waveform;
+            }
         }
-        return undefined;
+        return nearest;
     }
 }

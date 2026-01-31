@@ -118,7 +118,24 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "shortcut.deselect": "Deselect All",
         "menu.customize_menu": "Menu Customization",
         "window.menu_customization": "Menu Customization",
-        "menu.customization_instruction": "Drag items to reorder. Check to show in menu."
+        "menu.customization_instruction": "Drag items to reorder. Check to show in menu.",
+
+        "context.undo": "Undo",
+        "context.redo": "Redo",
+        "context.cut": "Cut",
+        "context.copy": "Copy",
+        "context.paste": "Paste",
+        "context.delete": "Delete",
+        "context.split": "Split",
+        "context.merge": "Merge",
+        "context.select_all": "Select All",
+        "context.browser_menu_hint": "Default Browser Menu (Shift+Right Click)",
+        "context.curve_mode": "◆ Curve Mode",
+        "context.curve_linear": "Linear",
+        "context.curve_step": "Step",
+        "context.curve_fast": "Fast",
+        "context.curve_slow": "Slow",
+        "context.clear_envelope": "Clear Envelope"
     },
     "ja": {
         "loading": "読み込み中",
@@ -233,7 +250,24 @@ const DICTIONARY: Record<Language, Record<string, string>> = {
         "shortcut.deselect": "選択解除",
         "menu.customize_menu": "メニューカスタマイズ",
         "window.menu_customization": "メニューカスタマイズ",
-        "menu.customization_instruction": "ドラッグして並べ変え、チェックで表示/非表示を切り替え"
+        "menu.customization_instruction": "ドラッグして並べ変え、チェックで表示/非表示を切り替え",
+
+        "context.undo": "元に戻す",
+        "context.redo": "やり直す",
+        "context.cut": "切り取り",
+        "context.copy": "コピー",
+        "context.paste": "貼り付け",
+        "context.delete": "削除",
+        "context.split": "分割",
+        "context.merge": "結合",
+        "context.select_all": "すべて選択",
+        "context.browser_menu_hint": "ブラウザメニュー (Shift+右クリック)",
+        "context.curve_mode": "◆ カーブモード",
+        "context.curve_linear": "直線",
+        "context.curve_step": "ジャンプ",
+        "context.curve_fast": "ファースト",
+        "context.curve_slow": "スロー",
+        "context.clear_envelope": "エンベロープをクリア"
     }
 };
 

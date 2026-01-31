@@ -148,6 +148,10 @@ template.innerHTML = /*html*/`
     cursor: pointer;
 }
 
+.track-color:hover {
+    filter: brightness(1.2);
+}
+
 .track-vu-meter {
     width: 35px;
     height: 100%;

@@ -2,6 +2,8 @@ import App from "../App";
 import { MIDI } from "../Audio/MIDI/MIDI";
 import OperableAudioBuffer from "../Audio/OperableAudioBuffer";
 import { State } from "../Components/BPF";
+import { MAX_DURATION_SEC } from "../Env";
+import AutomationRegion, { AutomationPoint } from "../Models/Region/AutomationRegion";
 import MIDIRegion from "../Models/Region/MIDIRegion";
 import { RegionOf, RegionType } from "../Models/Region/Region";
 import SampleRegion from "../Models/Region/SampleRegion";
@@ -66,9 +68,13 @@ export interface ProjectData {
             name: string;
             state: any;
         };
+        automationOpened?: boolean;
+        currentAutomationParam?: string;
+        currentAutomationParams?: string[];
         automations: {
             param: string;
-            state: State
+            points: AutomationPoint[];
+            color?: string;
         }[];
         regions: {
             type: string;
@@ -113,28 +119,41 @@ export default class Loader {
             let pluginState = await track.plugin?.getState()
             let pluginData = pluginState ? { name: track.plugin!.name, state: pluginState } : undefined
 
-            if (pluginData) {
-                let parameters = await track.plugin!.instance!._audioNode.getParameterInfo();
-                for (let param in parameters) {
-                    let bpf = track.automation.getBpfOfParam(param);
-                    if (bpf !== undefined) {
-                        if (bpf.state.points.length > 0) {
-                            automations.push({
-                                "param": param,
-                                "state": bpf.state
-                            })
-                        }
-                    }
+            // Save Automation Data
+            // 1. Current Regions (Active Lanes)
+            for (const region of track.automationRegions) {
+                if (region.paramId) {
+                    track.automationData.set(region.paramId, region.points);
+                }
+            }
+
+            // 2. Iterate all data in map
+            for (const [paramId, points] of track.automationData) {
+                if (points && points.length > 0) {
+                    automations.push({
+                        param: paramId,
+                        points: points,
+                        color: track.automationColors.get(paramId)
+                    });
                 }
             }
 
             // Add regions to the track
             let regions: ProjectData['tracks'][0]['regions'] = [];
             for (let region of track.regions) {
+                // Skip AutomationRegion in normal region list if we don't want to save it as a "Region" blob
+                // But wait, the original logic checks regionLoaders. 
+                // We haven't added AutomationRegion to regionLoaders.
+                // So it will likely be skipped or error if we don't handle it.
+                // Automation is saved in 'automations' property now.
+                // So we explicitly skip it here.
+                if (region.regionType === "AUTOMATION_REGION") continue;
+
                 let content_name = `track-${track.id}-region-${region.id}`
 
                 const extension = regionLoaders[region.regionType]?.extension
                 if (extension) content_name += `.${extension}`
+                else continue; // Skip unknown regions
 
                 contents.push({
                     content_name,
@@ -156,7 +175,10 @@ export default class Loader {
                 balance: track.balance,
                 plugin: pluginData,
                 regions: regions,
-                automations: automations
+                automations: automations,
+                automationOpened: track.isAutomationOpened,
+                currentAutomationParam: track.automationRegions.length > 0 ? track.automationRegions[0].paramId : undefined,
+                currentAutomationParams: track.automationRegions.map(r => r.paramId).filter((id): id is string => !!id)
             });
         }
 
@@ -237,13 +259,32 @@ export default class Loader {
                     await track.plugin?.setState(pluginData.state)
                     await this._app.automationController.updateAutomations(track);
                 }
-                let automations = trackJson.automations;
+            }
+            // Load Automations
+            let automations = trackJson.automations;
+            if (automations) {
                 for (let automation of automations) {
-                    let bpf = track.automation.getBpfOfParam(automation.param);
-
-                    if (bpf !== undefined) {
-                        bpf.state = automation.state;
+                    if (automation.points && automation.points.length > 0) {
+                        track.automationData.set(automation.param, automation.points);
+                        if (automation.color) {
+                            track.automationColors.set(automation.param, automation.color);
+                        }
                     }
+                }
+            }
+
+            // Restore Automation UI State
+            if (trackJson.automationOpened) {
+                track.isAutomationOpened = true;
+                const paramsToOpen = trackJson.currentAutomationParams || (trackJson.currentAutomationParam ? [trackJson.currentAutomationParam] : []);
+
+                if (paramsToOpen.length > 0) {
+                    for (const paramId of paramsToOpen) {
+                        await this._app.automationController.addAutomationLane(track, paramId);
+                    }
+                } else {
+                    // Default open (volume only etc)
+                    await this._app.automationController.addAutomationLane(track);
                 }
             }
 

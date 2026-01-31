@@ -1,0 +1,17 @@
+diff --git a/node_modules/@webaudiomodules/sdk/src/WamNode.js b/node_modules/@webaudiomodules/sdk/src/WamNode.js
+index 2fe3ff7..78087f8 100644
+--- a/node_modules/@webaudiomodules/sdk/src/WamNode.js
++++ b/node_modules/@webaudiomodules/sdk/src/WamNode.js
+@@ -250,8 +250,10 @@ export default class WamNode extends AudioWorkletNode {
+ 				this.port.postMessage({ id, request });
+ 			}).then((clearedIds) => {
+ 				clearedIds.forEach((clearedId) => {
+-					this._pendingEvents[clearedId]();
+-					delete this._pendingEvents[clearedId];
++					if (this._pendingEvents[clearedId]) {
++						this._pendingEvents[clearedId]();
++						delete this._pendingEvents[clearedId];
++					}
+ 				});
+ 			});
+ 		}

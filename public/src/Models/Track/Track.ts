@@ -234,15 +234,29 @@ export default class Track extends SoundProvider {
   public isAutomationOpened: boolean = false;
 
   /**
-   * The automation region associated with the track.
-   * Persisted even when removed from the regions list (hidden).
+   * The automation regions associated with the track.
+   * Multiple regions can be displayed simultaneously.
    */
-  public automationRegion: AutomationRegion | null = null;
+  public automationRegions: AutomationRegion[] = [];
 
   /**
    * Stores automation points for each parameter ID.
    */
+  /**
+   * Stores automation points for each parameter ID.
+   */
   public automationData: Map<string, AutomationPoint[]> = new Map();
+
+  /**
+   * Stores custom color for each parameter ID.
+   */
+  public automationColors: Map<string, string> = new Map();
+
+  /**
+   * Stores the list of parameter IDs that were visible before closing automation.
+   * Used to restore the exact state when reopening.
+   */
+  public lastAutomationParams: string[] = [];
 
 
   /* -~- RECORDING -~- */

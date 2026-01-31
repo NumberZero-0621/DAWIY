@@ -55,6 +55,7 @@ export default class PlayheadController {
       this._app.editorView.playhead.moveTo(pos / RATIO_MILLS_BY_PX)
       this.moveAccordingToPlayhead(pos, movedByPlayer)
       this._app.hostView.updateTimer(pos);
+      this._app.tracksController.updateTracksDisplay();
     })
   }
 
@@ -417,7 +418,7 @@ export default class PlayheadController {
       this._isSelectingRange = false;
       this._app.hostController.resumeTimerInterval();
       if (this._app.host.isPlaying) {
-        this._app.automationController.applyAllAutomations();
+        this._app.automationController.resetAutomationStreaming();
       }
       this._pointerIsDown = false;
     }

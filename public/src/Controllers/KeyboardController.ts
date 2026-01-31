@@ -56,6 +56,7 @@ export default class KeyboardController {
             if (e.repeat) return;
 
             if (this._app.shortcutController.isTriggered("transport.playPause", e)) {
+                e.preventDefault();
                 this._app.hostController.onPlayButton();
             }
 

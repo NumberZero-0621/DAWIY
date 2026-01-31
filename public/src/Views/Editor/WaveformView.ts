@@ -1,6 +1,6 @@
-import { Container } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import TrackElement from "../../Components/Editor/TrackElement";
-import { HEIGHT_TRACK } from "../../Env";
+import { HEIGHT_TRACK, HEIGHT_AUTOMATION, RATIO_MILLS_BY_PX } from "../../Env";
 import Region from "../../Models/Region/Region";
 import Track from "../../Models/Track/Track";
 import EditorView from "./EditorView";
@@ -35,6 +35,8 @@ export default class WaveformView extends Container {
      */
     private _editorView: EditorView;
 
+    public ghostAutomationGraphics: Graphics;
+
     constructor(editor: EditorView, track: Track) {
         super();
         this._editorView = editor;
@@ -49,6 +51,12 @@ export default class WaveformView extends Container {
         this._editorView.viewport.addChild(this);
 
         this.zIndex = -10;
+
+        this.sortableChildren = true;
+        this.ghostAutomationGraphics = new Graphics();
+        this.ghostAutomationGraphics.zIndex = 50;
+        this.addChild(this.ghostAutomationGraphics);
+
         this.setPos(track);
     }
 
@@ -98,6 +106,50 @@ export default class WaveformView extends Container {
 
         this.position.x = 0;
         this.position.y = pos * HEIGHT_TRACK + 25;
+    }
+
+    public updateAutomationPositions(): void {
+        for (let regionView of this.regionViews) {
+            const index = this.track.automationRegions.findIndex(r => r.id === regionView.id);
+            if (index !== -1) {
+                regionView.y = HEIGHT_TRACK + (index * HEIGHT_AUTOMATION);
+            }
+        }
+    }
+
+    public drawGhostAutomations() {
+        this.ghostAutomationGraphics.clear();
+
+        const openParams = new Set(this.track.automationRegions.map(r => r.paramId));
+
+        for (const [paramId, points] of this.track.automationData) {
+            if (openParams.has(paramId)) continue;
+            if (points.length < 2) continue;
+
+            // Check if values change (simple logic: not flat)
+            let hasChange = false;
+            const firstVal = points[0].value;
+            for (let i = 1; i < points.length; i++) {
+                if (points[i].value !== firstVal) {
+                    hasChange = true;
+                    break;
+                }
+            }
+            if (!hasChange) continue;
+
+            const colorStr = this.track.automationColors.get(paramId) || this.track.color;
+            let color = 0xAAAAAA;
+            if (colorStr.startsWith("#")) {
+                color = parseInt(colorStr.replace("#", ""), 16);
+            }
+
+            this.ghostAutomationGraphics.lineStyle(1, color, 0.4);
+
+            this.ghostAutomationGraphics.moveTo(points[0].time / RATIO_MILLS_BY_PX, HEIGHT_TRACK * (1 - points[0].value));
+            for (let i = 1; i < points.length; i++) {
+                this.ghostAutomationGraphics.lineTo(points[i].time / RATIO_MILLS_BY_PX, HEIGHT_TRACK * (1 - points[i].value));
+            }
+        }
     }
 
 }

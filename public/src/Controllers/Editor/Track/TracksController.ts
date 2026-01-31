@@ -18,6 +18,8 @@ import { registerOnKeyDown } from "../../../Utils/keys";
 import { ObservableArray, ReadOnlyObservableArray } from "../../../Utils/observable/observables";
 import RecorderController, { CRecorderFactory } from "../../Recording/RecorderController";
 import RegionRecorderManager from "../../Recording/Recorders/RegionRecorderManager";
+import ColorPickerView from "../../../Views/ColorPickerView";
+
 
 /**
  * Class that controls the tracks view. It creates, removes and manages the tracks. It also defines the listeners for the tracks.
@@ -49,6 +51,10 @@ export default class TracksController {
     this.trackIdCount = 1
     this.bindEvents()
   }
+
+  private _colorPicker: ColorPickerView = new ColorPickerView();
+
+
 
 
 
@@ -140,6 +146,7 @@ export default class TracksController {
     // Remove from the lists
     const index = this.track_list.indexOf(track)
     if (index >= 0) {
+      this._app.automationController.removeAutomationLane(track);
       this.track_list.splice(index, 1)
       this._app.pluginsController.connectPlugin(track, null);
       this._view.removeTrack(track.element);
@@ -159,6 +166,16 @@ export default class TracksController {
       if (track.id === id) return track
     }
     return undefined
+  }
+
+  /**
+   * Updates the volume and balance sliders of all tracks.
+   * Called by the playhead on each frame during playback/seek.
+   */
+  public updateTracksDisplay(): void {
+    for (const track of this.tracks) {
+      track.updateDisplay();
+    }
   }
 
 
@@ -182,6 +199,11 @@ export default class TracksController {
    */
   private async createEmptyTrack(): Promise<Track> {
     let track = new Track(new TrackElement(), audioCtx, this._app.host.hostGroupId)
+    track.onPluginParamChange = (t) => {
+      if (t instanceof Track) {
+        this._app.automationController.syncAutomationParams(t);
+      }
+    };
     track.element.name = `Track ${this.trackNameCounter++}`
     await this.addTrack(track)
     return track;
@@ -410,15 +432,33 @@ export default class TracksController {
       )
     });
 
-    // TRACK COLOR
-    track.element.colorLine.addEventListener("click", () => {
-      let oldColor = track.color
-      let newColor = getRandomColor()
 
-      this._app.doIt(true,
-        () => this.setColor(track, newColor),
-        () => this.setColor(track, oldColor),
-      )
+    // TRACK COLOR
+    track.element.colorLine.addEventListener("click", (e) => {
+      let initialColor = track.color;
+
+      // Get click position for popup
+      const rect = track.element.colorLine.getBoundingClientRect();
+      const x = rect.right + 10;
+      const y = rect.top;
+
+      this._colorPicker.show(x, y, initialColor,
+        // onColorChange: Update only the track element color (lightweight)
+        (newColor) => {
+          track.color = newColor;
+        },
+        // onClose: Register undo history with final color
+        () => {
+          let finalColor = track.color;
+          if (finalColor !== initialColor) {
+            this._app.doIt(true,
+              () => this.setColor(track, finalColor),
+              () => this.setColor(track, initialColor)
+            );
+          }
+        }
+      );
+      e.stopPropagation();
     })
 
     // TRACK MONITOR
@@ -550,6 +590,7 @@ export default class TracksController {
     track.color = color
     this._app.editorView.changeWaveFormColor(track);
     this._app.pianoRollController.redraw();
+    this._app.automationController.updateAutomationLaneColors(track);
   }
 
   /**

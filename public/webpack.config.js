@@ -33,10 +33,7 @@ module.exports = (env, argv) => {
             },
             client: {
                 logging: "warn",
-                overlay: {
-                    errors: true,
-                    warnings: false,
-                },
+                overlay: false,
                 progress: true,
             },
             port: process.env.PORT || 5002,
