@@ -81,7 +81,32 @@ export default class ShortcutController {
         const combos = this._shortcuts.get(actionId);
         if (!combos) return false;
 
-        return combos.some(combo => this.matches(combo, e));
+        // Check if allow shortcuts even if input focused
+        // Some users might want custom behavior, but generally we block keys on inputs.
+        let activeElement = document.activeElement as HTMLElement;
+
+        // Traverse shadow DOMs to find the real active element
+        while (activeElement && activeElement.shadowRoot && activeElement.shadowRoot.activeElement) {
+            activeElement = activeElement.shadowRoot.activeElement as HTMLElement;
+        }
+
+        const isInputFocused = activeElement && (
+            activeElement.tagName === "INPUT" ||
+            activeElement.tagName === "TEXTAREA" ||
+            activeElement.isContentEditable
+        );
+
+        return combos.some(combo => {
+            if (isInputFocused) {
+                // If focusing an input, only allow shortcuts that have Control, Alt or Meta.
+                // Simple keys (e.g. "1", "Space") or Shift+Key are blocked to allow typing.
+                const hasCommandMod = combo.modifiers?.some(m =>
+                    m === "Control" || m === "Alt" || m === "Meta"
+                );
+                if (!hasCommandMod) return false;
+            }
+            return this.matches(combo, e);
+        });
     }
 
     private matches(combo: KeyCombo, e: KeyboardEvent): boolean {

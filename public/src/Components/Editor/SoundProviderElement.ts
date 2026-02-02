@@ -181,6 +181,8 @@ template.innerHTML = /*html*/`
     padding: 0;
     outline: none;
     border: solid 1px lightgrey;
+    background-color: transparent;
+    color: lightgrey;
 }
 
 .track-close {

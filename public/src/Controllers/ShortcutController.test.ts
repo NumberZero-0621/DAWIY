@@ -13,6 +13,7 @@ if (typeof window === 'undefined') {
             addEventListener: jest.fn(),
         }),
         getElementById: jest.fn(),
+        activeElement: null,
     };
     (global as any).KeyboardEvent = class KeyboardEvent {
         key: string;
@@ -110,7 +111,46 @@ describe("ShortcutController", () => {
         const eventNoMod = new KeyboardEvent("keydown", { key: "s", ctrlKey: false });
 
         expect(controller.isTriggered("project.save", eventMatch)).toBe(true);
+        expect(controller.isTriggered("project.save", eventMatch)).toBe(true);
         expect(controller.isTriggered("project.save", eventNoMod)).toBe(false);
+    });
+
+    test("isTriggered should ignore simple shortcuts when input is focused", () => {
+        // Mock input element
+        const input = { tagName: "INPUT", type: "text" } as any;
+        (document as any).activeElement = input;
+
+        // Space (playPause) should be ignored because no modifier
+        const event = new KeyboardEvent("keydown", { key: " " });
+        expect(controller.isTriggered("transport.playPause", event)).toBe(false);
+
+        // Ctrl+S (save) should work
+        const eventSave = new KeyboardEvent("keydown", { key: "s", ctrlKey: true });
+        expect(controller.isTriggered("project.save", eventSave)).toBe(true);
+
+        // Reset activeElement
+        (document as any).activeElement = null;
+        expect(controller.isTriggered("transport.playPause", event)).toBe(true);
+    });
+
+    test("isTriggered should check active element inside Shadow DOM", () => {
+        // Mock Shadow DOM structure
+        const hostElement = {
+            tagName: "MY-ELEMENT",
+            shadowRoot: {
+                activeElement: {
+                    tagName: "INPUT"
+                }
+            }
+        } as any;
+        (document as any).activeElement = hostElement;
+
+        // Space (playPause) should be ignored because input is focused in shadow root
+        const event = new KeyboardEvent("keydown", { key: " " });
+        expect(controller.isTriggered("transport.playPause", event)).toBe(false);
+
+        // Reset
+        (document as any).activeElement = null;
     });
 
     test("updateShortcut should update definition and save to storage", () => {
