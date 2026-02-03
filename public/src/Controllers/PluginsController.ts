@@ -67,20 +67,37 @@ export default class PluginsController {
      * @param wam_name The name of the wam to fetch in {@link WAM_LIST} 
      */
     private async fetchWAM(wam_name: string): Promise<PluginsController['WAM_LIST']['_'] & { wam: typeof WebAudioModule } | null> {
-        const infos = this.WAM_LIST[wam_name]
+        let infos = this.WAM_LIST[wam_name]
         if (!infos) return null
 
         let fetched = this.wam_list_fetcheds[wam_name]
         if (!fetched) {
-            if (!infos) {
-                crashOnDebug(`No such WAM Plugin as '${wam_name}' `)
-                return null
+
+            let { url } = infos
+            let isVst = false;
+            let realVstPath = "";
+
+            // Intercept VST URLs
+            if (url.startsWith("vst://")) {
+                isVst = true;
+                realVstPath = url.replace("vst://", "");
+                // Redirect to VstProxy
+                url = `${BACKEND_URL}/plugins/VstProxy/index.js`;
             }
-            const { url } = infos
+
             try {
                 const { default: WAM } = await import(/* webpackIgnore: true */url) as { default: typeof WebAudioModule };
                 fetched = { factory: WAM }
                 this.wam_list_fetcheds[wam_name] = fetched
+
+                // If it was a VST, we need to ensure the state carries the path
+                if (isVst) {
+                    infos = { ...infos, url: url, state: { ...infos.state, vstPath: realVstPath } };
+                    // Update the global list to point to proxy url too? No, keep original for identification?
+                    // Actually, if we change 'infos' locally here, it's passed to return.
+                    // But we also need to ensure 'new Plugin' gets this state.
+                }
+
             }
             catch (e) {
                 crashOnDebug(`Error while fetching WAM Plugin "${wam_name}": `, e)
@@ -97,11 +114,27 @@ export default class PluginsController {
     /**
      * Registers a new WAM dynamically.
      */
-    public addWam(url: string) {
-        // Use filename or a derived name as key
-        const name = url.split('/').pop()?.replace('.js', '') || 'UnknownWam';
+    public addWam(url: string, explicitName?: string) {
+        let name = explicitName;
+
+        if (!name) {
+            // Use filename or a derived name as key
+            const filename = url.split('/').pop()?.replace('.js', '') || 'UnknownWam';
+            if (filename === 'index') {
+                // Use parent folder name
+                const parts = url.split('/');
+                if (parts.length > 2) {
+                    name = parts[parts.length - 2];
+                } else {
+                    name = filename;
+                }
+            } else {
+                name = filename;
+            }
+        }
+
         // Avoid overwriting Pedalboard2 or existing
-        const safeName = this.WAM_LIST[name] && this.WAM_LIST[name].url !== url ? name + '_' + Date.now() : name;
+        const safeName = this.WAM_LIST[name!] && this.WAM_LIST[name!].url !== url ? name + '_' + Date.now() : name!;
 
         this.WAM_LIST[safeName] = { url: url };
         // Clear fetch cache for this name if it existed

@@ -16,3 +16,4 @@ storage/*
 # Environment files (local configuration)
 public/.env
 bank/.env
+bank/settings.json

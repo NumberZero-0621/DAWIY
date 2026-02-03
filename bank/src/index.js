@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth.routes');
 const pluginsRoutes = require('./routes/plugins.routes');
 const audioloopsRoutes = require('./routes/audioloops.routes');
 const pedalboard2Routes = require('./routes/pedalboard2.routes.js');
+const settingsRoutes = require('./routes/settings.routes');
 
 const path = require("path");
 
@@ -40,6 +41,7 @@ app.use(cors(CORS_VERIFIED), authRoutes);
 app.use(cors(CORS_ALL), pluginsRoutes);
 app.use(cors(CORS_ALL), audioloopsRoutes);
 app.use(cors(CORS_ALL), pedalboard2Routes);
+app.use(cors(CORS_ALL), settingsRoutes);
 
 app.use("/pedalboard", cors(CORS_ALL), express.static(path.join(__dirname, "../PedalBoard")));
 app.use("/plugins", cors(CORS_ALL), express.static(path.join(__dirname, "../plugins")));

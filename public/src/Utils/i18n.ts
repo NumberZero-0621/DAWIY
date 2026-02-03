@@ -2,7 +2,7 @@ export type Language = "en" | "ja";
 
 const STORAGE_KEY = "wam_studio_lang";
 
-export let CURRENT_LANGUAGE: Language = (localStorage.getItem(STORAGE_KEY) as Language) || "en";
+export let CURRENT_LANGUAGE: Language = "en";
 
 export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
     "en": {
@@ -25,6 +25,7 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "menu.settings": "Settings",
         "menu.dawiy_plugin": "DAWIY Plugin",
         "menu.wam_plugin": "WAM Plugin",
+        "menu.vst_scan": "VST scan",
         "menu.login": "Login (Administrator)",
         "menu.logout": "Log out (Administrator)",
 
@@ -193,6 +194,7 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "menu.settings": "設定",
         "menu.dawiy_plugin": "DAWIYプラグイン",
         "menu.wam_plugin": "WAMプラグイン",
+        "menu.vst_scan": "VSTスキャン",
         "menu.login": "ログイン（管理者用）",
         "menu.logout": "ログアウト",
 
@@ -370,10 +372,12 @@ export const AVAILABLE_LANGUAGES: { code: Language; name: string }[] = [
     { code: "ja", name: "日本語" }
 ];
 
+import SettingsPersistenceController from "../Controllers/SettingsPersistenceController";
+
 export function setLanguage(lang: Language) {
     if (AVAILABLE_LANGUAGES.some((l: { code: string; }) => l.code === lang)) {
         CURRENT_LANGUAGE = lang;
-        localStorage.setItem(STORAGE_KEY, lang);
+        SettingsPersistenceController.save("language", lang);
         updateDOM();
     }
 }

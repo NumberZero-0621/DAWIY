@@ -107,11 +107,15 @@ export default class WamPluginController {
 
     private syncWithPluginsController() {
         // This ensures that any plugin in our installed list is actually registered in the runtime controller
+        /* 
+        // User requested to hide these from the main "Add Plugin" list for now.
+        // Only Pedalboard2 should be there.
         if (this.app.pluginsController) {
             this.installedWams.forEach(wam => {
-                this.app.pluginsController.addWam(wam.url);
+                this.app.pluginsController.addWam(wam.url, wam.name);
             });
         }
+        */
     }
 
     private saveInstalledWams() {
@@ -121,6 +125,14 @@ export default class WamPluginController {
     public openWindow() {
         this.view.show();
         this.refreshList();
+    }
+
+    public addAvailableWam(wam: WamPluginInfo) {
+        if (!this.availableWams.some(w => w.url === wam.url)) {
+            this.availableWams.push(wam);
+            // If the view is open, refresh the list to show the new plugin immediately
+            this.refreshList();
+        }
     }
 
     private bindEvents() {
@@ -244,7 +256,7 @@ export default class WamPluginController {
         // Ideally, PluginsController needs to know about these.
         // For now, let's just save. The PluginsController might need to read this list on init or be updated.
         // We will assume for this task we just manage the list, and a reload might be needed or we update PluginsController.
-        this.app.pluginsController.addWam(wam.url);
+        this.app.pluginsController.addWam(wam.url, wam.name);
 
         this.refreshList();
     }

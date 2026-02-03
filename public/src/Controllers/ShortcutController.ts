@@ -1,6 +1,7 @@
 import App from "../App";
 import { DEFAULT_SHORTCUTS, KeyCombo, ShortcutDefinition } from "../Data/Shortcuts";
 import { t } from "../Utils/i18n";
+import SettingsPersistenceController from "./SettingsPersistenceController";
 
 const STORAGE_KEY = "dawiy_shortcuts";
 
@@ -31,22 +32,28 @@ export default class ShortcutController {
 
     private loadSettings() {
         try {
-            const stored = localStorage.getItem(STORAGE_KEY);
+            // SettingsPersistenceController is already initialized in index.ts
+            const stored = SettingsPersistenceController.get<any>(STORAGE_KEY);
             if (stored) {
-                const parsed = JSON.parse(stored);
-                // parsed is likely { actionId: KeyCombo[] }
+                // stored is likely { actionId: KeyCombo[] }
+                // If stored is string (legacy), parse it. But SettingsPersistenceController returns object/json.
+                // Our backend returns object.
+                // But wait, our API structure is flat keys. 
+                // SettingsPersistenceController.get("dawiy_shortcuts") returns the value associated with that key.
+                // Since we store JSON string in localStorage, did we decide to store Object in backend?
+                // The backend handles JSON body. 
+                // SettingsPersistenceController.save("key", value) sends { "key": value }.
+                // So value can be object.
+
+                let parsed = stored;
+                if (typeof stored === "string") {
+                    try { parsed = JSON.parse(stored); } catch (e) { }
+                }
+
                 for (const [id, keys] of Object.entries(parsed)) {
                     if (this._shortcuts.has(id)) {
                         this._shortcuts.set(id, keys as KeyCombo[]);
                     } else {
-                        // This might be a plugin shortcut or deprecated one. 
-                        // For now, if we don't have a definition, we might want to store it 
-                        // IF we support dynamic registration, but better to wait for registration.
-                        // Ideally, we load settings *after* all static definitions are set.
-                        // But for plugins, they might register later. 
-                        // We will store these 'orphaned' settings temporarily? 
-                        // Or just set them and assuming definition comes later?
-                        // Let's set them.
                         this._shortcuts.set(id, keys as KeyCombo[]);
                     }
                 }
@@ -63,7 +70,7 @@ export default class ShortcutController {
             // Or save all to be safe and consistent. Saving all is easier.
             minimalExport[id] = keys;
         });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(minimalExport));
+        SettingsPersistenceController.save(STORAGE_KEY, minimalExport);
     }
 
     public resetToDefault() {

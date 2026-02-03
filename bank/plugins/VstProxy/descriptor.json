@@ -1,0 +1,9 @@
+{
+    "name": "VstProxy",
+    "vendor": "DAWIY",
+    "version": "1.0.0",
+    "apiVersion": "2.0.0",
+    "thumbnail": "",
+    "description": "Proxy for VST3 plugins",
+    "isInstrument": false
+}

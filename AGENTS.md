@@ -15,6 +15,7 @@
 
 - `public/`: **Frontend Application** (SPA, UI, Audio Engine).
 - `bank/`: **Backend Server** (Static resources, WAM host).
+- `src-tauri/`: **Desktop Application** (Rust backend, WebView wrapper).
 - `run_dev.cmd` / `run_dev.sh`: Development entry point (runs both apps).
 
 ### Frontend Structure (`public/`)

@@ -1,14 +1,18 @@
 {
   "scripts": {
-    "dev": "concurrently --kill-others -n \"PUBLIC,BANK\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm start --prefix public\" \"npm start --prefix bank\""
+    "dev": "concurrently --kill-others -n \"PUBLIC,BANK\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm start --prefix public\" \"npm start --prefix bank\"",
+    "tauri": "tauri",
+    "desktop": "concurrently --kill-others -n \"PUBLIC,BANK,TAURI\" -c \"bgBlue.bold,bgMagenta.bold,bgYellow.bold\" \"set HEADLESS=true&& npm start --prefix public\" \"npm start --prefix bank\" \"set PATH=%PATH%;C:\\Users\\jotar\\.cargo\\bin&& tauri dev\""
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.10.1",
     "@types/file-saver": "^2.0.7",
     "file-saver": "^2.0.5",
     "html-loader": "^5.1.0",
     "tonal": "^6.4.2"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.10.0",
     "@types/node": "^25.1.0",
     "concurrently": "^8.2.2"
   }

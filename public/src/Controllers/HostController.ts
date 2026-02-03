@@ -652,6 +652,10 @@ export default class HostController {
       this.focus(this._app.wamPluginView);
     })
 
+    this._view.vstScanBtn.addEventListener("click", () => {
+      this._app.vstPluginController.scanVstPlugins();
+    })
+
     this._view.aboutBtn.addEventListener("click", () => {
       this._view.aboutWindow.hidden = false;
       this.focus(this._app.aboutView);

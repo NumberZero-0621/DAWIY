@@ -59,7 +59,10 @@ customElements.define(
 
 import TemplateLoader from './TemplateLoader';
 
-import { updateDOM } from './Utils/i18n';
+import { updateDOM, setLanguage, Language } from './Utils/i18n';
+import SettingsPersistenceController from './Controllers/SettingsPersistenceController';
+
+// ... imports
 
 window.addEventListener('beforeunload', (e) => {
     e.returnValue = 'test';
@@ -67,8 +70,8 @@ window.addEventListener('beforeunload', (e) => {
 
 const audioCtx = new AudioContext({ latencyHint: 0.00001 });
 TemplateLoader.load();
-updateDOM();
-const app = new App();
+// updateDOM(); // Moved to inside init
+let app: App;
 
 (async () => {
     const showLoading = () => {
@@ -90,7 +93,20 @@ const app = new App();
     }
 
     showLoading();
+
+    // 1. Initialize Settings Persistence
+    await SettingsPersistenceController.init();
+
+    // 2. Set Language (this updates DOM)
+    const lang = SettingsPersistenceController.get<Language>("language", "en");
+    setLanguage(lang);
+
+    // 3. Instantiate App (Now that settings are ready)
+    app = new App();
+
+    // 4. Initialize Host
     await app.initHost();
+
     hideLoading();
     let interval: any
 

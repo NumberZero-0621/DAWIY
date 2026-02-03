@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import SettingsPersistenceController from "../Controllers/SettingsPersistenceController";
 
 export interface MenuItemConfig {
     id: string;
@@ -23,10 +24,12 @@ export const DEFAULT_MENU_CONFIG: MenuItemConfig[] = [
 
 export class MenuConfig {
     static load(): MenuItemConfig[] {
-        const stored = localStorage.getItem(STORAGE_KEY);
+        // As initialized in index.ts, SettingsPersistenceController is ready.
+        const stored = SettingsPersistenceController.get<MenuItemConfig[]>(STORAGE_KEY);
         if (stored) {
             try {
-                const parsed = JSON.parse(stored) as MenuItemConfig[];
+                // If it is string for some legacy reason (shouldn't be with new backend)
+                const parsed = (typeof stored === 'string') ? JSON.parse(stored) : stored;
                 // Merge with default to handle potential schema changes or missing keys
                 return this.mergeWithDefault(parsed);
             } catch (e) {
@@ -38,12 +41,20 @@ export class MenuConfig {
     }
 
     static save(config: MenuItemConfig[]) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+        SettingsPersistenceController.save(STORAGE_KEY, config);
     }
 
     static reset() {
-        localStorage.removeItem(STORAGE_KEY);
-        return [...DEFAULT_MENU_CONFIG];
+        // localStorage.removeItem(STORAGE_KEY);
+        // We can't easily remove key from JSON yet via our API (we only merge matching keys).
+        // But we can overwrite it with default.
+        const defaults = [...DEFAULT_MENU_CONFIG];
+        // Or specific "reset" logic if needed. 
+        // For now, saving as null? No, API implementation of POST /settings merges.
+        // It doesn't delete.
+        // Let's just save the defaults.
+        this.save(defaults);
+        return defaults;
     }
 
     private static mergeWithDefault(stored: MenuItemConfig[]): MenuItemConfig[] {

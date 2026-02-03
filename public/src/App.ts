@@ -23,6 +23,7 @@ import ProjectController from "./Controllers/ProjectController";
 import RecorderController from "./Controllers/Recording/RecorderController";
 import SettingsController from "./Controllers/SettingsController";
 import DawiyPluginController from "./Controllers/DawiyPluginController";
+import VstPluginController from "./Controllers/VstPluginController";
 import WamPluginController from "./Controllers/WamPluginController";
 import Loader from "./Loader/Loader";
 import Host from "./Models/Track/Host";
@@ -57,7 +58,7 @@ export default class App {
     settingsController: SettingsController;
     dawiyPluginController: DawiyPluginController;
     dawiyPluginView: DawiyPluginView;
-
+    vstPluginController: VstPluginController;
     wamPluginController: WamPluginController;
     wamPluginView: WamPluginView;
 
@@ -126,6 +127,7 @@ export default class App {
         this.latencyController = new LatencyController(this);
         this.settingsController = new SettingsController(this);
         this.dawiyPluginController = new DawiyPluginController(this);
+        this.vstPluginController = new VstPluginController(this);
         this.dawiyPluginController.setView(this.dawiyPluginView);
 
         this.wamPluginController = new WamPluginController(this);
