@@ -48,12 +48,23 @@ module.exports = (env, argv) => {
                     throw new Error('webpack-dev-server is not defined');
                 }
 
+                devServer.app.options('/upload-plugin', (req, res) => {
+                    res.header("Access-Control-Allow-Origin", "*");
+                    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+                    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, x-filename");
+                    res.send();
+                });
+
                 devServer.app.post('/upload-plugin', (req, res) => {
                     const filename = req.headers['x-filename'];
                     if (!filename) {
                         res.status(400).send('Missing x-filename header');
                         return;
                     }
+
+                    // Enable CORS for POST
+                    res.header("Access-Control-Allow-Origin", "*");
+                    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, x-filename");
 
                     // Basic body parsing for raw text
                     let data = '';
@@ -62,10 +73,15 @@ module.exports = (env, argv) => {
                         data += chunk;
                     });
                     req.on('end', function () {
+                        // Allow subdirectories in filename (e.g. "MyPlugin/MyPlugin.ts")
                         const targetPath = path.join(__dirname, 'src', 'DawiyPlugins', filename);
 
                         // Security check: prevent directory traversal
-                        if (!targetPath.startsWith(path.join(__dirname, 'src', 'DawiyPlugins'))) {
+                        // Resolve paths to ensure safety
+                        const safePath = path.resolve(__dirname, 'src', 'DawiyPlugins');
+                        const resolvedTargetPath = path.resolve(targetPath);
+
+                        if (!resolvedTargetPath.startsWith(safePath)) {
                             res.status(403).send('Invalid file path');
                             return;
                         }
@@ -76,7 +92,7 @@ module.exports = (env, argv) => {
                             return;
                         }
 
-                        // Create directories if they don't exist
+                        // Create directories recursively
                         const dir = path.dirname(targetPath);
                         if (!fs.existsSync(dir)) {
                             fs.mkdirSync(dir, { recursive: true });

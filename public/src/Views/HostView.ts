@@ -2,6 +2,7 @@ import { default as MetronomeComponent } from "../Components/MetronomeComponent"
 import TempoElement from "../Components/TempoElement";
 import TimeSignatureElement from "../Components/TimeSignatureElement";
 import AudioLoopBrowser from "../Components/WamAudioLoopBrowser";
+import AiAssistantSidebar from "../Components/AiAssistantSidebar";
 import { RATIO_MILLS_BY_PX } from "../Env";
 import { t } from "../Utils/i18n";
 
@@ -21,6 +22,7 @@ export default class HostView {
     redoBtn = document.getElementById("redo-btn") as HTMLDivElement;
     metroBtn = document.getElementById("metro-btn") as HTMLDivElement;
     soundLoopBtn = document.getElementById("soundLoupBtn") as HTMLElement;
+    aiAssistantBtn = document.getElementById("aiAssistantBtn") as HTMLElement;
 
     toolBtn = document.getElementById("tool-btn") as HTMLDivElement;
     toolMenu = document.getElementById("tool-menu") as HTMLDivElement;
@@ -35,6 +37,9 @@ export default class HostView {
 
     audioLoopBrowserDiv = document.getElementById("audio-loop-browser") as HTMLDivElement;
     audioLoopBrowserElement = new AudioLoopBrowser() as HTMLElement;
+
+    aiAssistantBrowserDiv = document.getElementById("ai-assistant-browser") as HTMLDivElement;
+    aiAssistantElement = new AiAssistantSidebar() as HTMLElement;
 
     timeSignatureDiv = document.getElementById("time-signature-selector") as HTMLDivElement;
     timeSignatureSelector = new TimeSignatureElement()
@@ -108,10 +113,26 @@ export default class HostView {
 
         // audio loop browser
         this.audioLoopBrowserDiv.appendChild(this.audioLoopBrowserElement);
+
+        // ai assistant browser
+        this.aiAssistantBrowserDiv.appendChild(this.aiAssistantElement);
+
         this.metronomeContainer.appendChild(this.metronome);
     }
     toggleAudioLoopBrowser = this.soundLoopBtn.addEventListener("click", () => {
         this.audioLoopBrowserDiv.style.display = this.audioLoopBrowserDiv.style.display !== "flex" ? "flex" : "none";
+        // Close AI Assistant if open
+        if (this.audioLoopBrowserDiv.style.display === "flex") {
+            this.aiAssistantBrowserDiv.style.display = "none";
+        }
+    });
+
+    toggleAiAssistantBrowser = this.aiAssistantBtn.addEventListener("click", () => {
+        this.aiAssistantBrowserDiv.style.display = this.aiAssistantBrowserDiv.style.display !== "flex" ? "flex" : "none";
+        // Close Audio Loop Browser if open
+        if (this.aiAssistantBrowserDiv.style.display === "flex") {
+            this.audioLoopBrowserDiv.style.display = "none";
+        }
     });
 
 

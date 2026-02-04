@@ -170,6 +170,15 @@ body {
     transform: translateZ(0);
 }
 
+#ai-assistant-browser {
+    width: 300px;
+    display: none;
+    position: relative;
+    font-size: 12px;
+    height: 100%;
+    transform: translateZ(0);
+}
+
 #editor-content {
     width: 100%;
     height: 100%;
