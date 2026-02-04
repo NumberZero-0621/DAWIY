@@ -107,6 +107,9 @@ let app: App;
     // 4. Initialize Host
     await app.initHost();
 
+    // デバッグ用: appをグローバルに公開
+    (window as any).app = app;
+
     hideLoading();
     let interval: any
 

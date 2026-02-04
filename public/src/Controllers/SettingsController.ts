@@ -29,6 +29,7 @@ export default class SettingsController {
         this.view = app.settingsView;
 
         this.initMIDIInputDevice()
+        this.initMIDIOutputDevice()
         this.initAudioInputOutputDevice()
         this.initLanguageSelector()
         this.bindEvents()
@@ -85,8 +86,43 @@ export default class SettingsController {
 
     //@ts-ignore
     private _selectedMIDIInputDevice: MIDIInput | null = null;
+    private _selectedMIDIOutputDeviceName: string | null = null;
 
+    //// MIDI OUTPUT DEVICE ////
+    private async initMIDIOutputDevice() {
+        const refresh = async () => {
+            const outputs = await this.app.midiOutputController.listOutputs();
+            createSelect(
+                this.view.selectMIDIOutputDevice,
+                "midioutput",
+                "No MIDI Output",
+                outputs,
+                name => [name, name],
+                async selectedName => {
+                    await this.app.midiOutputController.disconnect();
+                    if (selectedName) {
+                        const success = await this.app.midiOutputController.connect(selectedName);
+                        if (success) {
+                            this._selectedMIDIOutputDeviceName = selectedName;
+                        } else {
+                            // 失敗したら選択を戻す等の処理が必要かも
+                        }
+                    } else {
+                        this._selectedMIDIOutputDeviceName = null;
+                    }
+                },
+                -1
+            )
+        }
 
+        // 初回ロード
+        await refresh();
+
+        // 設定画面を開くたびにリスト更新したい場合は openSettings で呼ぶ
+        // ここでは簡易的に最初に呼ぶだけにする（あるいはリフレッシュボタンをつける）
+        // しかし、USB抜き差し等に対応するためには、ここで定期的に呼ぶか、何かトリガーが必要。
+        // とりあえず今回は初回のみで実装。
+    }
 
     //// AUDIO INPUT AND OUTPUT DEVICE ////
     private async initAudioInputOutputDevice() {
@@ -166,6 +202,8 @@ export default class SettingsController {
      */
     public async openSettings(): Promise<void> {
         this.view.settingsWindow.hidden = false;
+        // リストを更新
+        this.initMIDIOutputDevice();
     }
 
     private bindEvents() {

@@ -221,6 +221,13 @@ export default class PluginsController {
     private bindEvents(): void {
         // On plugin selected
         this._view.onPluginClick = async (plugin_name) => {
+            const pluginInfo = this.WAM_LIST[plugin_name];
+            if (pluginInfo && pluginInfo.url && pluginInfo.url.startsWith("vst://")) {
+                const vstPath = pluginInfo.url.replace("vst://", "");
+                this._app.vstPluginController.launchVstStandalone(vstPath);
+                return;
+            }
+
             const plugin = await this.fetchPlugin(plugin_name)
             if (this.selected != null && this.selected.plugin == null) {
                 this.hideAllButtons()

@@ -202,7 +202,15 @@ export default class WamPluginController {
 
             let actionBtn = '';
             if (this.currentFilter === 'installed') {
-                actionBtn = `<button class="btn btn-sm btn-danger uninstall-btn" data-url="${wam.url}">${t("plugin.action.uninstall")}</button>`;
+                // VSTプラグインの場合はOpenボタンを表示
+                if (wam.url.startsWith("vst://")) {
+                    actionBtn = `
+                        <button class="btn btn-sm btn-success open-vst-btn" style="margin-right: 5px;" data-url="${wam.url}">Open</button>
+                        <button class="btn btn-sm btn-danger uninstall-btn" data-url="${wam.url}">${t("plugin.action.uninstall")}</button>
+                    `;
+                } else {
+                    actionBtn = `<button class="btn btn-sm btn-danger uninstall-btn" data-url="${wam.url}">${t("plugin.action.uninstall")}</button>`;
+                }
             } else {
                 if (isInstalled) {
                     actionBtn = `<span style="color: #5cb85c; margin-right: 10px;">${t("plugin.status.installed")}</span>`;
@@ -232,6 +240,16 @@ export default class WamPluginController {
                 const url = (e.target as HTMLElement).getAttribute('data-url');
                 const wam = this.availableWams.find(w => w.url === url);
                 if (wam) this.installWam(wam);
+            };
+        });
+
+        container.querySelectorAll('.open-vst-btn').forEach(btn => {
+            (btn as HTMLButtonElement).onclick = (e) => {
+                const url = (e.target as HTMLElement).getAttribute('data-url');
+                if (url && url.startsWith("vst://")) {
+                    const pluginPath = url.replace("vst://", "");
+                    this.app.vstPluginController.launchVstStandalone(pluginPath);
+                }
             };
         });
 

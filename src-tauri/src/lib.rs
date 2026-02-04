@@ -17,13 +17,27 @@ struct VstPlugin {
 #[command]
 fn scan_plugins() -> Vec<VstPlugin> {
     let mut plugins = Vec::new();
-    let vst_dir = r"C:\Program Files\Common Files\VST3";
-    let path = Path::new(vst_dir);
+    let vst_dirs = vec![
+        r"C:\Program Files\Common Files\VST3",
+        r"C:\Program Files (x86)\Common Files\VST3",
+        r"C:\Program Files (x86)\Steinberg",
+        r"C:\Program Files (x86)\VstPlugins",
+        r"C:\Program Files\Cakewalk\VstPlugins",
+        r"C:\Program Files\Steinberg",
+        r"C:\Program Files\VstPlugins",
+    ];
 
-    if !path.exists() {
-        return plugins;
+    for vst_dir in vst_dirs {
+        let path = Path::new(vst_dir);
+        if path.exists() {
+            scan_dir_recursive(path, &mut plugins);
+        }
     }
+    
+    plugins
+}
 
+fn scan_dir_recursive(path: &Path, plugins: &mut Vec<VstPlugin>) {
     if let Ok(entries) = fs::read_dir(path) {
         for entry in entries {
             if let Ok(entry) = entry {
@@ -43,27 +57,30 @@ fn scan_plugins() -> Vec<VstPlugin> {
                         }
                     }
                 } 
-                // Check if it's a directory (bundle)
+                // Check if it's a directory
                 else if path.is_dir() {
-                     if let Some(ext) = path.extension() {
-                        if ext == "vst3" {
-                            let name = path.file_stem().unwrap().to_string_lossy().to_string();
-                            let binary_path = path.join("Contents").join("x86_64-win").join(&name).with_extension("vst3");
-                             if binary_path.exists() && try_load_vst(&binary_path) {
-                                plugins.push(VstPlugin {
-                                    name: name,
-                                    path: binary_path.to_string_lossy().to_string(),
-                                    vendor: "VST3".to_string(),
-                                });
-                            }
+                    let is_bundle = path.extension().map_or(false, |ext| ext == "vst3");
+                    
+                    if is_bundle {
+                         // Bundle logic: Check for Contents/x86_64-win/{name}.vst3
+                        let name = path.file_stem().unwrap().to_string_lossy().to_string();
+                        let binary_path = path.join("Contents").join("x86_64-win").join(&name).with_extension("vst3");
+                        
+                        if binary_path.exists() && try_load_vst(&binary_path) {
+                            plugins.push(VstPlugin {
+                                name: name,
+                                path: binary_path.to_string_lossy().to_string(),
+                                vendor: "VST3".to_string(),
+                            });
                         }
+                    } else {
+                        // Normal directory: Recurse
+                        scan_dir_recursive(&path, plugins);
                     }
                 }
             }
         }
     }
-    
-    plugins
 }
 
 fn try_load_vst(path: &Path) -> bool {
@@ -85,6 +102,9 @@ fn try_load_vst(path: &Path) -> bool {
 
 
 mod vst_host;
+mod carla_host;  // Carla統合モジュール（Windows非対応のため使用停止）
+mod vst_launcher;
+mod midi;  // スタンドアロンVST起動モジュール
 
 #[command]
 fn open_vst_editor(path: String) -> Result<(), String> {
@@ -95,7 +115,20 @@ fn open_vst_editor(path: String) -> Result<(), String> {
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_log::Builder::default().build())
-    .invoke_handler(tauri::generate_handler![scan_plugins, open_vst_editor])
+    .invoke_handler(tauri::generate_handler![
+        scan_plugins, 
+        open_vst_editor,
+        carla_host::open_vst_with_carla,
+        carla_host::stop_carla,
+        vst_launcher::launch_vst_standalone,
+        vst_launcher::stop_all_vst,
+        vst_launcher::launch_executable,
+        midi::list_midi_outputs,
+        midi::open_midi_output,
+        midi::close_midi_output,
+        midi::send_midi_message
+    ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
+

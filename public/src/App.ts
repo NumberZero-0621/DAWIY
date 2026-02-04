@@ -43,6 +43,7 @@ import TracksView from "./Views/TracksView";
 import PianoRollController from "./Controllers/Editor/PianoRoll/PianoRollController";
 import AutoSaveController from "./Controllers/AutoSaveController";
 import ContextMenuController from "./Controllers/ContextMenuController";
+import MidiOutputController from "./Controllers/MidiOutputController";
 
 /**
  * Main class for the host. Start all controllers, views and models. All controllers and views are accessible frome this app.
@@ -74,6 +75,7 @@ export default class App {
     autoSaveController: AutoSaveController;
     contextMenuController: ContextMenuController;
     shortcutController: ShortcutController;
+    midiOutputController: MidiOutputController;
 
     hostView: HostView;
     tracksView: TracksView;
@@ -141,6 +143,7 @@ export default class App {
         this.autoSaveController = new AutoSaveController(this);
         this.contextMenuController = new ContextMenuController(this);
         this.shortcutController = new ShortcutController(this);
+        this.midiOutputController = new MidiOutputController(this);
 
         this.hostController.addDraggableWindow(this.pluginsView, this.latencyView, this.settingsView,
             this.projectView, this.aboutView, this.keyboardShortcutsView, this.dawiyPluginView, this.wamPluginView, this.menuCustomizationView);
