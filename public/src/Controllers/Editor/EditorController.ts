@@ -31,29 +31,29 @@ export default class EditorController {
      * The file loaders used to load dragged files.
      * It should return the loaded region or null if the file is not supported.
      */
-    static DRAG_LOADERS: ((start:number, file:ArrayBuffer, type: string)=>Promise<RegionOf<any>|null>)[]= [
+    static DRAG_LOADERS: ((start: number, file: ArrayBuffer, type: string) => Promise<RegionOf<any> | null>)[] = [
         // Load MIDI files through note list
-        async function(start, buffer, type){
-            const midi= await parseNoteList(buffer)
-            if(midi)return new MIDIRegion(midi, start)
+        async function (start, buffer, type) {
+            const midi = await parseNoteList(buffer)
+            if (midi) return new MIDIRegion(midi, start)
             else return null
         },
         // Load MIDI files
-        async function(start, buffer, type){
-            if(!["audio/mid"].includes(type))return null
-            const midi= await MIDI.load2(buffer)
-            if(midi)return new MIDIRegion(midi, start)
+        async function (start, buffer, type) {
+            if (!["audio/mid"].includes(type)) return null
+            const midi = await MIDI.load2(buffer)
+            if (midi) return new MIDIRegion(midi, start)
             else return null
         },
         // Load sample files
-        async function(start, buffer, type){
-            if(!["audio/mpeg","audio/ogg","audio/wav","audio/x-wav"].includes(type))return null
-            try{
+        async function (start, buffer, type) {
+            if (!["audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav"].includes(type)) return null
+            try {
                 let audioArrayBuffer = buffer
                 let audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer);
                 let operableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
                 return new SampleRegion(operableAudioBuffer, start)
-            }catch(e){
+            } catch (e) {
                 console.error(e)
                 return null
             }
@@ -88,16 +88,16 @@ export default class EditorController {
 
     private bindSnapEvents() {
         const hostView = this._app.hostView;
-        
+
         hostView.snapBtnArrow.addEventListener("click", (e) => {
-             const display = hostView.snapMenu.style.display;
-             hostView.snapMenu.style.display = display === "none" ? "block" : "none";
-             e.stopPropagation();
+            const display = hostView.snapMenu.style.display;
+            hostView.snapMenu.style.display = display === "none" ? "block" : "none";
+            e.stopPropagation();
         });
 
         const updateViews = () => {
-             this._view.grid.updateGrid();
-             this._app.pianoRollController.redraw();
+            this._view.grid.updateGrid();
+            this._app.pianoRollController.redraw();
         };
 
         const setSnap = (res: number) => {
@@ -114,10 +114,10 @@ export default class EditorController {
         hostView.snap1_32.addEventListener("click", () => setSnap(32));
 
         hostView.snapTriplet.addEventListener("click", (e) => {
-             this._view.snapTriplet = !this._view.snapTriplet;
-             hostView.updateSnapMenu(this._view.snapResolution, this._view.snapTriplet);
-             updateViews();
-             e.stopPropagation();
+            this._view.snapTriplet = !this._view.snapTriplet;
+            hostView.updateSnapMenu(this._view.snapResolution, this._view.snapTriplet);
+            updateViews();
+            e.stopPropagation();
         });
 
         document.addEventListener("click", (e) => {
@@ -125,39 +125,39 @@ export default class EditorController {
                 hostView.snapMenu.style.display = "none";
             }
         });
-        
+
         // Initial update
         hostView.updateSnapMenu(this._view.snapResolution, this._view.snapTriplet);
     }
 
-    public async zoomTo(new_zoom_level: number, respect_step: boolean=false): Promise<void>{
+    public async zoomTo(new_zoom_level: number, respect_step: boolean = false): Promise<void> {
         // Snap to 1.0 if crossing
         if ((ZOOM_LEVEL < 1 && new_zoom_level > 1) || (ZOOM_LEVEL > 1 && new_zoom_level < 1)) {
             new_zoom_level = 1;
         }
 
         // Get zoom center
-        const [zoomTarget,zoomTargetPos]= (()=>{
-            const viewportLeft= this._view.playhead.viewportLeft*RATIO_MILLS_BY_PX
-            const viewportRight= viewportLeft + this._view.playhead.viewportWidth*RATIO_MILLS_BY_PX
-            const viewportWidth= viewportRight-viewportLeft
-            const playhead= this._app.host.playhead
-            if(viewportLeft<=playhead && playhead<=viewportRight) return [playhead, (playhead-viewportLeft)/viewportWidth]
-            else return [(viewportLeft+viewportRight)/2, 0.5]
+        const [zoomTarget, zoomTargetPos] = (() => {
+            const viewportLeft = this._view.playhead.viewportLeft * RATIO_MILLS_BY_PX
+            const viewportRight = viewportLeft + this._view.playhead.viewportWidth * RATIO_MILLS_BY_PX
+            const viewportWidth = viewportRight - viewportLeft
+            const playhead = this._app.host.playhead
+            if (viewportLeft <= playhead && playhead <= viewportRight) return [playhead, (playhead - viewportLeft) / viewportWidth]
+            else return [(viewportLeft + viewportRight) / 2, 0.5]
         })()
 
         // Init
-        for(const button of [this._app.hostView.zoomInBtn, this._app.hostView.zoomOutBtn]){
+        for (const button of [this._app.hostView.zoomInBtn, this._app.hostView.zoomOutBtn]) {
             button.classList.add("zoom-disabled")
             button.classList.remove("zoom-enabled")
         }
 
         // Get zoom ratio
         new_zoom_level = Math.max(MIN_ZOOM_LEVEL, Math.min(new_zoom_level, MAX_ZOOM_LEVEL))
-        if(respect_step){
+        if (respect_step) {
             const current_step = this.getStepByZoom(RATIO_MILLS_BY_PX)
             let new_step = this.getStepByZoom(new_zoom_level)
-            new_zoom_level=this.getZoomByStep(new_step)
+            new_zoom_level = this.getZoomByStep(new_step)
         }
 
         // Zoom
@@ -168,14 +168,14 @@ export default class EditorController {
         this._app.playheadController.updateRangeAfterZoom(oldRatio, newRatio);
         this._app.pianoRollController.updateRangeAfterZoom(oldRatio, newRatio);
 
-        this._app.host.playhead= this._app.host.playhead
-        this._view.playhead.viewportLeft= (zoomTarget/RATIO_MILLS_BY_PX)-this._view.playhead.viewportWidth*zoomTargetPos
+        this._app.host.playhead = this._app.host.playhead
+        this._view.playhead.viewportLeft = (zoomTarget / RATIO_MILLS_BY_PX) - this._view.playhead.viewportWidth * zoomTargetPos
         await this._view.resizeCanvas()
         this._view.loop.updatePositionFromTime(...this._app.hostController.loopRange)
         this._app.automationController.updateBPFWidth()
         this._view.spanZoomLevel.value = ZOOM_LEVEL.toFixed(2)
-        await Promise.all(this._app.tracksController.tracks.map( track => this._view.stretchRegions(track)))
-        
+        await Promise.all(this._app.tracksController.tracks.map(track => this._view.stretchRegions(track)))
+
         // Force immediate redraw to avoid debounce delay
         this._app.tracksController.tracks.forEach(track => {
             track.regions.forEach(region => {
@@ -186,12 +186,12 @@ export default class EditorController {
         // Refresh Piano Roll if open
         this._app.pianoRollController.redraw();
 
-        if(ZOOM_LEVEL!=MAX_ZOOM_LEVEL){
+        if (ZOOM_LEVEL != MAX_ZOOM_LEVEL) {
             this._app.hostView.zoomInBtn.classList.add("zoom-enabled")
             this._app.hostView.zoomInBtn.classList.remove("zoom-disabled")
         }
 
-        if(ZOOM_LEVEL!=MIN_ZOOM_LEVEL){
+        if (ZOOM_LEVEL != MIN_ZOOM_LEVEL) {
             this._app.hostView.zoomOutBtn.classList.add("zoom-enabled")
             this._app.hostView.zoomOutBtn.classList.remove("zoom-disabled")
         }
@@ -209,7 +209,7 @@ export default class EditorController {
         this._view.editorDiv.addEventListener("wheel", (e) => {
             if (this._app.pianoRollController.isVisible) return;
             console.log("wheel called !!!!")
-             // MB: Prevent the default scroll behavior (i.e., browser swipe navigation)
+            // MB: Prevent the default scroll behavior (i.e., browser swipe navigation)
             e.preventDefault();
 
             // Idéalement :
@@ -218,7 +218,7 @@ export default class EditorController {
             // scroll vertical avec deux doigts et control pour zoom
             // ou gesture multi pinch out et in pour zoom
 
-            if(isKeyPressed("Shift")){ // Zoom in/out
+            if (isKeyPressed("Shift")) { // Zoom in/out
                 const currentTime = Date.now();
                 if (currentTime - this._lastExecutedZoom < this.THROTTLE_TIME) return;
 
@@ -227,26 +227,26 @@ export default class EditorController {
                 const isMac = navigator.platform.toUpperCase().includes('MAC');
                 if (isMac && e.metaKey || !isMac && e.ctrlKey) {
                     const zoomIn = e.deltaY > 0;
-                    if (zoomIn) this._app.editorController.zoomTo(ZOOM_LEVEL*1.5);
-                    else this._app.editorController.zoomTo(ZOOM_LEVEL/1.5);
+                    if (zoomIn) this._app.editorController.zoomTo(ZOOM_LEVEL * 1.5);
+                    else this._app.editorController.zoomTo(ZOOM_LEVEL / 1.5);
                 }
                 else {
                     this._view.handleWheel(e);
                 }
             }
-            else{ // Scroll
+            else { // Scroll
                 //console.log("Detected horizontal scroll with two fingers");
                 // console.log("Horizontal scroll distance: ", e.deltaX);
                 // console.log("Vertical scroll distance: ", e.deltaY);
 
                 // MB changed e.deltaY to e.deltaX
-                this._view.playhead.viewportLeft+= this._view.playhead.viewportWidth * e.deltaX / 2000
-                
+                this._view.playhead.viewportLeft += this._view.playhead.viewportWidth * e.deltaX / 2000
+
                 // Scroll vertically
                 this._view.verticalScrollbar.customScrollBy(e.deltaY);
             }
 
-            
+
             e.stopPropagation();
         });
         this._view.horizontalScrollbar.addEventListener("change", (e: ScrollEvent) => {
@@ -255,37 +255,46 @@ export default class EditorController {
         this._view.verticalScrollbar.addEventListener("change", (e: ScrollEvent) => {
             this._view.handleVerticalScroll(e);
         });
-        this._view.canvasContainer.addEventListener('dragover', (e: DragEvent) => {
-            e.preventDefault();
-        });
+        // Use capture phase for dragover to ensure we allow copy everywhere in the window
         window.addEventListener('dragover', (e: DragEvent) => {
             e.preventDefault();
-        });
-        this._view.canvasContainer.addEventListener('drop', (e: DragEvent) => {
-            console.log("drag called !!!!")
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = "copy";
+            }
+        }, true);
+
+        window.addEventListener('dragenter', (e: DragEvent) => {
             e.preventDefault();
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = "copy";
+            }
+        }, true);
 
+        // Handle drop on the canvas/window
+        window.addEventListener('drop', (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation(); // Stop default browser behavior
 
+            console.log("Global drop event caught!", e.clientX, e.clientY);
+
+            // Check for audioFileURL (internal drag from Audio Loop Browser)
             if (e.dataTransfer?.getData("audioFileURL")) {
-                // LEt's fetch the audio file and create a new region (drag'n'drop from audio loop browser)
                 let audioFileURL = e.dataTransfer?.getData("audioFileURL");
+                console.log("Importing audio loop from URL:", audioFileURL);
                 this.importDraggedAudioLoop(audioFileURL, e.clientX, e.clientY);
-            } else {
-                // check if dragged data is one or several files (drag'n'drop from desktop)
-                if (e.dataTransfer?.items) {
-
+            }
+            // Check for external files (OS file drag)
+            else if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+                const hasFiles = Array.from(e.dataTransfer.items).some(item => item.kind === 'file');
+                if (hasFiles) {
                     this.importDraggedFiles([...e.dataTransfer.items], e.clientX, e.clientY);
                 }
             }
+        }, true); // Capture phase
 
-
-        })
-        this._view.playhead.onViewMove.add((prev,next)=>{
-            this._view.horizontalScrollbar.scrollLeft=next
-            this._view.automationContainer.scrollLeft=next
-        })
-        window.addEventListener('drop', (e) => {
-            e.preventDefault();
+        this._view.playhead.onViewMove.add((prev, next) => {
+            this._view.horizontalScrollbar.scrollLeft = next
+            this._view.automationContainer.scrollLeft = next
         })
     }
 
@@ -299,7 +308,7 @@ export default class EditorController {
     private getZoomByStep(level: number): number {
         return Math.max(MIN_ZOOM_LEVEL, Math.min(MAX_ZOOM_LEVEL, Math.pow(2, level)))
     }
-    
+
     /**
      * @return Get the zoom level step the nearest of a given zoom level
      */
@@ -319,37 +328,37 @@ export default class EditorController {
         // /!\ The file have to be getted before the first "await" /!\
         // The DataTransferItem is emptied, once out of the event listener, if a listener of drop event
         // call this function, you have to get the files before the first await.
-        const items= _items.map(f => ({type:f.type, file:f.getAsFile()}))
+        const items = _items.map(f => ({ type: f.type, file: f.getAsFile() }))
 
         // Get the track under the given position
         const target = await this.getTrackAt(clientX, clientY, true)
-        if(!target)return
+        if (!target) return
 
         // Then import the loaded files
-        let success=false
-        let needNewTrack=false
-        for(const item of items){
-            if(needNewTrack){
-                const tracks=this._app.tracksController.tracks
-                let next_track=tracks.get(tracks.indexOf(target.track)+1)
-                if(next_track==null){
-                    next_track=await this._app.tracksController.createTrack()
+        let success = false
+        let needNewTrack = false
+        for (const item of items) {
+            if (needNewTrack) {
+                const tracks = this._app.tracksController.tracks
+                let next_track = tracks.get(tracks.indexOf(target.track) + 1)
+                if (next_track == null) {
+                    next_track = await this._app.tracksController.createTrack()
                 }
-                target.track=next_track
-                needNewTrack=false
+                target.track = next_track
+                needNewTrack = false
             }
-            
+
             const isMidi = item.type === "audio/midi" || item.type === "audio/x-midi" || (item.file && (item.file.name.endsWith(".mid") || item.file.name.endsWith(".midi")));
-        
+
             if (isMidi) {
                 const audioFile = item.file;
                 if (!audioFile) continue;
-        
+
                 target.track.element.progress(0, 1);
                 const buffer = await audioFile.arrayBuffer();
                 const importedTracks = await parseMidiFile(buffer);
                 target.track.element.progressDone();
-                
+
                 if (importedTracks.length > 0) {
                     success = true;
                     let firstTrack = true;
@@ -363,7 +372,7 @@ export default class EditorController {
                             }
                             target.track = nextTrack;
                         }
-                        
+
                         target.track.element.name = imported.name || audioFile.name;
                         const region = new MIDIRegion(imported.midi, target.start);
                         this._app.regionsController.addRegion(target.track, region);
@@ -372,41 +381,41 @@ export default class EditorController {
                     needNewTrack = true; // For the next file in `items`
                 }
             } else {
-                const result=await this.importFile(
+                const result = await this.importFile(
                     async () => {
                         const audioFile = item.file
-                        if(!audioFile)return null
-                        target.track.element.name=audioFile.name
-                        return {buffer:await audioFile.arrayBuffer(), type: item.type}
+                        if (!audioFile) return null
+                        target.track.element.name = audioFile.name
+                        return { buffer: await audioFile.arrayBuffer(), type: item.type }
                     },
                     target.track,
                     target.start
                 )
-                if(result){
-                    success=true
-                    needNewTrack=true
+                if (result) {
+                    success = true
+                    needNewTrack = true
                 }
             }
         }
-        if(!success)target.cancel()
+        if (!success) target.cancel()
     }
 
 
     private async importDraggedAudioLoop(url: string, clientX: number, clientY: number) {
         // Get the track under the given position
         const target = await this.getTrackAt(clientX, clientY, true)
-        if(!target)return
+        if (!target) return
 
         // Then import the loaded file 
-        const result=await this.importFile(
+        const result = await this.importFile(
             async () => {
-                let file = await fetch(url,{mode:"cors"});
-                return {buffer:await file.arrayBuffer(), type: file.headers.get("content-type")||""}
+                let file = await fetch(url, { mode: "cors" });
+                return { buffer: await file.arrayBuffer(), type: file.headers.get("content-type") || "" }
             },
             target.track,
             target.start
         )
-        if(!result)target.cancel()
+        if (!result) target.cancel()
     }
 
     /**
@@ -419,7 +428,7 @@ export default class EditorController {
      * @returns The track at the given position and the position of the given position in the track as duration in milliseconds.
      * And a function you can call to cancel the creation of the track if a track has been created.
      */
-    private async getTrackAt(clientX: number, clientY: number, doCreate=false): Promise<{start:number, track:Track, cancel:()=>void}|null>{
+    private async getTrackAt(clientX: number, clientY: number, doCreate = false): Promise<{ start: number, track: Track, cancel: () => void } | null> {
         let offsetLeft = this._view.canvasContainer.offsetLeft // offset x of the canvas
         let offsetTop = this._view.canvasContainer.offsetTop // offset y of the canvas
 
@@ -434,17 +443,17 @@ export default class EditorController {
 
             // Else create the track if asked to
             if (!waveform) {
-                if(doCreate){
+                if (doCreate) {
                     const track = await this._app.tracksController.createTrack();
                     track.element.name = "NEW TRACK"
-                    return {start, track, cancel:()=>this._app.tracksController.removeTrack(track)}
+                    return { start, track, cancel: () => this._app.tracksController.removeTrack(track) }
                 }
                 else return null
             }
-            else{
+            else {
                 const track = this._app.tracksController.getTrackById(waveform.trackId)!;
-                if(track)return {start, track, cancel:()=>{}}
-                else{
+                if (track) return { start, track, cancel: () => { } }
+                else {
                     crashOnDebug("A track should be associated to this waveform")
                     return null
                 }
@@ -459,28 +468,28 @@ export default class EditorController {
      * @param track The track to import the file in
      * @param start The start position of the loaded region
      */
-    private async importFile(bufferLoader: ()=>Promise<{buffer:ArrayBuffer, type:string}|null>, track: Track, start: number): Promise<RegionOf<any>|null>{
+    private async importFile(bufferLoader: () => Promise<{ buffer: ArrayBuffer, type: string } | null>, track: Track, start: number): Promise<RegionOf<any> | null> {
         this._view.setLoading(true)
         track.element.progress();
-        
+
         // Fetch the file
         const file = await bufferLoader()
-        if(!file){
+        if (!file) {
             this._view.setLoading(false)
             console.error("File could not be loaded")
             return null
         }
 
         // Get the array buff
-        const {buffer,type} = file
+        const { buffer, type } = file
 
         // Decode the audio file as a node
-        let region: RegionOf<any>|null= null
-        for(const loader of EditorController.DRAG_LOADERS){
+        let region: RegionOf<any> | null = null
+        for (const loader of EditorController.DRAG_LOADERS) {
             // Try each audio file loader until one can decode the file
             let loaded_region = await loader(start, buffer, type)
-            if(loaded_region!==null){
-                region=loaded_region
+            if (loaded_region !== null) {
+                region = loaded_region
                 this._app.regionsController.addRegion(track, loaded_region)
                 break
             }

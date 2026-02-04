@@ -115,6 +115,7 @@ fn open_vst_editor(path: String) -> Result<(), String> {
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_log::Builder::default().build())
+    .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
         scan_plugins, 
         open_vst_editor,

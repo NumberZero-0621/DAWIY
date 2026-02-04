@@ -1,4 +1,5 @@
 import { BACKEND_URL } from "../Env";
+import { open } from '@tauri-apps/plugin-dialog'; // Tauri v2 dialog plugin
 
 export default class WamAudioLoopBrowser extends HTMLElement {
     audioData: any = null;
@@ -28,6 +29,11 @@ export default class WamAudioLoopBrowser extends HTMLElement {
                     <i class="bi bi-search" id="search-icon"></i>
                     <input type="text" id="search-input" placeholder="  Search Library"/>
                 </div><br>
+                <div id="add-library-container" style="text-align: center; margin-bottom: 1rem;">
+                    <button id="add-library-btn" style="width: 90%;">
+                        <i class="bi bi-folder-plus"></i> Add Library
+                    </button>
+                </div>
                 <div id="filter-container">
                     <div id="key-filter">
                         <label for="key-select">KEY :</label>
@@ -290,7 +296,18 @@ export default class WamAudioLoopBrowser extends HTMLElement {
           }
 
           button:hover {
-            background-color: darken(var(--accent-color), 60%);
+            background-color: #555;
+          }
+
+          #add-library-btn {
+             background-color: rgba(0, 0, 0, 0.5);
+             color: var(--text-color);
+             border: 1px solid var(--text-color);
+          }
+
+          #add-library-btn:hover {
+             background-color: white;
+             color: black;
           }
 
           #key-filter {
@@ -351,6 +368,9 @@ export default class WamAudioLoopBrowser extends HTMLElement {
                 let resetFiltersBtn = this.shadowRoot!.getElementById('reset-filters-btn') as HTMLButtonElement;
                 resetFiltersBtn.addEventListener('click', () => this.resetDisplay());
 
+                const addLibraryBtn = this.shadowRoot!.getElementById('add-library-btn') as HTMLButtonElement;
+                addLibraryBtn.addEventListener('click', () => this.handleAddLibrary());
+
                 let showFavoritesCheckbox = this.shadowRoot!.getElementById('show-favorites') as HTMLInputElement;
                 showFavoritesCheckbox.addEventListener('change', (event) => {
                     const favoritesContainer = this.shadowRoot!.getElementById('favorites-container') as HTMLElement;
@@ -368,13 +388,47 @@ export default class WamAudioLoopBrowser extends HTMLElement {
                     }
                 });
                 this.attachFavouriteButtonEventListeners();
+                this.attachFavouriteButtonEventListeners();
                 this.updateFavoritesDisplay();
                 this.initFavouriteIcons();
+
+                // Attach dragover to the main list to allow dragging
+                const libraryList = this.shadowRoot!.getElementById('library-list');
+                if (libraryList) {
+                    libraryList.addEventListener('dragover', this.dragOverHandler);
+                }
             })
             .catch((error) => {
                 console.error("Error fetching audio data:", error);
             });
     }
+
+    async handleAddLibrary() {
+        try {
+            const selected = await open({
+                directory: true,
+                multiple: false,
+            });
+
+            if (selected) {
+                console.log("Selected folder:", selected);
+                // Send path to backend
+                await fetch(this.URL_SERVER + '/api/audioloops/path', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ path: selected }),
+                });
+
+                // Refresh list
+                this.init();
+            }
+        } catch (err) {
+            console.error("Error selecting folder:", err);
+        }
+    }
+
     handleSearchAndFilter() {
         if (this.searchTimeout) {
             clearTimeout(this.searchTimeout);
@@ -617,11 +671,30 @@ export default class WamAudioLoopBrowser extends HTMLElement {
             }
         });
 
+        // Add ended event listener to reset play button logic
+        this.shadowRoot!.querySelectorAll('audio').forEach((audio: HTMLAudioElement) => {
+            audio.addEventListener('ended', () => {
+                const audioItem = audio.closest('.audio-file-item');
+                if (audioItem) {
+                    const playBtn = audioItem.querySelector('.play-btn') as HTMLButtonElement;
+                    if (playBtn) {
+                        playBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+                    }
+                }
+            });
+        });
+
         this.attachPlayButtonEventListeners();
     }
-    findFileObjectByFullPath(fullPath: string, children: any) {
+    findFileObjectByFullPath(fullPath: string, children: any): any {
         for (const item of children) {
-            const path = this.URL_SERVER + (encodeURI(item.url).replace(/#/g, '%23'));
+            let path = "";
+            if (item.url && item.url.startsWith("/api/audioloops/serve")) {
+                path = this.URL_SERVER + item.url;
+            } else if (item.url) {
+                path = this.URL_SERVER + (encodeURI(item.url).replace(/#/g, '%23'));
+            }
+
             if (item.type === 'file' && (path === fullPath)) {
                 return item;
             } else if (item.type === 'folder') {
@@ -682,11 +755,20 @@ export default class WamAudioLoopBrowser extends HTMLElement {
         const audioId = `audio-${safeName}${audioIdSuffix}`;
         const durationId = `duration-${safeName}`;
         const fileExtension = element.name.split('.').pop();
-        const fullPath = this.URL_SERVER + encodeURI(element.url).replace(/#/g, '%23');
+
+        let fullPath = "";
+        if (element.url && element.url.startsWith("/api/audioloops/serve")) {
+            // It's an external file served via API, URL is already properly prepped
+            fullPath = this.URL_SERVER + element.url;
+        } else {
+            // Legacy local file path
+            fullPath = this.URL_SERVER + encodeURI(element.url).replace(/#/g, '%23');
+        }
+
         const fileNameWithoutExtension = element.name.replace(new RegExp(`\.${fileExtension}$`), '');
 
         return `
-            <div draggable=true  class="audio-file-item" data-filename="${element.name}"
+            <div draggable="true" class="audio-file-item" data-filename="${element.name}"
             data-fullpath="${fullPath}">
                 <button class="play-btn">
                     <i class="bi bi-play-fill"></i>
@@ -707,9 +789,24 @@ export default class WamAudioLoopBrowser extends HTMLElement {
     }
 
     dragHandler = (event: any) => {
-        console.log(event.target.dataset.fullpath);
-        // copy to datatransfer
-        event.dataTransfer.setData("audioFileURL", event.target.dataset.fullpath);
+        event.stopPropagation();
+        // Use currentTarget to ensure we get the div with the dataset, not a child element
+        const target = event.currentTarget as HTMLElement;
+        console.log("Drag started:", target.dataset.fullpath);
+
+        if (event.dataTransfer && target.dataset.fullpath) {
+            event.dataTransfer.effectAllowed = "copy";
+            event.dataTransfer.setData("audioFileURL", target.dataset.fullpath);
+            // Also set text/plain for broader compatibility debugging
+            event.dataTransfer.setData("text/plain", target.dataset.fullpath);
+        }
+    }
+
+    dragOverHandler = (event: any) => {
+        event.preventDefault();
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "copy";
+        }
     }
 }
 
