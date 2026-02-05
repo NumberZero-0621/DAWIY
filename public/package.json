@@ -17,6 +17,7 @@
     "@pixi/app": "7.2.4",
     "@pixi/core": "7.2.4",
     "@popperjs/core": "^2.11.6",
+    "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "@webaudiomodules/api": "^2.0.0-alpha.6",
     "@webaudiomodules/sdk": "^0.0.12",

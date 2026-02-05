@@ -48,6 +48,11 @@
 
 Rust環境(`cargo`)がインストールされている必要があります。
 
+また、Windows環境でビルドエラー（`linker link.exe not found` や `cannot open input file 'kernel32.lib'`）が発生する場合は、以下のツールが必要です：
+
+- **Visual Studio Build Tools 2022**（「C++によるデスクトップ開発」ワークロード）
+- **Windows 10/11 SDK**（Visual Studio Installerの「個別のコンポーネント」からインストール可能）
+
 - `npm run desktop`
   - フロントエンド、バックエンド、そしてTauriアプリウィンドウが同時に起動します。
 

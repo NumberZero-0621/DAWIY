@@ -2,6 +2,7 @@
   "scripts": {
     "dev": "concurrently --kill-others -n \"PUBLIC,BANK\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm start --prefix public\" \"npm start --prefix bank\"",
     "tauri": "tauri",
+    "predesktop": "node scripts/check-deps.js",
     "desktop": "concurrently --kill-others -n \"PUBLIC,BANK,TAURI\" -c \"bgBlue.bold,bgMagenta.bold,bgYellow.bold\" \"set HEADLESS=true&& npm start --prefix public\" \"npm start --prefix bank\" \"set PATH=%PATH%;C:\\Users\\jotar\\.cargo\\bin&& tauri dev\""
   },
   "dependencies": {
