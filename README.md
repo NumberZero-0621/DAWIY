@@ -36,25 +36,36 @@
 
 ## スタートガイド（ローカル）
 
-### Windows
+### ブラウザ版（Windows）
 
 [`run_dev.cmd`](run_dev.cmd)をダブルクリックするか、ターミナルで`.\run_dev.cmd`を実行
 
-### Mac / Linux  
+### ブラウザ版（Mac / Linux）  
 
 シェルで`sh run_dev.cmd`または`bash run_dev.cmd`を実行
 
 ### デスクトップ版 (Tauri)
 
-Rust環境(`cargo`)がインストールされている必要があります。
+**※注意！：**  
+初めてコンパイルする際にものすごく色々インストールされるので、ウェブ版に比べてファイルサイズがかなり（4～8GBくらい）増えることが予想されます  
+ストレージに20GB以上余裕のある方以外は非推奨です
 
-また、Windows環境でビルドエラー（`linker link.exe not found` や `cannot open input file 'kernel32.lib'`）が発生する場合は、以下のツールが必要です：
+Rust環境(`cargo`)がインストールされている必要があります
+
+- [rustup](https://rustup.rs/)のサイトから`rustup-init.exe`をダウンロードしてきて実行してください
+
+また、Windows環境でビルドエラー（`linker link.exe not found` や `cannot open input file 'kernel32.lib'`）が発生する場合は、以下のツールが必要です  
+（※[MSVCの前提条件](https://rust-lang.github.io/rustup/installation/windows-msvc.html)というページにほぼ同じことが書かれています）：
 
 - **Visual Studio Build Tools 2022**（「C++によるデスクトップ開発」ワークロード）
 - **Windows 10/11 SDK**（Visual Studio Installerの「個別のコンポーネント」からインストール可能）
+  - 「C++によるデスクトップ開発」にチェックを入れた後、画面右側のオプションはこのチェックだけで動きます
+  
+  ![Visual Studio Installerの様子](https://github.com/user-attachments/assets/295b0882-c302-4262-9137-b269dc7847c3)
 
-- `npm run desktop`
-  - フロントエンド、バックエンド、そしてTauriアプリウィンドウが同時に起動します。
+
+- 各項目のインストールが終了したら、ターミナルで`npm run desktop`を実行
+  - フロントエンド、バックエンド、そしてTauriアプリウィンドウが同時に起動します
 
 ***
 
