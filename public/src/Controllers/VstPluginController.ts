@@ -80,13 +80,14 @@ export default class VstPluginController {
         }
 
         try {
-            this.app.showToast("Launching VST standalone...");
-            const result = await invoke<string>("launch_vst_standalone", { pluginPath });
-            console.log("[VST] Launch result:", result);
-            this.app.showToast("VST plugin launched successfully!");
+            this.app.showToast("Opening Native Editor (Experimental)...");
+            // Switch to Native Implementation
+            const result = await invoke<string>("open_vst_editor", { path: pluginPath });
+            console.log("[VST] Native launch result:", result);
+            this.app.showToast("VST plugin launched (Native Mode)!");
         } catch (e) {
-            console.error("[VST] Launch error:", e);
-            this.app.showToast("" + e, true);
+            console.error("[VST] Native Launch error:", e);
+            this.app.showToast("Native Launch Failed: " + e, true);
         }
     }
 

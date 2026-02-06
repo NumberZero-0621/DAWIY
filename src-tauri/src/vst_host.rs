@@ -1,527 +1,444 @@
 use std::ffi::c_void;
-use std::os::raw::{c_char, c_int};
-use std::ptr;
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::mpsc::channel;
 use std::thread;
 
-use libloading::{Library, Symbol};
-use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoopBuilder};
-use winit::platform::windows::EventLoopBuilderExtWindows;
-use winit::window::WindowBuilder;
-use winit::raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
-
-// --- Manual VST3 / COM Definitions ---
-
-// Basic types
-type TResult = i32;
-const K_RESULT_OK: TResult = 0;
-const K_NO_INTERFACE: TResult = -2147467262; // 0x80004002 (E_NOINTERFACE)
-const K_RESULT_FALSE: TResult = 1;
-const K_NOT_IMPLEMENTED: TResult = -2147467263; // 0x80004001 (E_NOTIMPL)
-
-// GUID/IID struct
-#[repr(C)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct TUID {
-    pub data: [u8; 16],
-}
-
-impl std::fmt::Debug for TUID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
-            self.data[3], self.data[2], self.data[1], self.data[0],
-            self.data[5], self.data[4],
-            self.data[7], self.data[6],
-            self.data[8], self.data[9],
-            self.data[10], self.data[11], self.data[12], self.data[13], self.data[14], self.data[15]
-        )
-    }
-}
-
-// IID constants
-// IHostApplication: 58E595CC-db2D-4969-8B62-D3D953323D8E
-const I_HOST_APPLICATION_IID: TUID = TUID { data: [0xCC, 0x95, 0xE5, 0x58, 0x2D, 0xdb, 0x69, 0x49, 0x8B, 0x62, 0xD3, 0xD9, 0x53, 0x32, 0x3D, 0x8E] };
-const I_UNKNOWN_IID: TUID = TUID { data: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46] };
-
-// IComponent: E831FF31-F2D5-4301-928E-BBEE256975F2 (LE)
-const I_COMPONENT_IID_LE: TUID = TUID { data: [0x31, 0xFF, 0x31, 0xE8, 0xD5, 0xF2, 0x01, 0x43, 0x92, 0x8E, 0xBB, 0xEE, 0x25, 0x69, 0x75, 0xF2] };
-const I_COMPONENT_IID_BE: TUID = TUID { data: [0xE8, 0x31, 0xFF, 0x31, 0xF2, 0xD5, 0x43, 0x01, 0x92, 0x8E, 0xBB, 0xEE, 0x25, 0x69, 0x75, 0xF2] };
-
-// IEditController: DCD7BBE3-7742-4722-A491-5859E140BF47 (LE)
-const I_EDIT_CONTROLLER_IID_LE: TUID = TUID { data: [0xE3, 0xBB, 0xD7, 0xDC, 0x42, 0x77, 0x22, 0x47, 0xA4, 0x91, 0x58, 0x59, 0xE1, 0x40, 0xBF, 0x47] };
-const I_EDIT_CONTROLLER_IID_BE: TUID = TUID { data: [0xDC, 0xD7, 0xBB, 0xE3, 0x77, 0x42, 0x47, 0x22, 0xA4, 0x91, 0x58, 0x59, 0xE1, 0x40, 0xBF, 0x47] };
-
-#[repr(C)]
-pub struct IUnknownVTable {
-    pub query_interface: unsafe extern "system" fn(this: *mut c_void, iid: *const TUID, obj: *mut *mut c_void) -> TResult,
-    pub add_ref: unsafe extern "system" fn(this: *mut c_void) -> u32,
-    pub release: unsafe extern "system" fn(this: *mut c_void) -> u32,
-}
-
-#[repr(C)]
-pub struct IPluginFactoryVTable {
-    pub base: IUnknownVTable,
-    pub get_factory_info: unsafe extern "system" fn(this: *mut c_void, info: *mut c_void) -> TResult,
-    pub count_classes: unsafe extern "system" fn(this: *mut c_void) -> i32,
-    pub get_class_info: unsafe extern "system" fn(this: *mut c_void, index: i32, info: *mut PClassInfo) -> TResult,
-    pub create_instance: unsafe extern "system" fn(this: *mut c_void, cid: *const TUID, iid: *const TUID, obj: *mut *mut c_void) -> TResult,
-}
-
-#[repr(C)]
-pub struct PClassInfo {
-    pub cid: TUID,
-    pub cardinality: i32,
-    pub category: [c_char; 32],
-    pub name: [c_char; 64],
-}
-
-#[repr(C)]
-pub struct IComponentVTable {
-    pub base: IUnknownVTable, // 0..2
-    // IPluginBase
-    pub initialize: unsafe extern "system" fn(this: *mut c_void, context: *mut c_void) -> TResult, // 3
-    pub terminate: unsafe extern "system" fn(this: *mut c_void) -> TResult, // 4
-    // IComponent (partial)
-    pub get_controller_class_id: unsafe extern "system" fn(this: *mut c_void, class_id: *mut TUID) -> TResult, // 5
-}
-
-#[repr(C)]
-pub struct IEditControllerVTable {
-    pub base: IUnknownVTable, // 0..2
-    // IPluginBase
-    pub initialize: unsafe extern "system" fn(this: *mut c_void, context: *mut c_void) -> TResult, // 3
-    pub terminate: unsafe extern "system" fn(this: *mut c_void) -> TResult, // 4
-    // IEditController
-    pub set_component_state: unsafe extern "system" fn(this: *mut c_void, state: *mut c_void) -> TResult, // 5
-    // ...
-    // Note: To be safe, we should have full definition if we call methods further down
-    pub set_state: unsafe extern "system" fn(this: *mut c_void, state: *mut c_void) -> TResult, // 6
-    pub get_state: unsafe extern "system" fn(this: *mut c_void, state: *mut c_void) -> TResult, // 7
-    pub get_parameter_count: unsafe extern "system" fn(this: *mut c_void) -> i32, // 8
-    pub get_parameter_info: unsafe extern "system" fn(this: *mut c_void, param_index: i32, info: *mut c_void) -> TResult, // 9
-    pub get_param_string_by_value: unsafe extern "system" fn(this: *mut c_void, id: u32, value_normalized: f64, string: *mut c_void) -> TResult, // 10
-    pub get_param_value_by_string: unsafe extern "system" fn(this: *mut c_void, id: u32, string: *mut c_void, value_normalized: *mut f64) -> TResult, // 11
-    pub normalized_param_to_plain: unsafe extern "system" fn(this: *mut c_void, id: u32, value_normalized: f64) -> f64, // 12
-    pub plain_param_to_normalized: unsafe extern "system" fn(this: *mut c_void, id: u32, plain_value: f64) -> f64, // 13
-    pub get_param_normalized: unsafe extern "system" fn(this: *mut c_void, id: u32) -> f64, // 14
-    pub set_param_normalized: unsafe extern "system" fn(this: *mut c_void, id: u32, value: f64) -> TResult, // 15
-    pub set_component_handler: unsafe extern "system" fn(this: *mut c_void, handler: *mut c_void) -> TResult, // 16
-    pub create_view: unsafe extern "system" fn(this: *mut c_void, name: *const c_char) -> *mut *mut IPlugViewVTable, // 17 - returns IPlugView*
-}
-
-#[repr(C)]
-pub struct IPlugViewVTable {
-    pub base: IUnknownVTable,
-    pub is_platform_type_supported: unsafe extern "system" fn(this: *mut c_void, type_: *const c_char) -> TResult,
-    pub attached: unsafe extern "system" fn(this: *mut c_void, parent: *mut c_void, type_: *const c_char) -> TResult,
-    pub removed: unsafe extern "system" fn(this: *mut c_void) -> TResult,
-    pub on_wheel: unsafe extern "system" fn(this: *mut c_void, distance: f32) -> TResult,
-    pub on_key_down: unsafe extern "system" fn(this: *mut c_void, key: c_int, key_code: c_int, modifiers: c_int) -> TResult,
-    pub on_key_up: unsafe extern "system" fn(this: *mut c_void, key: c_int, key_code: c_int, modifiers: c_int) -> TResult,
-    pub get_size: unsafe extern "system" fn(this: *mut c_void, size: *mut ViewRect) -> TResult,
-    pub on_size: unsafe extern "system" fn(this: *mut c_void, new_size: *mut ViewRect) -> TResult,
-    pub on_focus: unsafe extern "system" fn(this: *mut c_void, state: u8) -> TResult,
-    pub set_frame: unsafe extern "system" fn(this: *mut c_void, frame: *mut c_void) -> TResult,
-    pub can_resize: unsafe extern "system" fn(this: *mut c_void) -> TResult,
-    pub check_size_constraint: unsafe extern "system" fn(this: *mut c_void, rect: *mut ViewRect) -> TResult,
-}
-
-#[repr(C)]
-pub struct ViewRect {
-    pub left: i32,
-    pub top: i32,
-    pub right: i32,
-    pub bottom: i32,
-}
-
-// --- Dummy Host Application ---
-
-#[repr(C)]
-struct IHostApplicationVTable {
-    base: IUnknownVTable,
-    get_name: unsafe extern "system" fn(this: *mut c_void, name: *mut c_void) -> TResult,
-    create_instance: unsafe extern "system" fn(this: *mut c_void, cid: *const TUID, iid: *const TUID, obj: *mut *mut c_void) -> TResult,
-}
-
-// Static VTable for HostApp
-static mut HOST_APP_VTABLE: IHostApplicationVTable = IHostApplicationVTable {
-    base: IUnknownVTable {
-        query_interface: host_query_interface,
-        add_ref: host_add_ref,
-        release: host_release,
-    },
-    get_name: host_get_name,
-    create_instance: host_create_instance,
+use vst3_sys::base::{kResultOk, IPluginFactory, kNoInterface, IPluginBase, IUnknown, tresult};
+use vst3_sys::vst::{
+    IComponent, IEditController, IHostApplication, IComponentHandler, ParamID, ParamValue
 };
+use vst3_sys::gui::{IPlugView, ViewRect, IPlugFrame}; 
+
+use vst3_com::{IID, VstPtr, ComInterface};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM, RECT};
+use windows::Win32::System::LibraryLoader::{GetModuleHandleW, LoadLibraryW, GetProcAddress};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, LoadCursorW,
+    PostQuitMessage, RegisterClassW, TranslateMessage, CS_HREDRAW, CS_VREDRAW,
+    CW_USEDEFAULT, IDC_ARROW, MSG, WINDOW_EX_STYLE,
+    WM_DESTROY, WM_SIZE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+    AdjustWindowRect, SetWindowLongPtrW, GetWindowLongPtrW, GWLP_USERDATA,
+    SetWindowPos, SWP_NOMOVE, SWP_NOZORDER, SWP_NOACTIVATE, SW_SHOW
+};
+use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, CoUninitialize};
+use windows::core::{PCWSTR, s, w};
+
+// --- Interfaces Implementation ---
 
 #[repr(C)]
 struct HostApplication {
-    vtable: *const IHostApplicationVTable,
-    ref_count: u32,
+    pub vptr: *const IHostApplicationVTableLayout, 
+    ref_count: AtomicI32,
 }
 
-// Implementations for HostApp
-unsafe extern "system" fn host_query_interface(_this: *mut c_void, iid: *const TUID, obj: *mut *mut c_void) -> TResult {
-    if iid.is_null() || obj.is_null() { return K_RESULT_FALSE; }
-    let iid_ref = &*iid;
-    if iid_ref == &I_UNKNOWN_IID || iid_ref == &I_HOST_APPLICATION_IID {
-         *obj = _this;
-         host_add_ref(_this);
-         return K_RESULT_OK;
+#[repr(C)]
+struct IHostApplicationVTableLayout {
+    pub query_interface: unsafe extern "system" fn(*mut c_void, *const IID, *mut *mut c_void) -> i32,
+    pub add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
+    pub release: unsafe extern "system" fn(*mut c_void) -> u32,
+    pub get_name: unsafe extern "system" fn(*mut c_void, *mut u16) -> i32,
+    pub create_instance: unsafe extern "system" fn(*mut c_void, *const IID, *const IID, *mut *mut c_void) -> i32,
+}
+
+static HOST_APP_VTBL: IHostApplicationVTableLayout = IHostApplicationVTableLayout {
+    query_interface: HostApplication_query_interface,
+    add_ref: HostApplication_add_ref,
+    release: HostApplication_release,
+    get_name: HostApplication_get_name,
+    create_instance: HostApplication_create_instance,
+};
+
+unsafe extern "system" fn HostApplication_query_interface(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> i32 {
+    let check = *iid;
+    if check == <dyn IUnknown as ComInterface>::IID || check == <dyn IHostApplication as ComInterface>::IID {
+        *obj = this;
+        HostApplication_add_ref(this);
+        return kResultOk;
     }
-    *obj = ptr::null_mut();
-    K_NO_INTERFACE
+    kNoInterface
 }
-unsafe extern "system" fn host_add_ref(_this: *mut c_void) -> u32 { 1 }
-unsafe extern "system" fn host_release(_this: *mut c_void) -> u32 { 1 }
-
-unsafe extern "system" fn host_get_name(_this: *mut c_void, _name: *mut c_void) -> TResult {
-    K_NOT_IMPLEMENTED
+unsafe extern "system" fn HostApplication_add_ref(this: *mut c_void) -> u32 {
+    let app = &*(this as *const HostApplication);
+    app.ref_count.fetch_add(1, Ordering::Relaxed) as u32 + 1
 }
-unsafe extern "system" fn host_create_instance(_this: *mut c_void, _cid: *const TUID, _iid: *const TUID, _obj: *mut *mut c_void) -> TResult {
-    K_NOT_IMPLEMENTED
+unsafe extern "system" fn HostApplication_release(this: *mut c_void) -> u32 {
+    let app = &*(this as *const HostApplication);
+    let val = app.ref_count.fetch_sub(1, Ordering::Relaxed);
+    val as u32 - 1
+}
+unsafe extern "system" fn HostApplication_get_name(_this: *mut c_void, name: *mut u16) -> i32 {
+    let dawiy = "DAWIY".encode_utf16().collect::<Vec<u16>>();
+    let dest = std::slice::from_raw_parts_mut(name, 128);
+    for (i, &c) in dawiy.iter().enumerate() {
+        if i >= 127 { break; }
+        dest[i] = c;
+    }
+    dest[dawiy.len()] = 0;
+    kResultOk
+}
+unsafe extern "system" fn HostApplication_create_instance(_this: *mut c_void, _cid: *const IID, _iid: *const IID, _obj: *mut *mut c_void) -> i32 {
+    kNoInterface
 }
 
+#[repr(C)]
+struct ComponentHandler {
+    pub vptr: *const IComponentHandlerVTableLayout,
+    ref_count: AtomicI32,
+}
+#[repr(C)]
+struct IComponentHandlerVTableLayout {
+    pub query_interface: unsafe extern "system" fn(*mut c_void, *const IID, *mut *mut c_void) -> i32,
+    pub add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
+    pub release: unsafe extern "system" fn(*mut c_void) -> u32,
+    pub begin_edit: unsafe extern "system" fn(*mut c_void, ParamID) -> tresult,
+    pub perform_edit: unsafe extern "system" fn(*mut c_void, ParamID, ParamValue) -> tresult,
+    pub end_edit: unsafe extern "system" fn(*mut c_void, ParamID) -> tresult,
+    pub restart_component: unsafe extern "system" fn(*mut c_void, i32) -> tresult,
+}
+static COMP_HANDLER_VTBL: IComponentHandlerVTableLayout = IComponentHandlerVTableLayout {
+    query_interface: ComponentHandler_query_interface,
+    add_ref: ComponentHandler_add_ref,
+    release: ComponentHandler_release,
+    begin_edit: ComponentHandler_begin_edit,
+    perform_edit: ComponentHandler_perform_edit,
+    end_edit: ComponentHandler_end_edit,
+    restart_component: ComponentHandler_restart_component,
+};
+unsafe extern "system" fn ComponentHandler_query_interface(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> i32 {
+    if *iid == <dyn IUnknown as ComInterface>::IID || *iid == <dyn IComponentHandler as ComInterface>::IID {
+        *obj = this;
+        ComponentHandler_add_ref(this);
+        return kResultOk;
+    }
+    kNoInterface
+}
+unsafe extern "system" fn ComponentHandler_add_ref(this: *mut c_void) -> u32 {
+    let h = &*(this as *const ComponentHandler);
+    h.ref_count.fetch_add(1, Ordering::Relaxed) as u32 + 1
+}
+unsafe extern "system" fn ComponentHandler_release(this: *mut c_void) -> u32 {
+    let h = &*(this as *const ComponentHandler);
+    let val = h.ref_count.fetch_sub(1, Ordering::Relaxed);
+    val as u32 - 1
+}
+unsafe extern "system" fn ComponentHandler_begin_edit(_this: *mut c_void, _id: ParamID) -> tresult { kResultOk }
+unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, _id: ParamID, _val: ParamValue) -> tresult { kResultOk }
+unsafe extern "system" fn ComponentHandler_end_edit(_this: *mut c_void, _id: ParamID) -> tresult { kResultOk }
+unsafe extern "system" fn ComponentHandler_restart_component(_this: *mut c_void, _flags: i32) -> tresult { kResultOk }
 
-fn c_char_to_string(c_char_array: &[c_char]) -> String {
-    let bytes: Vec<u8> = c_char_array.iter().map(|&c| c as u8).take_while(|&c| c != 0).collect();
-    String::from_utf8_lossy(&bytes).into_owned()
+#[repr(C)]
+struct PlugFrame {
+    pub vptr: *const IPlugFrameVTableLayout,
+    ref_count: AtomicI32,
+    hwnd: HWND,
+}
+#[repr(C)]
+struct IPlugFrameVTableLayout {
+    pub query_interface: unsafe extern "system" fn(*mut c_void, *const IID, *mut *mut c_void) -> i32,
+    pub add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
+    pub release: unsafe extern "system" fn(*mut c_void) -> u32,
+    pub resize_view: unsafe extern "system" fn(*mut c_void, *mut c_void, *mut ViewRect) -> tresult, 
+}
+static PLUG_FRAME_VTBL: IPlugFrameVTableLayout = IPlugFrameVTableLayout {
+    query_interface: PlugFrame_query_interface,
+    add_ref: PlugFrame_add_ref,
+    release: PlugFrame_release,
+    resize_view: PlugFrame_resize_view,
+};
+unsafe extern "system" fn PlugFrame_query_interface(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> i32 {
+    if *iid == <dyn IUnknown as ComInterface>::IID || *iid == <dyn IPlugFrame as ComInterface>::IID {
+        *obj = this;
+        PlugFrame_add_ref(this);
+        return kResultOk;
+    }
+    kNoInterface
+}
+unsafe extern "system" fn PlugFrame_add_ref(this: *mut c_void) -> u32 {
+    let f = &*(this as *const PlugFrame);
+    f.ref_count.fetch_add(1, Ordering::Relaxed) as u32 + 1
+}
+unsafe extern "system" fn PlugFrame_release(this: *mut c_void) -> u32 {
+    let f = &*(this as *const PlugFrame);
+    let val = f.ref_count.fetch_sub(1, Ordering::Relaxed);
+    val as u32 - 1
+}
+unsafe extern "system" fn PlugFrame_resize_view(this: *mut c_void, _view: *mut c_void, new_size: *mut ViewRect) -> tresult {
+    let f = &*(this as *const PlugFrame);
+    if !new_size.is_null() {
+        let rect = &*new_size;
+        let width = rect.right - rect.left;
+        let height = rect.bottom - rect.top;
+        
+        // Resize window request from Plugin
+        let mut win_rect = RECT { left: 0, top: 0, right: width, bottom: height };
+        AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
+        let full_width = win_rect.right - win_rect.left;
+        let full_height = win_rect.bottom - win_rect.top;
+        
+        SetWindowPos(f.hwnd, None, 0, 0, full_width, full_height, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    kResultOk
 }
 
-// --- Implementation ---
+fn create_host_app() -> *mut c_void {
+    let app = Box::new(HostApplication {
+        vptr: &HOST_APP_VTBL,
+        ref_count: AtomicI32::new(1),
+    });
+    Box::into_raw(app) as *mut c_void
+}
+fn create_component_handler() -> *mut c_void {
+    let h = Box::new(ComponentHandler {
+        vptr: &COMP_HANDLER_VTBL,
+        ref_count: AtomicI32::new(1),
+    });
+    Box::into_raw(h) as *mut c_void
+}
+fn create_plug_frame(hwnd: HWND) -> *mut c_void {
+    let f = Box::new(PlugFrame {
+        vptr: &PLUG_FRAME_VTBL,
+        ref_count: AtomicI32::new(1),
+        hwnd,
+    });
+    Box::into_raw(f) as *mut c_void
+}
 
-// Signature of GetPluginFactory
-type GetPluginFactory = unsafe extern "C" fn() -> *mut *mut IPluginFactoryVTable;
+// --- Main Exported Function ---
 
 pub fn load_and_open(path: String) -> Result<(), String> {
-    println!("[TAURI] Native Host: Loading VST3 from {}", path);
+    let (tx, rx) = channel();
 
-    let _handle = thread::spawn(move || {
-        if let Err(e) = run_vst_host(&path) {
-            eprintln!("[TAURI] VST Host Error: {}", e);
+    thread::spawn(move || {
+        let res = unsafe { run_vst_thread(&path, tx.clone()) };
+        if let Err(e) = res {
+            println!("[Native] Thread Error: {}", e);
+            let _ = tx.send(Err(e));
         }
     });
 
+    // Wait for initialization result. If thread sends Ok, it means window is open.
+    // If thread sends Err, it means failed.
+    rx.recv().map_err(|e| format!("Receive error: {}", e))?
+}
+
+unsafe fn run_vst_thread(path: &str, tx: std::sync::mpsc::Sender<Result<(), String>>) -> Result<(), String> {
+    CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok();
+
+    // 1. Create Window Class & Window
+    let instance = GetModuleHandleW(None).unwrap();
+    let class_name = w!("DAWIY_VST_HOST");
+
+    let wc = WNDCLASSW {
+        hInstance: instance.into(),
+        lpszClassName: class_name,
+        lpfnWndProc: Some(wnd_proc),
+        style: CS_HREDRAW | CS_VREDRAW,
+        hCursor: LoadCursorW(None, IDC_ARROW).unwrap(),
+        ..Default::default()
+    };
+    RegisterClassW(&wc);
+    
+    // Create initially hidden or default size
+    let hwnd = CreateWindowExW(
+        WINDOW_EX_STYLE::default(),
+        class_name,
+        w!("DAWIY Native VST3"),
+        WS_OVERLAPPEDWINDOW, // Not visible yet
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        800, 600,
+        None, None, instance, None
+    );
+    
+    // 2. Load Plugin
+    let path_os: Vec<u16> = std::path::Path::new(path)
+        .as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    let lib_handle = LoadLibraryW(PCWSTR(path_os.as_ptr()))
+        .map_err(|e| format!("Failed to load DLL: {:?}", e))?;
+
+    let get_factory_name = s!("GetPluginFactory");
+    let get_factory_proc = GetProcAddress(lib_handle, get_factory_name);
+    if get_factory_proc.is_none() { 
+        return Err("No factory".into());
+    }
+
+    let get_factory: unsafe extern "system" fn() -> *mut c_void = std::mem::transmute(get_factory_proc.unwrap());
+    let factory_raw = get_factory();
+    let factory = VstPtr::<dyn IPluginFactory>::owned(factory_raw as *mut *mut _).unwrap();
+
+    let factory_ptr = factory_raw as *mut *mut <dyn IPluginFactory as ComInterface>::VTable;
+    let factory_vtbl = &**factory_ptr;
+    let this_ptr = factory_ptr as *mut *const <dyn IPluginFactory as ComInterface>::VTable;
+    
+    let count = (factory_vtbl.CountClasses)(this_ptr);
+    let mut component_uid: Option<IID> = None;
+    for i in 0..count {
+            let mut info = std::mem::zeroed::<vst3_sys::base::PClassInfo>();
+            if (factory_vtbl.GetClassInfo)(this_ptr, i, &mut info) == kResultOk {
+                component_uid = Some(info.cid);
+                break;
+            }
+    }
+    let cid = component_uid.unwrap();
+    
+    let mut component_ptr: *mut c_void = std::ptr::null_mut();
+    let i_component_iid = <dyn IComponent as ComInterface>::IID; 
+    if (factory_vtbl.CreateInstance)(this_ptr, &cid, &i_component_iid, &mut component_ptr) != kResultOk {
+            return Err("Failed to create component".into());
+    }
+    let component = VstPtr::<dyn IComponent>::owned(component_ptr as *mut *mut _).unwrap();
+    
+    let host_app = create_host_app();
+    component.set_io_mode(vst3_sys::vst::IoModes::kSimple as i32);
+    if component.initialize(host_app as *mut c_void) != kResultOk {
+            return Err("Failed initialize".into());
+    }
+
+    let mut edit_controller: Option<VstPtr<dyn IEditController>> = None;
+    let mut controller_iid: IID = std::mem::zeroed();
+
+    if component.get_controller_class_id(&mut controller_iid) == kResultOk {
+        let mut controller_ptr: *mut c_void = std::ptr::null_mut();
+        let i_edit_iid = <dyn IEditController as ComInterface>::IID;
+        if (factory_vtbl.CreateInstance)(this_ptr, &controller_iid, &i_edit_iid, &mut controller_ptr) == kResultOk && !controller_ptr.is_null() {
+                let controller = VstPtr::<dyn IEditController>::owned(controller_ptr as *mut *mut _).unwrap();
+                if controller.initialize(host_app as *mut c_void) == kResultOk {
+                    edit_controller = Some(controller);
+                }
+        }
+    }
+    if edit_controller.is_none() {
+        let mut edit_controller_ptr: *mut c_void = std::ptr::null_mut();
+        let i_edit_iid = <dyn IEditController as ComInterface>::IID;
+        if component.query_interface(&i_edit_iid, &mut edit_controller_ptr) == kResultOk {
+                edit_controller = VstPtr::<dyn IEditController>::owned(edit_controller_ptr as *mut *mut _);
+        }
+    }
+    let edit_controller = edit_controller.ok_or("No controller")?;
+    
+    let handler_raw = create_component_handler();
+    
+    // Re-interprete cast for SharedVstPtr
+    #[repr(transparent)]
+    struct MySharedVstPtr { ptr: *mut *mut c_void }
+    let handler_arg: vst3_sys::utils::SharedVstPtr<dyn IComponentHandler> = std::mem::transmute(handler_raw);
+    edit_controller.set_component_handler(handler_arg);
+
+    // Create View
+    let mut fs_name = [0u8; 128]; 
+    let editor_s = b"editor\0";
+    for (i, &b) in editor_s.iter().enumerate() { fs_name[i] = b; }
+    
+    let view_ptr_void = edit_controller.create_view(fs_name.as_ptr() as *const i8);
+    if view_ptr_void.is_null() {
+            return Err("No view".into());
+    }
+    let view = VstPtr::<dyn IPlugView>::owned(view_ptr_void as *mut *mut _).unwrap();
+
+    // Attach View info to Window for Resize
+    // We cannot pass Rust Objects (VstPtr) easily to wnd_proc globally.
+    // We can store the raw pointer to IPlugView interface in GWLP_USERDATA.
+    // IPlugView interface pointer is `*mut *mut VTable`.
+    let view_raw_interface = view.as_ptr(); 
+    SetWindowLongPtrW(hwnd, GWLP_USERDATA, view_raw_interface as isize);
+
+    // Initial Resize
+    let mut rect = vst3_sys::gui::ViewRect::default();
+    view.get_size(&mut rect);
+    let mut width = rect.right - rect.left;
+    let mut height = rect.bottom - rect.top;
+    if width <= 0 { width = 800; }
+    if height <= 0 { height = 600; }
+    
+    let mut win_rect = RECT { left: 0, top: 0, right: width, bottom: height };
+    AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
+    let full_width = win_rect.right - win_rect.left;
+    let full_height = win_rect.bottom - win_rect.top;
+    
+    SetWindowPos(hwnd, None, 0, 0, full_width, full_height, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    // Attach
+    let plug_frame = create_plug_frame(hwnd);
+    view.set_frame(plug_frame); // pass pointer to PlugFrame interface
+    
+    let type_hwnd = b"HWND\0".as_ptr() as *const i8;
+    if view.attached(hwnd.0 as *mut c_void, type_hwnd) != kResultOk {
+        return Err("Failed to attach".into());
+    }
+
+    // Show Window
+    windows::Win32::UI::WindowsAndMessaging::ShowWindow(hwnd, SW_SHOW);
+    
+    // Everything OK - Signal Success
+    tx.send(Ok(())).unwrap_or(()); 
+
+    // Message Loop
+    let mut msg = MSG::default();
+    loop {
+        if GetMessageW(&mut msg, None, 0, 0).as_bool() == false {
+            break;
+        }
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    
+    // Cleanup
+    view.removed();
+    
+    // Drop logic
+    // We wrapped view in VstPtr, correct? But we also stored raw ptr in UserData.
+    // UserData doesn't own it. VstPtr owns it.
+    // Set UserData to 0
+    SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+
+    drop(view);
+    drop(edit_controller);
+    component.terminate();
+    drop(component);
+    drop(factory);
+    
+    CoUninitialize();
+    
     Ok(())
 }
 
-fn run_vst_host(path: &str) -> Result<(), String> {
-    unsafe {
-        // Setup Host Application
-        let host_app = HostApplication {
-            vtable: &HOST_APP_VTABLE,
-            ref_count: 1,
-        };
-        let host_app_ptr = &host_app as *const HostApplication as *mut c_void;
+use std::os::windows::ffi::OsStrExt;
 
-        // 1. Load Library
-        let lib = Library::new(path).map_err(|e| format!("Failed to load DLL: {}", e))?;
-        let get_factory_fn: Symbol<GetPluginFactory> = lib.get(b"GetPluginFactory")
-            .map_err(|e| format!("GetPluginFactory not found: {}", e))?;
-
-        // 2. Get Factory
-        let factory_ptr = get_factory_fn();
-        if factory_ptr.is_null() {
-            return Err("Failed to get IPluginFactory: returned null".to_string());
+unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    match msg {
+        WM_DESTROY => {
+            PostQuitMessage(0);
+            LRESULT(0)
         }
-        let factory_vtable = &*( *factory_ptr );
-
-        // 3. Iterate Classes
-        let count = (factory_vtable.count_classes)(factory_ptr as *mut c_void);
-        println!("[TAURI] VST Factory has {} classes", count);
-
-        if count == 0 {
-            return Err("No classes in factory".to_string());
-        }
-
-        let mut controller_ptr: *mut c_void = ptr::null_mut();
-        let mut found = false;
-
-        // First, enumerate all classes and collect info
-        println!("[TAURI] Enumerating classes...");
-        
-        // Strategy 1: Look for "Component Controller Class" and instantiate directly
-        for i in 0..count {
-            let mut info: PClassInfo = std::mem::zeroed();
-            if (factory_vtable.get_class_info)(factory_ptr as *mut c_void, i, &mut info) == K_RESULT_OK {
-                let name = c_char_to_string(&info.name);
-                let category = c_char_to_string(&info.category);
-                println!("[TAURI] Class {}: Name='{}', Category='{}', CID={:?}", i, name, category, info.cid);
+        WM_SIZE => {
+            // Retrieve IPlugView pointer
+            let ptr_val = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+            if ptr_val != 0 {
+                // This is *mut *mut IPlugViewVTable
+                let view_interface_ptr = ptr_val as *mut *mut <dyn IPlugView as ComInterface>::VTable;
+                // Construct temporary reference to call on_size
+                // We don't own it here, just borrowing for the call.
+                // We can't use VstPtr::from_raw because it might alter refcount? 
+                // VstPtr doesn't have "borrow_from_raw".
+                // We manually invoke VTable.
+                let vptr_ptr = *view_interface_ptr;
+                let vptr = &*vptr_ptr;
                 
-                if category == "Component Controller Class" {
-                    println!("[TAURI] Found Controller Class directly! Creating with FUnknown IID...");
-                    
-                    let mut ctl_ptr: *mut c_void = ptr::null_mut();
-                    let create_res = (factory_vtable.create_instance)(
-                        factory_ptr as *mut c_void,
-                        &info.cid,
-                        &I_UNKNOWN_IID,
-                        &mut ctl_ptr
-                    );
-                    
-                    if create_res == K_RESULT_OK && !ctl_ptr.is_null() {
-                        println!("[TAURI] Created Controller with FUnknown IID");
-                        
-                        // Get base vtable for QueryInterface
-                        let base_vtable = &*( * (ctl_ptr as *mut *mut IUnknownVTable) );
-                        
-                        // Initialize first (some plugins need this before QI works properly)
-                        // Use IPluginBase layout - initialize is at offset 3
-                        let pluginbase_vtable = &*( * (ctl_ptr as *mut *mut IEditControllerVTable) );
-                        let init_res = (pluginbase_vtable.initialize)(ctl_ptr, host_app_ptr);
-                        println!("[TAURI] Controller Initialize Result: 0x{:X}", init_res);
-                        
-                        // Now call QueryInterface to get the correct IEditController pointer
-                        let mut edit_ctl_ptr: *mut c_void = ptr::null_mut();
-                        let mut qi_res = (base_vtable.query_interface)(
-                            ctl_ptr,
-                            &I_EDIT_CONTROLLER_IID_LE,
-                            &mut edit_ctl_ptr
-                        );
-                        
-                        if qi_res != K_RESULT_OK || edit_ctl_ptr.is_null() {
-                            println!("[TAURI] QI for IEditController (LE) failed: 0x{:X}, trying BE...", qi_res);
-                            qi_res = (base_vtable.query_interface)(
-                                ctl_ptr,
-                                &I_EDIT_CONTROLLER_IID_BE,
-                                &mut edit_ctl_ptr
-                            );
-                        }
-                        
-                        if qi_res == K_RESULT_OK && !edit_ctl_ptr.is_null() {
-                            println!("[TAURI] QI for IEditController succeeded! Got proper pointer.");
-                            controller_ptr = edit_ctl_ptr;
-                            found = true;
-                            break;
-                        } else {
-                            println!("[TAURI] QI for IEditController failed: 0x{:X}. Using original pointer (may not work).", qi_res);
-                            // Fall back to original pointer - might not work
-                            controller_ptr = ctl_ptr;
-                            found = true;
-                            break;
-                        }
-                    } else {
-                        println!("[TAURI] Failed to create Controller: 0x{:X}", create_res);
-                    }
-                }
+                // Get new client size
+                let mut rect = RECT::default();
+                windows::Win32::UI::WindowsAndMessaging::GetClientRect(hwnd, &mut rect);
+                
+                let mut view_rect = ViewRect {
+                    left: rect.left,
+                    top: rect.top,
+                    right: rect.right,
+                    bottom: rect.bottom,
+                };
+                
+                let this_ptr = view_interface_ptr as *mut *const <dyn IPlugView as ComInterface>::VTable;
+                (vptr.OnSize)(this_ptr, &mut view_rect);
             }
+            DefWindowProcW(hwnd, msg, wparam, lparam)
         }
-        
-        // Strategy 2: If no Controller class found, try Audio Module (merged architecture)
-        if !found {
-            println!("[TAURI] No Controller class found, trying Audio Module for merged architecture...");
-            for i in 0..count {
-                let mut info: PClassInfo = std::mem::zeroed();
-                if (factory_vtable.get_class_info)(factory_ptr as *mut c_void, i, &mut info) == K_RESULT_OK {
-                    let category = c_char_to_string(&info.category);
-                    
-                    if category == "Audio Module Class" {
-                        println!("[TAURI] Found Audio Module. Creating...");
-                        
-                        let mut comp_ptr: *mut c_void = ptr::null_mut();
-                        let create_res = (factory_vtable.create_instance)(
-                            factory_ptr as *mut c_void,
-                            &info.cid,
-                            &I_UNKNOWN_IID,
-                            &mut comp_ptr
-                        );
-                        
-                        if create_res == K_RESULT_OK && !comp_ptr.is_null() {
-                            let comp_vtable = &*( * (comp_ptr as *mut *mut IComponentVTable) );
-                            let init_res = (comp_vtable.initialize)(comp_ptr, host_app_ptr);
-                            println!("[TAURI] Component Initialize Result: 0x{:X}", init_res);
-                            
-                            // Use as controller (might work for merged architecture)
-                            controller_ptr = comp_ptr;
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        if !found || controller_ptr.is_null() {
-             return Err("Failed to obtain IEditController (Tried both QI and Split Architecture)".to_string());
-        }
-
-        // DEBUG: Examine the vtable pointer structure
-        println!("[TAURI] DEBUG: controller_ptr = {:?}", controller_ptr);
-        
-        // The object's first field should be a vtable pointer
-        let vtable_ptr_ptr = controller_ptr as *const *const u8;
-        let vtable_ptr = *vtable_ptr_ptr;
-        println!("[TAURI] DEBUG: vtable[0] (first vtable) = {:?}", vtable_ptr);
-        
-        // Check if there's a second vtable pointer (for multiple inheritance)
-        let second_ptr_ptr = (controller_ptr as *const usize).add(1);
-        let second_ptr = *second_ptr_ptr;
-        println!("[TAURI] DEBUG: object[1] (possible second vtable) = 0x{:016X}", second_ptr);
-        
-        // Check for more vtable pointers
-        let third_ptr = *((controller_ptr as *const usize).add(2));
-        let fourth_ptr = *((controller_ptr as *const usize).add(3));
-        println!("[TAURI] DEBUG: object[2] = 0x{:016X}", third_ptr);
-        println!("[TAURI] DEBUG: object[3] = 0x{:016X}", fourth_ptr);
-        
-        // If second_ptr looks like a valid pointer (high bits set like 0x7FFCxxxxxxxx), it might be another vtable
-        if second_ptr > 0x7FF000000000 && second_ptr < 0x800000000000 {
-            println!("[TAURI] DEBUG: object[1] looks like a pointer! Checking its vtable (0-20)...");
-            let second_vtable_ptr = second_ptr as *const usize;
-            for i in 0..21 {
-                let fn_ptr = *second_vtable_ptr.add(i);
-                println!("[TAURI] DEBUG: second_vtable[{}] = 0x{:016X}", i, fn_ptr);
-            }
-        }
-        
-        // Check if object[2] is also a vtable
-        if third_ptr > 0x7FF000000000 && third_ptr < 0x800000000000 {
-            println!("[TAURI] DEBUG: object[2] looks like a pointer! Checking its vtable (0-20)...");
-            let third_vtable_ptr = third_ptr as *const usize;
-            for i in 0..21 {
-                let fn_ptr = *third_vtable_ptr.add(i);
-                println!("[TAURI] DEBUG: third_vtable[{}] = 0x{:016X}", i, fn_ptr);
-            }
-        }
-        
-        // Read the first few function pointers from the vtable
-        let vtable_as_fn_ptrs = vtable_ptr as *const usize;
-        for i in 0..21 {
-            let fn_ptr = *vtable_as_fn_ptrs.add(i);
-            println!("[TAURI] DEBUG: vtable[{}] = 0x{:016X}", i, fn_ptr);
-        }
-        // Try using the SECOND vtable (object[1]) as IEditController!
-        // In multiple inheritance, this might be the IEditController interface
-        let edit_controller_this = (controller_ptr as *mut u8).add(8) as *mut c_void;  // Adjusted this pointer
-        // object[1] IS the vtable pointer itself, not a pointer to it - so cast directly
-        let edit_controller_vtable_ptr = *((controller_ptr as *const usize).add(1)) as *const IEditControllerVTable;
-        let edit_controller_vtable = &*edit_controller_vtable_ptr;
-        
-        println!("[TAURI] Trying SECOND vtable as IEditController...");
-        println!("[TAURI] DEBUG: edit_controller_this = {:?}", edit_controller_this);
-        println!("[TAURI] DEBUG: edit_controller_vtable_ptr = {:?}", edit_controller_vtable_ptr);
-        
-        // Test with second vtable
-        let param_count_v2 = (edit_controller_vtable.get_parameter_count)(edit_controller_this);
-        println!("[TAURI] DEBUG: getParameterCount (via second vtable) returned: {}", param_count_v2);
-        
-        // Also test with first vtable for comparison
-        let controller_vtable = &*( * (controller_ptr as *mut *mut IEditControllerVTable) );
-        println!("[TAURI] Got EditController Interface");
-        
-        // Test addRef to verify basic COM functionality
-        let ref_count = (controller_vtable.base.add_ref)(controller_ptr);
-        println!("[TAURI] DEBUG: addRef() returned: {}", ref_count);
-
-        // 6. Create Window (winit 0.29 - using any_thread for spawned thread support)
-        let event_loop = EventLoopBuilder::new().with_any_thread(true).build().unwrap();
-        let window = WindowBuilder::new()
-            .with_title("VST3 Editor")
-            .with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0))
-            .build(&event_loop)
-            .map_err(|e| format!("Failed to create window: {}", e))?;
-
-        // Get HWND via HasRawWindowHandle
-        let hwnd = if let Ok(RawWindowHandle::Win32(handle)) = window.raw_window_handle() {
-            handle.hwnd.get()
-        } else {
-             return Err("Not a connection to a Windows window system".to_string());
-        } as *mut c_void;
-        
-        println!("[TAURI] Created Window, HWND: {:?}", hwnd);
-
-        // DEBUG: Test VTable layout by calling getParameterCount (using first vtable)
-        let param_count = (controller_vtable.get_parameter_count)(controller_ptr);
-        println!("[TAURI] DEBUG: getParameterCount (via first vtable) returned: {}", param_count);
-
-        // Note: For multiple inheritance, the this pointer needs to be adjusted
-        // to point to the sub-object for the interface being called
-        let (final_controller_ptr, final_vtable): (*mut c_void, &IEditControllerVTable) = 
-            if param_count_v2 > 0 {
-                println!("[TAURI] Using SECOND vtable (param_count_v2 = {})", param_count_v2);
-                // Use ADJUSTED this pointer (controller_ptr + 8) for second vtable
-                (edit_controller_this, edit_controller_vtable)
-            } else {
-                println!("[TAURI] Using FIRST vtable (fallback)");
-                (controller_ptr, controller_vtable)
-            };
-
-        // 7. Create View - createView returns IPlugView* directly
-        let view_type = b"editor\0".as_ptr() as *const c_char;
-        
-        // DEBUG: Show which function pointer createView maps to
-        let create_view_fn_ptr = final_vtable.create_view as usize;
-        println!("[TAURI] DEBUG: create_view function pointer = 0x{:016X}", create_view_fn_ptr);
-        println!("[TAURI] DEBUG: final_controller_ptr = {:?}", final_controller_ptr);
-        
-        // DIRECT FUNCTION POINTER CALLS - bypass struct to avoid layout issues
-        // Get raw vtable pointer for the second vtable
-        let raw_vtable = *((controller_ptr as *const usize).add(1)) as *const usize;
-        
-        // setComponentHandler is at index 16
-        let set_component_handler_fn: unsafe extern "system" fn(*mut c_void, *mut c_void) -> TResult = 
-            std::mem::transmute(*raw_vtable.add(16));
-        println!("[TAURI] DEBUG: Direct setComponentHandler ptr = 0x{:016X}", *raw_vtable.add(16));
-        
-        println!("[TAURI] DEBUG: Calling setComponentHandler(null) DIRECTLY...");
-        let set_handler_res = set_component_handler_fn(edit_controller_this, ptr::null_mut());
-        println!("[TAURI] DEBUG: setComponentHandler result: 0x{:X}", set_handler_res);
-        
-        // createView is at index 17
-        let create_view_fn: unsafe extern "system" fn(*mut c_void, *const c_char) -> *mut *mut IPlugViewVTable = 
-            std::mem::transmute(*raw_vtable.add(17));
-        println!("[TAURI] DEBUG: Direct createView ptr = 0x{:016X}", *raw_vtable.add(17));
-        
-        println!("[TAURI] DEBUG: Calling createView with viewType='editor' DIRECTLY...");
-        let view_ptr: *mut *mut IPlugViewVTable = create_view_fn(edit_controller_this, view_type);
-        
-        println!("[TAURI] create_view returned: {:?}", view_ptr);
-        
-        if view_ptr.is_null() {
-             return Err("Failed to create IPlugView (returned null)".to_string());
-        }
-        
-        let view_vtable = &*( * view_ptr );
-        println!("[TAURI] Got IPlugView");
-
-        // 8. Attach View
-        let type_hwnd = "HWND\0".as_ptr() as *const c_char;
-        
-        // Check size?
-        let mut size: ViewRect = std::mem::zeroed();
-        if (view_vtable.get_size)(view_ptr as *mut c_void, &mut size) == K_RESULT_OK {
-             let width = (size.right - size.left).abs();
-             let height = (size.bottom - size.top).abs();
-             let _ = window.request_inner_size(winit::dpi::LogicalSize::new(width as f64, height as f64));
-        }
-
-        let res_attach = (view_vtable.attached)(view_ptr as *mut c_void, hwnd, type_hwnd);
-        if res_attach != K_RESULT_OK {
-             return Err(format!("Failed to attach view: {}", res_attach));
-        }
-
-        println!("[TAURI] Attached View! Running loop...");
-
-        // 9. Run Event Loop (winit 0.29)
-        let _ = event_loop.run(move |event, target| {
-            target.set_control_flow(ControlFlow::Wait);
-
-            match event {
-                Event::WindowEvent {
-                    event: WindowEvent::CloseRequested,
-                    window_id,
-                } if window_id == window.id() => {
-                    // Cleanup
-                    unsafe { 
-                        (view_vtable.removed)(view_ptr as *mut c_void); 
-                        // (controller_vtable.terminate)(controller_ptr); // Terminate controller?
-                    }
-                    target.exit();
-                },
-                _ => ()
-            }
-        });
+        _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
-
-    Ok(())
 }
