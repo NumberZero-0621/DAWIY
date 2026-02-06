@@ -211,7 +211,9 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "ai.generic_error": "Error: ",
         "ai.send_mode": "Send Key",
         "ai.send_mode.enter": "Enter",
-        "ai.send_mode.ctrl_enter": "Ctrl + Enter"
+        "ai.send_mode.ctrl_enter": "Ctrl + Enter",
+        "ai.voice_input": "Voice Input",
+        "ai.stop_recording":"Stop Recording"
     },
     "ja": {
         "loading": "読み込み中",
@@ -419,7 +421,9 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "ai.generic_error": "エラー: ",
         "ai.send_mode": "送信キー",
         "ai.send_mode.enter": "Enter",
-        "ai.send_mode.ctrl_enter": "Ctrl + Enter"
+        "ai.send_mode.ctrl_enter": "Ctrl + Enter",
+        "ai.voice_input": "音声入力",
+        "ai.stop_recording":"音声入力を停止"
     }
 };
 

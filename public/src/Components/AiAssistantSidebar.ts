@@ -127,6 +127,11 @@ export default class AiAssistantSidebar extends HTMLElement {
     private historyIndex: number = -1;
     private tempInput: string = ""; // Store current input when navigating history
 
+    // Voice Input
+    private recognition: any;
+    private isRecording: boolean = false;
+
+
     // Default models fallback
     private defaultModels: { [key: string]: { id: string, name: string }[] } = {
         gemini: [
@@ -430,6 +435,93 @@ export default class AiAssistantSidebar extends HTMLElement {
         }, 50);
     }
 
+    private setupSpeechRecognition() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            console.warn("Speech recognition not supported in this browser.");
+            return;
+        }
+
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = false; // Stop after one sentence/phrase for chat-like experience
+        this.recognition.interimResults = true;
+        this.recognition.lang = "ja-JP"; // Default to Japanese as requested, or make configurable later
+
+        this.recognition.onstart = () => {
+            this.isRecording = true;
+            this.updateMicButtonState();
+        };
+
+        this.recognition.onend = () => {
+            this.isRecording = false;
+            this.updateMicButtonState();
+        };
+
+        this.recognition.onresult = (event: any) => {
+            const transcript = Array.from(event.results)
+                .map((result: any) => result[0])
+                .map((result: any) => result.transcript)
+                .join('');
+
+            const promptInput = this.shadow.getElementById("prompt-input") as HTMLTextAreaElement;
+            if (promptInput) {
+                // If interim, we might want to show it differently, but for now just replacing/appending
+                // For simplicity in this text area, let's just set the value.
+                // If the user already typed something, maybe append?
+                // Typically voice input replaces or appends.
+                // Let's go with: if input is empty, replace. If not, append.
+
+                // NOTE: simpler approach for v1: just set value to transcript if final?
+                // But with interimResults=true, we get updates constantly.
+
+                // Let's use a "draft" approach. 
+                // However, without complex cursor management, let's just use the final result or
+                // just show what's being spoken.
+
+                promptInput.value = transcript;
+                promptInput.style.height = "auto";
+                promptInput.style.height = Math.min(promptInput.scrollHeight, 150) + "px";
+            }
+        };
+
+        this.recognition.onerror = (event: any) => {
+            console.error("Speech recognition error", event.error);
+            this.isRecording = false;
+            this.updateMicButtonState();
+        };
+    }
+
+    private toggleVoiceInput() {
+        if (!this.recognition) {
+            this.setupSpeechRecognition();
+            if (!this.recognition) {
+                alert("Voice input is not supported in this environment.");
+                return;
+            }
+        }
+
+        if (this.isRecording) {
+            this.recognition.stop();
+        } else {
+            this.recognition.start();
+        }
+    }
+
+    private updateMicButtonState() {
+        const micBtn = this.shadow.getElementById("mic-btn") as HTMLButtonElement;
+        if (!micBtn) return;
+
+        if (this.isRecording) {
+            micBtn.classList.add("recording");
+            micBtn.innerHTML = `<i class="bi bi-mic-fill"></i>`;
+            micBtn.title = t("ai.stop_recording") || "Stop Recording";
+        } else {
+            micBtn.classList.remove("recording");
+            micBtn.innerHTML = `<i class="bi bi-mic"></i>`;
+            micBtn.title = t("ai.start_recording") || "Voice Input";
+        }
+    }
+
     private capitalize(s: string) {
         return s.charAt(0).toUpperCase() + s.slice(1);
     }
@@ -565,6 +657,34 @@ export default class AiAssistantSidebar extends HTMLElement {
                 background-color: #555;
                 cursor: not-allowed;
             }
+            #mic-btn {
+                background-color: transparent;
+                color: #aaa;
+                border: 1px solid #555;
+                border-radius: 4px;
+                width: 40px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+            }
+            #mic-btn:hover {
+                color: white;
+                background-color: #444;
+            }
+            #mic-btn.recording {
+                background-color: #dc3545;
+                color: white;
+                border-color: #dc3545;
+                animation: pulse 1.5s infinite;
+            }
+            @keyframes pulse {
+                0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+                70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+            }
+
             
             /* Code Block Styles */
             pre {
@@ -902,6 +1022,7 @@ export default class AiAssistantSidebar extends HTMLElement {
 
         <div id="input-area">
             <textarea id="prompt-input" placeholder="${t("ai.placeholder")}"></textarea>
+            <button id="mic-btn" title="${t("ai.voice_input") || "Voice Input"}"><i class="bi bi-mic"></i></button>
             <button id="send-btn"><i class="bi bi-send-fill"></i></button>
         </div>
         `;
@@ -909,6 +1030,7 @@ export default class AiAssistantSidebar extends HTMLElement {
 
     private setupEventListeners() {
         const sendBtn = this.shadow.getElementById("send-btn") as HTMLButtonElement;
+        const micBtn = this.shadow.getElementById("mic-btn") as HTMLButtonElement;
         const promptInput = this.shadow.getElementById("prompt-input") as HTMLTextAreaElement;
         const settingsBtn = this.shadow.getElementById("settings-btn") as HTMLButtonElement;
         const settingsOverlay = this.shadow.getElementById("settings-overlay") as HTMLDivElement;
@@ -1021,6 +1143,11 @@ export default class AiAssistantSidebar extends HTMLElement {
             const text = promptInput.value.trim();
             if (!text) return;
 
+            // Stop recording if active
+            if (this.isRecording && this.recognition) {
+                this.recognition.stop();
+            }
+
             // Check key
             if (!this.apiKeys[this.currentProvider]) {
                 this.addMessage("system", t("ai.api_key_missing_action").replace("{provider}", this.capitalize(this.currentProvider)));
@@ -1042,6 +1169,7 @@ export default class AiAssistantSidebar extends HTMLElement {
         };
 
         sendBtn.addEventListener("click", handleSend);
+        micBtn.addEventListener("click", () => this.toggleVoiceInput());
         sendBtn.addEventListener("click", handleSend);
         promptInput.addEventListener("keydown", (e) => {
             const isEnter = e.key === "Enter";
@@ -1269,7 +1397,30 @@ export default class AiAssistantSidebar extends HTMLElement {
                 const data = await response.json();
                 if (data.models) {
                     models = data.models
-                        .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
+                        .filter((m: any) => {
+                            // 1. Must support generateContent
+                            if (!m.supportedGenerationMethods?.includes("generateContent")) return false;
+
+                            const name = (m.name || "").toLowerCase();
+
+                            // 2. Must be a "gemini" or "learnlm" model
+                            if (!name.includes("gemini") && !name.includes("learnlm")) return false;
+
+                            // 3. Eliminate models that are likely to produce errors
+                            if (name.includes("embedding")) return false;
+                            if (name.includes("aqa")) return false;
+                            if (name.includes("image")) return false;
+                            if (name.includes("tts")) return false;
+                            if (name.includes("robotics")) return false;
+                            if (name.includes("preview")) return false;
+                            if (name.includes("latest")) return false;
+                            if (name.includes("-exp-")) return false;
+                            if (name.includes("-001")) return false;
+                            if (name.includes("gemini-2.0")) return false;
+
+
+                            return true;
+                        })
                         .map((m: any) => ({
                             id: m.name.replace("models/", ""), // Remove 'models/' prefix
                             name: m.displayName || m.name
