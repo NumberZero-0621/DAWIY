@@ -102,6 +102,7 @@ interface ChatSession {
     model: string;
     userEditedTitle?: boolean;
     createdPlugins?: string[]; // Track which plugins have been created
+    autoTitleAttempted?: boolean;
 }
 
 export default class AiAssistantSidebar extends HTMLElement {
@@ -234,9 +235,14 @@ export default class AiAssistantSidebar extends HTMLElement {
         if (!session) return;
         if (session.userEditedTitle) return; // ユーザーが編集済みなら上書きしない
         if (session.title !== t("ai.new_chat")) return; // Already named
+        if (session.autoTitleAttempted) return;
+
         // Only auto-name after 3 user messages
         const userMessages = this.chatHistory.filter(m => m.role === "user");
         if (userMessages.length < 2) return;
+
+        session.autoTitleAttempted = true;
+        localStorage.setItem("ai_chat_sessions", JSON.stringify(this.sessions));
 
         const key = this.apiKeys[this.currentProvider];
         if (!key) return;
