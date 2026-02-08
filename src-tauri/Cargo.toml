@@ -34,6 +34,7 @@ windows = { version = "0.52", features = [
     "Win32_System_LibraryLoader",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Com",
+    "Win32_System_Ole",
     "Win32_Graphics_Gdi",
 ] }
 vst3-sys = { path = "../../vst3-sys" }

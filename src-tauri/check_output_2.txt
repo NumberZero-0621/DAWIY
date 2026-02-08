@@ -1,0 +1,500 @@
+warning: unused import: `ipersistant::*`
+  --> C:\Documents\UnivFukuchiyama\vst3-sys\src\base\mod.rs:17:9
+   |
+17 | pub use ipersistant::*;
+   |         ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ivstmidicontroller::*`
+  --> C:\Documents\UnivFukuchiyama\vst3-sys\src\vst\mod.rs:36:9
+   |
+36 | pub use ivstmidicontroller::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^
+
+warning: `vst3-sys` (lib) generated 2 warnings (run `cargo fix --lib -p vst3-sys` to apply 2 suggestions)
+    Checking app v0.1.0 (C:\Documents\UnivFukuchiyama\DAWIY\src-tauri)
+warning: unused import: `PathBuf`
+ --> src\vst_launcher.rs:5:23
+  |
+5 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `id`
+   --> src\vst_host.rs:388:77
+    |
+388 | unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, id: u32, value: f64) -> i32 {
+    |                                                                             ^^ help: if this is intentional, prefix it with an underscore: `_id`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `value`
+   --> src\vst_host.rs:388:86
+    |
+388 | unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, id: u32, value: f64) -> i32 {
+    |                                                                                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_value`
+
+warning: methods `connect`, `disconnect`, and `notify` are never used
+   --> src\vst_host.rs:733:15
+    |
+732 | pub trait IConnectionPoint: IUnknown {
+    |           ---------------- methods in this trait
+733 |     unsafe fn connect(&self, other: *mut c_void) -> tresult;
+    |               ^^^^^^^
+734 |     unsafe fn disconnect(&self, other: *mut c_void) -> tresult;
+    |               ^^^^^^^^^^
+735 |     unsafe fn notify(&self, message: *mut c_void) -> tresult;
+    |               ^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `HostConnectionPoint` is never constructed
+   --> src\vst_host.rs:761:8
+    |
+761 | struct HostConnectionPoint {
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: function `cp_query_interface` is never used
+   --> src\vst_host.rs:767:27
+    |
+767 | unsafe extern "system" fn cp_query_interface(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^
+
+warning: function `cp_add_ref` is never used
+   --> src\vst_host.rs:776:27
+    |
+776 | unsafe extern "system" fn cp_add_ref(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^
+
+warning: function `cp_release` is never used
+   --> src\vst_host.rs:780:27
+    |
+780 | unsafe extern "system" fn cp_release(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^
+
+warning: function `cp_connect` is never used
+   --> src\vst_host.rs:788:27
+    |
+788 | unsafe extern "system" fn cp_connect(this: *mut c_void, other: *mut c_void) -> tresult {
+    |                           ^^^^^^^^^^
+
+warning: function `cp_disconnect` is never used
+   --> src\vst_host.rs:794:27
+    |
+794 | unsafe extern "system" fn cp_disconnect(this: *mut c_void, _other: *mut c_void) -> tresult {
+    |                           ^^^^^^^^^^^^^
+
+warning: function `cp_notify` is never used
+   --> src\vst_host.rs:800:27
+    |
+800 | unsafe extern "system" fn cp_notify(this: *mut c_void, message: *mut c_void) -> tresult {
+    |                           ^^^^^^^^^
+
+warning: static `HOST_CP_VTBL` is never used
+   --> src\vst_host.rs:808:8
+    |
+808 | static HOST_CP_VTBL: IConnectionPointVTable = IConnectionPointVTable {
+    |        ^^^^^^^^^^^^
+
+warning: function `create_host_connection_point` is never used
+   --> src\vst_host.rs:817:4
+    |
+817 | fn create_host_connection_point() -> *mut c_void {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pump_messages` is never used
+    --> src\vst_host.rs:1053:15
+     |
+1053 |     unsafe fn pump_messages() {
+     |               ^^^^^^^^^^^^^
+
+warning: method `is_running` is never used
+   --> src\carla_host.rs:110:12
+    |
+ 21 | impl CarlaHost {
+    | -------------- method in this implementation
+...
+110 |     pub fn is_running(&self) -> bool {
+    |            ^^^^^^^^^^
+
+warning: function `AttrList_query_interface` should have a snake case name
+   --> src\vst_host.rs:132:27
+    |
+132 | unsafe extern "system" fn AttrList_query_interface(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_query_interface`
+    |
+    = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: function `AttrList_add_ref` should have a snake case name
+   --> src\vst_host.rs:141:27
+    |
+141 | unsafe extern "system" fn AttrList_add_ref(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_add_ref`
+
+warning: function `AttrList_release` should have a snake case name
+   --> src\vst_host.rs:145:27
+    |
+145 | unsafe extern "system" fn AttrList_release(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_release`
+
+warning: function `AttrList_set_int` should have a snake case name
+   --> src\vst_host.rs:154:27
+    |
+154 | unsafe extern "system" fn AttrList_set_int(this: *mut c_void, id: *const c_char, value: i64) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_set_int`
+
+warning: function `AttrList_get_int` should have a snake case name
+   --> src\vst_host.rs:160:27
+    |
+160 | unsafe extern "system" fn AttrList_get_int(this: *mut c_void, id: *const c_char, value: *mut i64) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_get_int`
+
+warning: function `AttrList_set_float` should have a snake case name
+   --> src\vst_host.rs:171:27
+    |
+171 | unsafe extern "system" fn AttrList_set_float(this: *mut c_void, id: *const c_char, value: f64) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_set_float`
+
+warning: function `AttrList_get_float` should have a snake case name
+   --> src\vst_host.rs:177:27
+    |
+177 | unsafe extern "system" fn AttrList_get_float(this: *mut c_void, id: *const c_char, value: *mut f64) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_get_float`
+
+warning: function `AttrList_set_string` should have a snake case name
+   --> src\vst_host.rs:188:27
+    |
+188 | unsafe extern "system" fn AttrList_set_string(this: *mut c_void, id: *const c_char, value: *const u16) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_set_string`
+
+warning: function `AttrList_get_string` should have a snake case name
+   --> src\vst_host.rs:207:27
+    |
+207 | unsafe extern "system" fn AttrList_get_string(this: *mut c_void, id: *const c_char, value: *mut u16, size: i32) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_get_string`
+
+warning: function `AttrList_set_binary` should have a snake case name
+   --> src\vst_host.rs:221:27
+    |
+221 | unsafe extern "system" fn AttrList_set_binary(this: *mut c_void, id: *const c_char, data: *const c_void, size: u32) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_set_binary`
+
+warning: function `AttrList_get_binary` should have a snake case name
+   --> src\vst_host.rs:230:27
+    |
+230 | unsafe extern "system" fn AttrList_get_binary(this: *mut c_void, id: *const c_char, data: *mut *const c_void, size: *mut u32) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `attr_list_get_binary`
+
+warning: function `ComponentHandler_begin_edit` should have a snake case name
+   --> src\vst_host.rs:384:27
+    |
+384 | unsafe extern "system" fn ComponentHandler_begin_edit(_this: *mut c_void, id: u32) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `component_handler_begin_edit`
+
+warning: function `ComponentHandler_perform_edit` should have a snake case name
+   --> src\vst_host.rs:388:27
+    |
+388 | unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, id: u32, value: f64) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `component_handler_perform_edit`
+
+warning: function `ComponentHandler_end_edit` should have a snake case name
+   --> src\vst_host.rs:392:27
+    |
+392 | unsafe extern "system" fn ComponentHandler_end_edit(_this: *mut c_void, id: u32) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `component_handler_end_edit`
+
+warning: function `ComponentHandler_restart_component` should have a snake case name
+   --> src\vst_host.rs:396:27
+    |
+396 | unsafe extern "system" fn ComponentHandler_restart_component(_this: *mut c_void, flags: i32) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `component_handler_restart_component`
+
+warning: function `ComponentHandler_set_dirty` should have a snake case name
+   --> src\vst_host.rs:400:27
+    |
+400 | unsafe extern "system" fn ComponentHandler_set_dirty(_this: *mut c_void, state: u8) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `component_handler_set_dirty`
+
+warning: function `ComponentHandler_request_open_editor` should have a snake case name
+   --> src\vst_host.rs:404:27
+    |
+404 | unsafe extern "system" fn ComponentHandler_request_open_editor(_this: *mut c_void, name: *const c_char) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `component_handler_request_open_editor`
+
+warning: function `ComponentHandler_start_group_edit` should have a snake case name
+   --> src\vst_host.rs:408:27
+    |
+408 | unsafe extern "system" fn ComponentHandler_start_group_edit(_this: *mut c_void, /*id: u32*/ ) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `component_handler_start_group_edit`
+
+warning: function `ComponentHandler_finish_group_edit` should have a snake case name
+   --> src\vst_host.rs:412:27
+    |
+412 | unsafe extern "system" fn ComponentHandler_finish_group_edit(_this: *mut c_void, /*id: u32*/ ) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `component_handler_finish_group_edit`
+
+warning: function `ComponentHandler_create_context_menu` should have a snake case name
+   --> src\vst_host.rs:416:27
+    |
+416 | ...em" fn ComponentHandler_create_context_menu(_this: *mut c_void, _plug_view: *mut c_void, _flags: *const i32) -> *mut c_void {
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `component_handler_create_context_menu`
+
+warning: function `UnifiedHost_query_interface` should have a snake case name
+   --> src\vst_host.rs:545:27
+    |
+545 | unsafe extern "system" fn UnifiedHost_query_interface(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_host_query_interface`
+
+warning: function `UnifiedHost_add_ref` should have a snake case name
+   --> src\vst_host.rs:549:27
+    |
+549 | unsafe extern "system" fn UnifiedHost_add_ref(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_host_add_ref`
+
+warning: function `UnifiedHost_release` should have a snake case name
+   --> src\vst_host.rs:553:27
+    |
+553 | unsafe extern "system" fn UnifiedHost_release(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_host_release`
+
+warning: function `UnifiedHandler_query_interface1` should have a snake case name
+   --> src\vst_host.rs:558:27
+    |
+558 | unsafe extern "system" fn UnifiedHandler_query_interface1(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_handler_query_interface1`
+
+warning: function `UnifiedHandler_add_ref1` should have a snake case name
+   --> src\vst_host.rs:562:27
+    |
+562 | unsafe extern "system" fn UnifiedHandler_add_ref1(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_handler_add_ref1`
+
+warning: function `UnifiedHandler_release1` should have a snake case name
+   --> src\vst_host.rs:566:27
+    |
+566 | unsafe extern "system" fn UnifiedHandler_release1(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_handler_release1`
+
+warning: function `UnifiedHandler_query_interface2` should have a snake case name
+   --> src\vst_host.rs:571:27
+    |
+571 | unsafe extern "system" fn UnifiedHandler_query_interface2(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_handler_query_interface2`
+
+warning: function `UnifiedHandler_add_ref2` should have a snake case name
+   --> src\vst_host.rs:575:27
+    |
+575 | unsafe extern "system" fn UnifiedHandler_add_ref2(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_handler_add_ref2`
+
+warning: function `UnifiedHandler_release2` should have a snake case name
+   --> src\vst_host.rs:579:27
+    |
+579 | unsafe extern "system" fn UnifiedHandler_release2(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_handler_release2`
+
+warning: function `UnifiedHandler_query_interface3` should have a snake case name
+   --> src\vst_host.rs:584:27
+    |
+584 | unsafe extern "system" fn UnifiedHandler_query_interface3(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_handler_query_interface3`
+
+warning: function `UnifiedHandler_add_ref3` should have a snake case name
+   --> src\vst_host.rs:588:27
+    |
+588 | unsafe extern "system" fn UnifiedHandler_add_ref3(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_handler_add_ref3`
+
+warning: function `UnifiedHandler_release3` should have a snake case name
+   --> src\vst_host.rs:592:27
+    |
+592 | unsafe extern "system" fn UnifiedHandler_release3(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `unified_handler_release3`
+
+warning: function `HostApplication_get_name` should have a snake case name
+   --> src\vst_host.rs:610:27
+    |
+610 | unsafe extern "system" fn HostApplication_get_name(_this: *mut c_void, name: *mut u16) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `host_application_get_name`
+
+warning: function `HostApplication_create_instance` should have a snake case name
+   --> src\vst_host.rs:622:27
+    |
+622 | ..."system" fn HostApplication_create_instance(_this: *mut c_void, cid: *const IID, _iid: *const IID, obj: *mut *mut c_void) -> i32 {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `host_application_create_instance`
+
+warning: function `PlugFrame_query_interface` should have a snake case name
+   --> src\vst_host.rs:674:27
+    |
+674 | unsafe extern "system" fn PlugFrame_query_interface(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> i32 {
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `plug_frame_query_interface`
+
+warning: function `PlugFrame_add_ref` should have a snake case name
+   --> src\vst_host.rs:686:27
+    |
+686 | unsafe extern "system" fn PlugFrame_add_ref(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `plug_frame_add_ref`
+
+warning: function `PlugFrame_release` should have a snake case name
+   --> src\vst_host.rs:690:27
+    |
+690 | unsafe extern "system" fn PlugFrame_release(this: *mut c_void) -> u32 {
+    |                           ^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `plug_frame_release`
+
+warning: function `PlugFrame_resize_view` should have a snake case name
+   --> src\vst_host.rs:695:27
+    |
+695 | unsafe extern "system" fn PlugFrame_resize_view(this: *mut c_void, _view: *mut c_void, new_size: *mut ViewRect) -> tresult {
+    |                           ^^^^^^^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `plug_frame_resize_view`
+
+warning: unused `Result` that must be used
+   --> src\vst_host.rs:712:9
+    |
+712 |         AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+712 |         let _ = AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
+    |         +++++++
+
+warning: unused `Result` that must be used
+   --> src\vst_host.rs:716:9
+    |
+716 |         SetWindowPos(f.hwnd, None, 0, 0, full_width, full_height, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+716 |         let _ = SetWindowPos(f.hwnd, None, 0, 0, full_width, full_height, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    |         +++++++
+
+warning: unused `Result` that must be used
+   --> src\vst_host.rs:910:5
+    |
+910 |     UnregisterClassW(class_name, instance);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+910 |     let _ = UnregisterClassW(class_name, instance);
+    |     +++++++
+
+warning: unused `Result` that must be used
+    --> src\vst_host.rs:1542:9
+     |
+1542 |         DestroyWindow(hwnd);
+     |         ^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1542 |         let _ = DestroyWindow(hwnd);
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> src\vst_host.rs:1643:9
+     |
+1643 |         DestroyWindow(hwnd);
+     |         ^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1643 |         let _ = DestroyWindow(hwnd);
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> src\vst_host.rs:1738:9
+     |
+1738 |         AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1738 |         let _ = AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
+     |         +++++++
+
+warning: unused `Result` that must be used
+    --> src\vst_host.rs:1739:9
+     |
+1739 | ...   SetWindowPos(hwnd, None, 0, 0, win_rect.right - win_rect.left, win_rect.bottom - win_rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1739 |         let _ = SetWindowPos(hwnd, None, 0, 0, win_rect.right - win_rect.left, win_rect.bottom - win_rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+     |         +++++++
+
+warning: constant in pattern `kResultOk` should have an upper case name
+    --> src\vst_host.rs:1754:14
+     |
+1754 |              kResultOk => println!("[Native] Attached successfully."),
+     |              ^^^^^^^^^ help: convert the identifier to upper case: `K_RESULT_OK`
+     |
+     = note: `#[warn(non_upper_case_globals)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: unused `Result` that must be used
+    --> src\vst_host.rs:1815:23
+     |
+1815 |                       AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
+     |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1815 |                       let _ = AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
+     |                       +++++++
+
+warning: unused `Result` that must be used
+    --> src\vst_host.rs:1816:23
+     |
+1816 | ...   SetWindowPos(hwnd, None, 0, 0, win_rect.right - win_rect.left, win_rect.bottom - win_rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1816 |                       let _ = SetWindowPos(hwnd, None, 0, 0, win_rect.right - win_rect.left, win_rect.bottom - win_rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+     |                       +++++++
+
+warning: constant in pattern `kResultOk` should have an upper case name
+    --> src\vst_host.rs:1827:28
+     |
+1827 | ...                   kResultOk => println!("[Native] Attached successfully (retry)."),
+     |                       ^^^^^^^^^ help: convert the identifier to upper case: `K_RESULT_OK`
+
+warning: unused `Result` that must be used
+    --> src\vst_host.rs:1956:14
+     |
+1956 |              DestroyWindow(hwnd);
+     |              ^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1956 |              let _ = DestroyWindow(hwnd);
+     |              +++++++
+
+warning: unused `Result` that must be used
+    --> src\vst_host.rs:1973:17
+     |
+1973 |                 windows::Win32::UI::WindowsAndMessaging::GetClientRect(hwnd, &mut rect);
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1973 |                 let _ = windows::Win32::UI::WindowsAndMessaging::GetClientRect(hwnd, &mut rect);
+     |                 +++++++
+
+warning: `app` (lib) generated 66 warnings (run `cargo fix --lib -p app` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.10s

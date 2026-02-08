@@ -129,6 +129,17 @@ pub fn run() {
         midi::close_midi_output,
         midi::send_midi_message
     ])
+    .on_window_event(|window, event| {
+        match event {
+            tauri::WindowEvent::CloseRequested { .. } => {
+                println!("[TAURI] Window Close Requested (Label: {}). Cleaning up...", window.label());
+            }
+            tauri::WindowEvent::Destroyed => {
+                println!("[TAURI] Window Destroyed (Label: {}).", window.label());
+            }
+            _ => {}
+        }
+    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

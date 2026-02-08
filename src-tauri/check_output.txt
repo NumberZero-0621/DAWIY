@@ -1,0 +1,184 @@
+warning: unused import: `ipersistant::*`
+  --> C:\Documents\UnivFukuchiyama\vst3-sys\src\base\mod.rs:17:9
+   |
+17 | pub use ipersistant::*;
+   |         ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ivstmidicontroller::*`
+  --> C:\Documents\UnivFukuchiyama\vst3-sys\src\vst\mod.rs:36:9
+   |
+36 | pub use ivstmidicontroller::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^
+
+warning: `vst3-sys` (lib) generated 2 warnings (run `cargo fix --lib -p vst3-sys` to apply 2 suggestions)
+    Checking app v0.1.0 (C:\Documents\UnivFukuchiyama\DAWIY\src-tauri)
+error[E0428]: the name `ComponentHandler_begin_edit` is defined multiple times
+   --> src\vst_host.rs:652:1
+    |
+384 | unsafe extern "system" fn ComponentHandler_begin_edit(_this: *mut c_void, id: u32) -> i32 {
+    | ----------------------------------------------------------------------------------------- previous definition of the value `ComponentHandler_begin_edit` here
+...
+652 | unsafe extern "system" fn ComponentHandler_begin_edit(_this: *mut c_void, _id: ParamID) -> tresult { 
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ComponentHandler_begin_edit` redefined here
+    |
+    = note: `ComponentHandler_begin_edit` must be defined only once in the value namespace of this module
+
+error[E0428]: the name `ComponentHandler_perform_edit` is defined multiple times
+   --> src\vst_host.rs:656:1
+    |
+388 | unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, id: u32, value: f64) -> i32 {
+    | ------------------------------------------------------------------------------------------------------- previous definition of the value `ComponentHandler_perform_edit` here
+...
+656 | unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, _id: ParamID, _val: ParamValue) -> tresult { kResultOk }
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ComponentHandler_perform_edit` redefined here
+    |
+    = note: `ComponentHandler_perform_edit` must be defined only once in the value namespace of this module
+
+error[E0428]: the name `ComponentHandler_end_edit` is defined multiple times
+   --> src\vst_host.rs:657:1
+    |
+392 | unsafe extern "system" fn ComponentHandler_end_edit(_this: *mut c_void, id: u32) -> i32 {
+    | --------------------------------------------------------------------------------------- previous definition of the value `ComponentHandler_end_edit` here
+...
+657 | unsafe extern "system" fn ComponentHandler_end_edit(_this: *mut c_void, _id: ParamID) -> tresult { kResultOk }
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ComponentHandler_end_edit` redefined here
+    |
+    = note: `ComponentHandler_end_edit` must be defined only once in the value namespace of this module
+
+error[E0428]: the name `ComponentHandler_restart_component` is defined multiple times
+   --> src\vst_host.rs:658:1
+    |
+396 | unsafe extern "system" fn ComponentHandler_restart_component(_this: *mut c_void, flags: i32) -> i32 {
+    | --------------------------------------------------------------------------------------------------- previous definition of the value `ComponentHandler_restart_component` here
+...
+658 | unsafe extern "system" fn ComponentHandler_restart_component(_this: *mut c_void, flags: i32) -> tresult {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ComponentHandler_restart_component` redefined here
+    |
+    = note: `ComponentHandler_restart_component` must be defined only once in the value namespace of this module
+
+error[E0428]: the name `ComponentHandler_set_dirty` is defined multiple times
+   --> src\vst_host.rs:667:1
+    |
+400 | unsafe extern "system" fn ComponentHandler_set_dirty(_this: *mut c_void, state: i32) -> i32 {
+    | ------------------------------------------------------------------------------------------- previous definition of the value `ComponentHandler_set_dirty` here
+...
+667 | unsafe extern "system" fn ComponentHandler_set_dirty(_this: *mut c_void, state: TBool) -> tresult { 
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ComponentHandler_set_dirty` redefined here
+    |
+    = note: `ComponentHandler_set_dirty` must be defined only once in the value namespace of this module
+
+error[E0428]: the name `ComponentHandler_request_open_editor` is defined multiple times
+   --> src\vst_host.rs:671:1
+    |
+404 | unsafe extern "system" fn ComponentHandler_request_open_editor(_this: *mut c_void, name: *const c_char) -> i32 {
+    | -------------------------------------------------------------------------------------------------------------- previous definition of the value `ComponentHandler_request_open_editor` here
+...
+671 | unsafe extern "system" fn ComponentHandler_request_open_editor(_this: *mut c_void, _name: *const c_char) -> tresult { 
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ComponentHandler_request_open_editor` redefined here
+    |
+    = note: `ComponentHandler_request_open_editor` must be defined only once in the value namespace of this module
+
+error[E0428]: the name `ComponentHandler_start_group_edit` is defined multiple times
+   --> src\vst_host.rs:675:1
+    |
+408 | unsafe extern "system" fn ComponentHandler_start_group_edit(_this: *mut c_void, id: u32) -> i32 {
+    | ----------------------------------------------------------------------------------------------- previous definition of the value `ComponentHandler_start_group_edit` here
+...
+675 | unsafe extern "system" fn ComponentHandler_start_group_edit(_this: *mut c_void) -> tresult {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ComponentHandler_start_group_edit` redefined here
+    |
+    = note: `ComponentHandler_start_group_edit` must be defined only once in the value namespace of this module
+
+error[E0428]: the name `ComponentHandler_finish_group_edit` is defined multiple times
+   --> src\vst_host.rs:679:1
+    |
+412 | unsafe extern "system" fn ComponentHandler_finish_group_edit(_this: *mut c_void, id: u32) -> i32 {
+    | ------------------------------------------------------------------------------------------------ previous definition of the value `ComponentHandler_finish_group_edit` here
+...
+679 | unsafe extern "system" fn ComponentHandler_finish_group_edit(_this: *mut c_void) -> tresult {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `ComponentHandler_finish_group_edit` redefined here
+    |
+    = note: `ComponentHandler_finish_group_edit` must be defined only once in the value namespace of this module
+
+warning: unused import: `PathBuf`
+ --> src\vst_launcher.rs:5:23
+  |
+5 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0308]: mismatched types
+   --> src\vst_host.rs:449:16
+    |
+449 |     set_dirty: ComponentHandler_set_dirty,
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected fn pointer, found fn item
+    |
+    = note: expected fn pointer `unsafe extern "system" fn(_, u8) -> _`
+                  found fn item `unsafe extern "system" fn(_, i32) -> _ {vst_host::ComponentHandler_set_dirty}`
+
+error[E0308]: mismatched types
+   --> src\vst_host.rs:451:23
+    |
+451 |     start_group_edit: ComponentHandler_start_group_edit,
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ incorrect number of function parameters
+    |
+    = note: expected fn pointer `unsafe extern "system" fn(*mut c_void) -> _`
+                  found fn item `unsafe extern "system" fn(*mut c_void, u32) -> _ {vst_host::ComponentHandler_start_group_edit}`
+
+error[E0308]: mismatched types
+   --> src\vst_host.rs:452:24
+    |
+452 |     finish_group_edit: ComponentHandler_finish_group_edit,
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ incorrect number of function parameters
+    |
+    = note: expected fn pointer `unsafe extern "system" fn(*mut c_void) -> _`
+                  found fn item `unsafe extern "system" fn(*mut c_void, u32) -> _ {vst_host::ComponentHandler_finish_group_edit}`
+
+error[E0308]: mismatched types
+   --> src\vst_host.rs:463:16
+    |
+463 |     set_dirty: ComponentHandler_set_dirty,
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected fn pointer, found fn item
+    |
+    = note: expected fn pointer `unsafe extern "system" fn(_, u8) -> _`
+                  found fn item `unsafe extern "system" fn(_, i32) -> _ {vst_host::ComponentHandler_set_dirty}`
+
+error[E0308]: mismatched types
+   --> src\vst_host.rs:465:23
+    |
+465 |     start_group_edit: ComponentHandler_start_group_edit,
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ incorrect number of function parameters
+    |
+    = note: expected fn pointer `unsafe extern "system" fn(*mut c_void) -> _`
+                  found fn item `unsafe extern "system" fn(*mut c_void, u32) -> _ {vst_host::ComponentHandler_start_group_edit}`
+
+error[E0308]: mismatched types
+   --> src\vst_host.rs:466:24
+    |
+466 |     finish_group_edit: ComponentHandler_finish_group_edit,
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ incorrect number of function parameters
+    |
+    = note: expected fn pointer `unsafe extern "system" fn(*mut c_void) -> _`
+                  found fn item `unsafe extern "system" fn(*mut c_void, u32) -> _ {vst_host::ComponentHandler_finish_group_edit}`
+
+warning: unused variable: `id`
+   --> src\vst_host.rs:388:77
+    |
+388 | unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, id: u32, value: f64) -> i32 {
+    |                                                                             ^^ help: if this is intentional, prefix it with an underscore: `_id`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `value`
+   --> src\vst_host.rs:388:86
+    |
+388 | unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, id: u32, value: f64) -> i32 {
+    |                                                                                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_value`
+
+Some errors have detailed explanations: E0308, E0428.
+For more information about an error, try `rustc --explain E0308`.
+warning: `app` (lib) generated 3 warnings
+error: could not compile `app` (lib) due to 14 previous errors; 3 warnings emitted
