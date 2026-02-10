@@ -888,6 +888,8 @@ pub fn load_and_open(path: String) -> Result<(), String> {
     Ok(())
 }
 
+const WM_VST_DROP_INSTANCE: u32 = windows::Win32::UI::WindowsAndMessaging::WM_USER + 4242;
+
 unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
     OleInitialize(None).ok();
     println!("[Native] VST Coordinator Thread Started. TID: {:?}", std::thread::current().id());
@@ -917,6 +919,15 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
         let mut msg = MSG::default();
         // PM_REMOVE because we handle them
         while windows::Win32::UI::WindowsAndMessaging::PeekMessageW(&mut msg, None, 0, 0, windows::Win32::UI::WindowsAndMessaging::PM_REMOVE).as_bool() {
+             if msg.message == WM_VST_DROP_INSTANCE {
+                 let hwnd_val = msg.wParam.0;
+                 // Remove instance with this hwnd
+                 if let Some(pos) = instances.iter().position(|x| x.hwnd.0 as usize == hwnd_val) {
+                     println!("[Native] Coordinator: Dropping Instance for HWND: {}", hwnd_val);
+                     instances.remove(pos); // Drop called here (triggers cleanup)
+                 }
+             }
+
              if msg.message == windows::Win32::UI::WindowsAndMessaging::WM_QUIT {
                  // If we receive WM_QUIT, it might be for the whole thread?
                  // Usually PostQuitMessage(0) sends it.
@@ -987,19 +998,7 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
 
     // Helper to pump messages
     // Returns false if WM_QUIT received
-    let pump_messages = || -> bool {
-        let mut msg = MSG::default();
-        unsafe {
-            while windows::Win32::UI::WindowsAndMessaging::PeekMessageW(&mut msg, None, 0, 0, windows::Win32::UI::WindowsAndMessaging::PM_REMOVE).as_bool() {
-                if msg.message == windows::Win32::UI::WindowsAndMessaging::WM_QUIT {
-                    return false;
-                }
-                windows::Win32::UI::WindowsAndMessaging::TranslateMessage(&msg);
-                windows::Win32::UI::WindowsAndMessaging::DispatchMessageW(&msg);
-            }
-        }
-        true
-    };
+
     
     // 2. Load Plugin
     let path_os: Vec<u16> = std::path::Path::new(path)
@@ -1267,7 +1266,11 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
          let unified_vtbl = *(unified_unknown as *mut *const IHostApplicationVTableLayout); 
          if ((*unified_vtbl).query_interface)(unified_unknown, &i_component_handler_iid, &mut handler_ptr) == kResultOk {
                let handler = VstPtr::<dyn IComponentHandler>::owned(handler_ptr as *mut *mut _).unwrap();
-               if edit_controller.set_component_handler(handler.as_ptr() as *mut *mut _) == kResultOk {
+               // Cast VstPtr (Smart Ptr) to raw pointer, then transmute to SharedVstPtr (Structure wrapping raw ptr)
+               // set_component_handler takes SharedVstPtr<dyn IComponentHandler>
+               // SharedVstPtr is #[repr(transparent)] wrapper around *mut *mut T
+               let shared_handler: vst3_sys::utils::SharedVstPtr<dyn IComponentHandler> = std::mem::transmute(handler.as_ptr());
+               if edit_controller.set_component_handler(shared_handler) == kResultOk {
                     println!("[Native] Component Handler set.");
                }
          }
@@ -1292,7 +1295,8 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
          if unit_count > 0 {
              let mut info = std::mem::zeroed();
              if unit_info.get_unit_info(0, &mut info) == kResultOk {
-                  let name = String::from_utf16_lossy(&info.name);
+                  let name_u16: Vec<u16> = info.name.iter().map(|&c| c as u16).take_while(|&c| c != 0).collect();
+                  let name = String::from_utf16_lossy(&name_u16);
                   println!("[Native] Unit 0 Name: {}", name);
              }
          }
@@ -1313,7 +1317,7 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
     }
 
     // Connection Point Handshake
-    use vst3_sys::base::IConnectionPoint;
+    use vst3_sys::vst::IConnectionPoint;
     let cp_iid = IID_ICONNECTIONPOINT;
     let mut comp_cp_ptr: *mut c_void = std::ptr::null_mut();
     let mut ctrl_cp_ptr: *mut c_void = std::ptr::null_mut();
@@ -1691,21 +1695,7 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
         }
     }
 
-    if view_ptr_void.is_null() {
-        println!("[Native] '' failed. Trying 'editor'...");
-        let editor_s = b"editor\0";
-        for (i, &b) in editor_s.iter().enumerate() { fs_name[i] = b; }
-        
-        // We can't reuse view_ptr_void as it's not mutable in previous scope? 
-        // Shadowing
-        view_ptr_void2 = edit_controller.create_view(fs_name.as_ptr() as *const i8);
-        if !view_ptr_void2.is_null() {
-             println!("[Native] 'editor' worked.");
-             view_ptr_void = view_ptr_void2;
-             println!("[Native] View created with 'editor'.");
-        }
-    }
-    */
+
 
 
 
@@ -1781,151 +1771,15 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
     SetTimer(hwnd, 1, 1000, None);
 
     
-    tx.send(Ok(())).unwrap_or(()); 
-
-    // Message Loop
-    let mut timer_printed = false;
-    let mut msg = MSG::default();
-    loop {
-        if GetMessageW(&mut msg, None, 0, 0).as_bool() == false {
-            break;
-        }
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-        
-        // Check Timer manually if Dispatch didn't handle it (it should have)
-        // But we need to implement WM_TIMER handling in wnd_proc OR check here?
-        // Since we didn't update wnd_proc, let's poll here?
-        // No, SetTimer posts WM_TIMER to queue. wnd_proc handles it.
-        // I need to update wnd_proc to handle WM_TIMER or use a closure/static state?
-        // Wait, local variables (edit_controller, view) are NOT accessible in wnd_proc.
-        // This is a Rust closure problem.
-        
-        // Alternative: Poll in the loop directly using GetTickCount?
-        // Or handle message here?
-        if msg.message == windows::Win32::UI::WindowsAndMessaging::WM_TIMER {
-             if !timer_printed {
-                 println!("[Native] Timer Tick. View exists: {}", view.is_some());
-                 
-                 let p_count = edit_controller.get_parameter_count();
-                 println!("[Native] Periodic Param Check: {}", p_count);
-                 timer_printed = true;
-             }
-             
-             // REMOVED Infinite Retry Loop for View Creation.
-             // If view is None, we stay headless.
-        }
-    }
-    
-    println!("[Native] Message Loop Ended (WM_QUIT received from first loop).");
-    
-    println!("[Native] Shutdown Sequence Started.");
-
-    // 1. Deactivate Component (Must be done before terminating controller/view actions?)
-    println!("[Native] Deactivating component...");
-    component.set_active(0);
-    println!("[Native] Component deactivated.");
-
-    // 2. Remove View
-    if let Some(ref v) = view {
-        println!("[Native] Removing view...");
-        v.removed();
-        println!("[Native] View removed.");
-    }
-    SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-
-    println!("[Native] Dropping view VstPtr...");
-    drop(view);
-    println!("[Native] View dropped.");
-    
-    // Re-check controller separation for cleanup
-    let has_separate_controller = (component.as_ptr() as *mut std::ffi::c_void) != (edit_controller.as_ptr() as *mut std::ffi::c_void);
-    println!("[Native] Has Separate Controller Ptr: {}", has_separate_controller);
-    
-    // Note: If obtained via QueryInterface, it might still share state.
-    // We should try terminating it usually, but if it crashes, maybe we skip if not separate?
-    // For now, let's keep it but log it.
-    
-    if has_separate_controller {
-         println!("[Native] Terminating EditController...");
-         edit_controller.terminate();
-         println!("[Native] EditController terminated.");
-    } else {
-         // Even if pointers are same (unlikely with QI), or if they are just same object, 
-         // VST3 spec implies controller and component are distinct interfaces to be terminated.
-         // BUT if we QI'd, we didn't call initialize() on controller specifically (we assumed component init did it).
-         // So maybe we shouldn't terminate it?
-         println!("[Native] EditController is Component (QI). Skipping separate terminate to avoid double-free/crash?");
-         // logic: if we didn't explicitly initialize it (via createInstance), we shouldn't terminate it?
-         // Actually, Component::initialize initializes the controller part too if it's the same object.
-         // So Component::terminate should terminate it.
-         // Let's TRY skipping it for Vienna.
-    }
-    println!("[Native] Dropping EditController...");
-    drop(edit_controller);
-    println!("[Native] EditController dropped.");
-    
-    // component.set_active(0); // Moved up
-    
-    println!("[Native] Terminating Component...");
-    component.terminate();
-    println!("[Native] Component terminated.");
-    
-    println!("[Native] Dropping Component...");
-    drop(component);
-    println!("[Native] Component dropped.");
-
-    
-    drop(factory); // Explicit drop before unloading library
-    
-    println!("[Native] VST Cleanup Complete.");
-    
-    // RefCounted ExitDll
-    let mut should_exit = false;
-    {
-        let mut map = LOADED_LIBRARIES.lock().unwrap();
-        let handle_val = lib_handle.0 as isize;
-        if let Some(count) = map.get_mut(&handle_val) {
-             if *count > 0 {
-                 *count -= 1;
-                 println!("[Native] Library Unloading. RefCount: {}", *count);
-                 if *count == 0 {
-                     should_exit = true;
-                     map.remove(&handle_val);
-                 }
-             }
-        }
-    }
-
-    if should_exit {
-        if !try_exit_dll(lib_handle) { println!("[Native] Warning: ExitDll returned false."); }
-    } else {
-        println!("[Native] Skipping ExitDll (RefCount > 0).");
-    }
-
-    // Explicitly destroy window here to trigger proper OS cleanup (WM_DESTROY will be sent now)
-    println!("[Native] Message Loop Ended. Destroying window...");
-    let _ = DestroyWindow(hwnd);
-    
-    // Unload Library
-    println!("[Native] Freeing Library...");
-    
-    // Define FreeLibrary manually to avoid import issues
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn FreeLibrary(hLibModule: isize) -> i32;
-    }
-    unsafe { FreeLibrary(lib_handle.0); }
-    
-    println!("[Native] Library Unloaded.");
-    
-    // We can also pump once more to ensure WM_DESTROY and WM_NCDESTROY are processed?
-    // GetMessage/Dispatch might be needed?
-    // Usually DestroyWindow sends messages directly to wnd_proc.
-    
-    println!("[Native] Session Exiting.");
-    
-    Ok(())
+    // Return Instance
+    Ok(VstInstance {
+        hwnd,
+        lib_handle,
+        factory: Some(factory),
+        component,
+        edit_controller,
+        view,
+    })
 }
 
 
@@ -2000,6 +1854,9 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         }
         WM_DESTROY => {
             println!("[Native] wnd_proc: WM_DESTROY received.");
+            use windows::Win32::System::Threading::GetCurrentThreadId;
+            use windows::Win32::UI::WindowsAndMessaging::PostThreadMessageW;
+            PostThreadMessageW(GetCurrentThreadId(), WM_VST_DROP_INSTANCE, WPARAM(hwnd.0 as usize), LPARAM(0));
             LRESULT(0)
         }
         WM_SIZE => {
@@ -2019,7 +1876,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 };
                 
                 // println!("[Native] Valid View found. Resizing to {}x{}", rect.right, rect.bottom);
-                match (vptr.on_size)(&view_rect) {
+                match (vptr.OnSize)(view_interface_ptr as *mut _, &mut view_rect) {
                     kResultOk => {}, // println!("[Native] onSize success."),
                     _ => {}, // println!("[Native] onSize failed/unsupported."),
                 }
