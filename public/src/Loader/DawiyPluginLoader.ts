@@ -56,6 +56,15 @@ export default class DawiyPluginLoader {
                     this.plugins.push(instance);
                     this.pluginGroups.set(instance.id, instance.group || "General");
 
+                    // Initialize Plugin with HostAPI
+                    if (instance.onInit) {
+                        try {
+                            instance.onInit(this.app.hostAPI);
+                        } catch (e) {
+                            console.error(`Error initializing plugin ${instance.name}:`, e);
+                        }
+                    }
+
                     console.log(`[DawiyPluginLoader] Loaded: ${instance.name}`);
 
                 } catch (e) {

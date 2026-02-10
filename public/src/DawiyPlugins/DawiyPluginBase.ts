@@ -1,5 +1,6 @@
 import App from "../App";
 import { IDawiyPlugin } from "./IDawiyPlugin";
+import HostAPI from "./API/HostAPI";
 
 /**
  * Base class for DAWIY Plugins.
@@ -10,7 +11,10 @@ export default abstract class DawiyPluginBase implements IDawiyPlugin {
     abstract name: string;
     abstract description: string;
 
+    categories: ('generator' | 'modifier' | 'analysis' | 'io' | 'ui')[] = [];
+
     protected app: App;
+    protected host: HostAPI | null = null;
     protected container: HTMLElement | null = null;
     protected dynamicImport = new Function('url', 'return import(url)');
 
@@ -18,7 +22,11 @@ export default abstract class DawiyPluginBase implements IDawiyPlugin {
         this.app = app;
     }
 
-    abstract render(container: HTMLElement): void;
+    public onInit(host: HostAPI) {
+        this.host = host;
+    }
+
+    render(container: HTMLElement): void { }
 
     public onActivate() { }
     public onDeactivate() { }

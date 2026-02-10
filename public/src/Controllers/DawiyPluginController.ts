@@ -1013,7 +1013,11 @@ export default class ${className} extends DawiyPluginBase {
         const ext = this.installedExtensions.find(e => e.id === this.activeExtensionId);
         if (ext) {
             try {
-                ext.render(viewContainer);
+                if (ext.render) {
+                    ext.render(viewContainer);
+                } else {
+                    viewContainer.innerHTML = '<div class="dawiy-ext-placeholder">No GUI available for this plugin.</div>';
+                }
             } catch (e) {
                 console.error(`Error rendering plugin ${ext.name}:`, e);
                 viewContainer.innerHTML = `<div style="color:red">Error rendering plugin: ${e}</div>`;
@@ -1183,7 +1187,11 @@ export default class ${className} extends DawiyPluginBase {
         this.popOutWindow.document.body.appendChild(container);
 
         try {
-            ext.render(container);
+            if (ext.render) {
+                ext.render(container);
+            } else {
+                container.innerHTML = '<div style="padding:20px;">No GUI available for this plugin.</div>';
+            }
         } catch (e) {
             console.error(`Error rendering plugin ${ext.name} in popout:`, e);
             container.innerHTML = `<div style="color:red">Error rendering plugin: ${e}</div>`;

@@ -35,27 +35,35 @@ Your goal is to help the user build TypeScript plugins for DAWIY, a Digital Audi
     -   MUST match: \`constructor(app: App) { super(app); }\`.
 
 3.  **Lifecycle**:
-    -   Implement \`render(container: HTMLElement)\` to build UI.
+    -   Implement \`onInit(host: HostAPI)\` to register UI/IO hooks.
+    -   Implement \`render(container: HTMLElement)\` to build Main UI (if needed).
     -   Implement \`onActivate()\` and \`onDeactivate()\` for lifecycle management.
-    -   **DO NOT** implement \`destroy()\`. Use \`onDeactivate()\` for cleanup (removing listeners, etc.).
 
-4.  **API Access (\`this.app\`)**:
-    -   Use \`this.app\` to access DAWIY controllers.
-    -   **MIDI Input**: Use \`this.app.settingsController.on_midi_message.add(this.callback)\`.
-        -   **IMPORTANT**: \`MIDIMessageEvent\` type might be missing. Use \`(event: any)\` or \`// @ts-ignore\` to avoid TS2552 errors. Access data via \`event.data\`.
+4.  **API Access (\`this.app.hostAPI\`) (NEW & PREFERRED)**:
+    -   **UI**: \`this.app.hostAPI.ui\`
+        -   \`registerSidebarItem(id, icon, label, element)\`: Add sidebar tab.
+        -   \`showToast(msg, isError?)\`: Show notification.
+        -   \`openWindow(title, content)\`: Open floating window.
+    -   **File System**: \`this.app.hostAPI.fs\`
+        -   \`readFile()\`: Open file picker & read text.
+        -   \`writeFile(path, content)\`: Save/Download file.
+    -   **I/O**: \`this.app.hostAPI.io\`
+        -   \`registerImporter(ext, callback)\`: Handle custom file drops (e.g., .txt, .json).
+        -   \`registerExporter(name, callback)\`: Add export menu item.
+
+5.  **Core Access (\`this.app\`)**:
     -   **Tracks**: \`this.app.tracksController\`
-    -   **Transport**: \`this.app.host\` (play, pause, position)
-    -   **Project**: \`this.app.projectController\`
+    -   **Transport**: \`this.app.host\` (play, pause)
 
-5.  **Imports**:
+6.  **Imports**:
     \`import App from "../../App";\`
     \`import { DAWIYPlugin } from "../IDawiyPlugin";\`
     \`import DawiyPluginBase from "../DawiyPluginBase";\`
+    \`import HostAPI from "../API/HostAPI";\`
 
-6.  **UI Construction**:
-    -   Use \`document.createElement\` or \`container.innerHTML = "..."\`.
-    -   Style elements using inline styles or \`<style>\` blocks within \`render\`.
-    -   Do NOT use external UI frameworks (React, Vue, etc.).
+7.  **UI Construction**:
+    -   Use standard DOM APIs (\`document.createElement\`).
+    -   Style with inline styles or Bootstrap utility classes (if available).
 
 # Example Plugin Structure:
 
@@ -63,6 +71,7 @@ Your goal is to help the user build TypeScript plugins for DAWIY, a Digital Audi
 import App from "../../App";
 import { DAWIYPlugin } from "../IDawiyPlugin";
 import DawiyPluginBase from "../DawiyPluginBase";
+import HostAPI from "../API/HostAPI";
 
 @DAWIYPlugin
 export default class MyPlugin extends DawiyPluginBase {
@@ -76,14 +85,25 @@ export default class MyPlugin extends DawiyPluginBase {
         super(app);
     }
 
-    render(container: HTMLElement) {
-        container.innerHTML = "<h3>Hello DAWIY</h3>";
+    /**
+     * Called when plugin is loaded. Use this to register sidebar items or importers.
+     */
+    onInit(host: HostAPI) {
+        // Register a sidebar item
+        const sidebarDiv = document.createElement("div");
+        sidebarDiv.innerHTML = "<button>Click Me</button>";
+        host.ui.registerSidebarItem("my-sidebar", "bi-star", "My Sidebar", sidebarDiv);
+
+        // Register a custom file importer
+        host.io.registerImporter(".myfile", async (file) => {
+            const text = await file.text();
+            host.ui.showToast("Imported: " + file.name);
+        });
     }
 
-    // @ts-ignore
-    handleMidi(e: any) {
-        const data = e.data;
-        // ...
+    render(container: HTMLElement) {
+        // Main plugin view (if opened from Plugin Manager)
+        container.innerHTML = "<h3>Main View</h3>";
     }
 
     onDeactivate() {

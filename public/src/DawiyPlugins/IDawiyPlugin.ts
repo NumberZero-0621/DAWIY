@@ -1,14 +1,28 @@
+import HostAPI from "./API/HostAPI";
+
 export interface IDawiyPlugin {
     id: string;
     name: string;
     description: string;
     group?: string;
     /**
+     * Plugin categories.
+     * Defines where this plugin should be displayed or used.
+     */
+    categories?: ('generator' | 'modifier' | 'analysis' | 'io' | 'ui')[];
+
+    /**
+     * Called when the plugin is loaded.
+     * @param host The host API bridge.
+     */
+    onInit?(host: HostAPI): void;
+
+    /**
      * Called when the plugin is selected/opened in the UI.
      * Use this to render your plugin's interface into the provided container.
      * @param container The HTML element where the plugin should render its UI.
      */
-    render(container: HTMLElement): void;
+    render?(container: HTMLElement): void;
 
     /**
      * Optional: Called when the plugin is activated.

@@ -289,16 +289,33 @@ export default class HostController {
 
   /**
    * Handles the import of files by the browser. It creates a new track for each file.
+   * Checks for custom importers registered via HostAPI first.
    *
    * @param e - Input event of the file input.
    */
-  public importFilesSongs(e: InputEvent): void {
+  public async importFilesSongs(e: InputEvent): Promise<void> {
     const target = e.target as HTMLInputElement;
 
     if (target.files) {
       for (let i = 0; i < target.files.length; i++) {
         let file = target.files[i];
         if (file !== undefined) {
+          // 1. Check Custom Importers
+          const ext = "." + file.name.split('.').pop()?.toLowerCase();
+          const customImporter = this._app.hostAPI.getImporter(ext);
+
+          if (customImporter) {
+            console.log(`[HostController] Using custom importer for ${ext}`);
+            try {
+              await customImporter(file);
+            } catch (err) {
+              console.error(`[HostController] Custom import failed for ${file.name}`, err);
+              this._app.showToast(`Import failed: ${err}`, true);
+            }
+            continue; // Skip default handling
+          }
+
+          // 2. Default Handling
           this._app.tracksController.createTrackWithFile(file).then((track) => {
           });
         }

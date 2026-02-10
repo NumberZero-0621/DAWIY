@@ -285,9 +285,39 @@ export default class EditorController {
             }
             // Check for external files (OS file drag)
             else if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
-                const hasFiles = Array.from(e.dataTransfer.items).some(item => item.kind === 'file');
-                if (hasFiles) {
-                    this.importDraggedFiles([...e.dataTransfer.items], e.clientX, e.clientY);
+                const items = Array.from(e.dataTransfer.items);
+
+                // Check for custom importers first
+                // If ANY file matches a custom importer, we hand it over to the importer 
+                // and skip the default audio/midi loading for that file.
+                // However, EditorController is designed to load files into TRACKS.
+                // Custom importers might do something else (like load into a plugin UI).
+
+                // We will collect items that are NOT handled by custom importers 
+                // and pass them to importDraggedFiles.
+
+                const itemsForTracks: DataTransferItem[] = [];
+
+                for (const item of items) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        const ext = "." + file.name.split('.').pop()?.toLowerCase();
+                        const importer = this._app.hostAPI.getImporter(ext);
+
+                        if (importer) {
+                            console.log(`[EditorController] Found custom importer for ${file.name}`);
+                            importer(file).catch(err => {
+                                console.error(`[EditorController] Custom import failed:`, err);
+                                this._app.showToast(`Import failed: ${err}`, true);
+                            });
+                            continue; // Handled by custom importer
+                        }
+                    }
+                    itemsForTracks.push(item);
+                }
+
+                if (itemsForTracks.length > 0) {
+                    this.importDraggedFiles(itemsForTracks, e.clientX, e.clientY);
                 }
             }
         }, true); // Capture phase

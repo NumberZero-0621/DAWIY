@@ -44,6 +44,7 @@ import PianoRollController from "./Controllers/Editor/PianoRoll/PianoRollControl
 import AutoSaveController from "./Controllers/AutoSaveController";
 import ContextMenuController from "./Controllers/ContextMenuController";
 import MidiOutputController from "./Controllers/MidiOutputController";
+import HostAPI from "./DawiyPlugins/API/HostAPI";
 
 /**
  * Main class for the host. Start all controllers, views and models. All controllers and views are accessible frome this app.
@@ -92,6 +93,7 @@ export default class App {
 
     host: Host;
     loader: Loader;
+    hostAPI: HostAPI; // Added
 
     undoManager: UndoManager;
     audioLoopBrowser: any;
@@ -99,6 +101,7 @@ export default class App {
     public static TOOL_MODE: "SELECT" | "PEN" = "SELECT";
 
     constructor() {
+        this.hostAPI = new HostAPI(this); // Initialize HostAPI
         this.loader = new Loader(this);
 
         this.hostView = new HostView();
@@ -188,33 +191,30 @@ export default class App {
             const items = Array.from(e.dataTransfer.items);
 
             for (const item of items) {
+                console.log("[App] Drop item:", item.kind, item.type); // Debug
+
+                // Try webkitGetAsEntry first (supports directories)
                 const entry = item.webkitGetAsEntry();
                 if (entry) {
+                    console.log("[App] Entry found:", entry.name, entry.isFile ? "File" : "Dir"); // Debug
                     await this.traverseFileTree(entry);
+                    continue;
+                }
+
+                // Fallback to standard getAsFile for simple files
+                const file = item.getAsFile();
+                if (file) {
+                    console.log("[App] File found via getAsFile:", file.name);
+                    this.processFile(file);
+                } else {
+                    console.warn("[App] Could not retrieve file from item:", item);
                 }
             }
         });
     }
 
-    private async traverseFileTree(entry: any, path: string = "") {
-        if (entry.isFile) {
-            if (entry.name.endsWith('.ts')) {
-                this.uploadEntryFile(entry, path);
-            } else if (entry.name.endsWith('.zip')) {
-                this.processZipEntry(entry, path);
-            }
-        } else if (entry.isDirectory) {
-            const dirReader = entry.createReader();
-            dirReader.readEntries(async (entries: any[]) => {
-                for (const childEntry of entries) {
-                    await this.traverseFileTree(childEntry, path + entry.name + "/");
-                }
-            });
-        }
-    }
-
-    private uploadEntryFile(fileEntry: any, path: string) {
-        fileEntry.file((file: File) => {
+    private processFile(file: File, path: string = "") {
+        if (file.name.endsWith('.ts')) {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const content = event.target?.result as string;
@@ -222,29 +222,71 @@ export default class App {
                 this.uploadPlugin(path + file.name, content, file.name);
             };
             reader.readAsText(file);
-        });
-    }
-
-    private processZipEntry(fileEntry: any, path: string) {
-        fileEntry.file(async (file: File) => {
-            try {
-                const zip = await JSZip.loadAsync(file);
-                zip.forEach(async (relativePath, zipEntry) => {
-                    if (zipEntry.dir) return; // Ignore directories
-                    if (!zipEntry.name.endsWith('.ts')) return; // Allow only .ts inside zip for now
-
-                    const content = await zipEntry.async("string");
-                    // Combine the path where zip was dropped + zip internal structure
-                    // If we want to extract ZIP content AS IS into the target path:
-                    // usually zip contains a folder structure.
-                    const fullPath = path + relativePath;
-                    this.uploadPlugin(fullPath, content, zipEntry.name);
-                });
-            } catch (err) {
-                this.showToast(`Error reading ZIP file: ${err}`, true);
+        } else if (file.name.endsWith('.zip')) {
+            // Reuse zip logic (needs refactor or simple call if we wrap it)
+            // For now, let's just use the JSZip directly here or wrap processZipEntry logic
+            // But processZipEntry expects FileEntry.
+            // Let's create a helper "handleZipFile"
+            this.handleZipFile(file, path);
+        } else {
+            // Check custom importers
+            const ext = "." + file.name.split('.').pop()?.toLowerCase();
+            const importer = this.hostAPI.getImporter(ext);
+            console.log(`[App] Checking importer for ${ext}:`, !!importer);
+            if (importer) {
+                this.runCustomImporter(importer, file);
             }
+        }
+    }
+
+    private async runCustomImporter(importer: (file: File) => Promise<void>, file: File) {
+        console.log(`[App] Using custom importer for ${file.name}`);
+        try {
+            await importer(file);
+        } catch (err) {
+            console.error(`[App] Custom import failed for ${file.name}`, err);
+            this.showToast(`Import failed: ${err}`, true);
+        }
+    }
+
+    private handleZipFile(file: File, path: string) {
+        JSZip.loadAsync(file).then(zip => {
+            zip.forEach(async (relativePath, zipEntry) => {
+                if (zipEntry.dir) return;
+                if (!zipEntry.name.endsWith('.ts')) return;
+                const content = await zipEntry.async("string");
+                const fullPath = path + relativePath;
+                this.uploadPlugin(fullPath, content, zipEntry.name);
+            });
+        }).catch(err => {
+            this.showToast(`Error reading ZIP file: ${err}`, true);
         });
     }
+
+    private async traverseFileTree(entry: any, path: string = "") {
+        console.log("[App] traverseFileTree:", entry.name, path); // Debug
+        if (entry.isFile) {
+            entry.file((file: File) => {
+                this.processFile(file, path);
+            }, (err: any) => {
+                console.error(`[App] Failed to get file from entry ${entry.name}:`, err);
+            });
+        } else if (entry.isDirectory) {
+            const dirReader = entry.createReader();
+            const readEntries = () => {
+                dirReader.readEntries(async (entries: any[]) => {
+                    if (entries.length === 0) return;
+                    for (const childEntry of entries) {
+                        await this.traverseFileTree(childEntry, path + entry.name + "/");
+                    }
+                    readEntries(); // Continue reading (needed for large dirs in some browsers)
+                });
+            };
+            readEntries();
+        }
+    }
+
+    // Deprecated methods removed for clarity
 
     /**
      * Uploads the plugin content to the server.

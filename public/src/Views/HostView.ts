@@ -100,11 +100,16 @@ export default class HostView {
     aboutWindow = document.getElementById("about-window") as HTMLDivElement
 
 
-
     keyboardShortcutsCloseBtn = document.getElementById("keyboard-shortcuts-close-button") as HTMLDivElement;
     keyboardShortcutsWindow = document.getElementById("keyboard-shortcuts-window") as HTMLDivElement;
 
-    host = document.getElementById("main-track")
+    host = document.getElementById("main-track") as HTMLDivElement;
+
+    toggleButtonsDiv = document.getElementById("ToggleButtons") as HTMLDivElement;
+
+    // Export menu container (dynamically found or add ID in template if needed)
+    // For now we look for the dropdown inside menu-container-export-project
+    exportMenuDropdown = document.querySelector("#menu-container-export-project .dropdown-menu") as HTMLDivElement;
 
     constructor() {
         // add tempo and time signature selectors to the main toolbar
@@ -119,19 +124,113 @@ export default class HostView {
 
         this.metronomeContainer.appendChild(this.metronome);
     }
+
+    /**
+     * Adds a new menu item to the Export menu.
+     * @param label Label of the menu item
+     * @param callback Function to call when clicked
+     */
+    public addExportMenuItem(label: string, callback: () => void) {
+        if (!this.exportMenuDropdown) {
+            console.warn("Export menu dropdown not found.");
+            return;
+        }
+        const item = document.createElement("a");
+        item.className = "dropdown-item";
+        item.innerText = label;
+        item.style.cursor = "pointer";
+        item.addEventListener("click", callback);
+        this.exportMenuDropdown.appendChild(item);
+    }
+
+
+    /**
+     * Adds a new sidebar item from a plugin.
+     * @param id Unique ID for the sidebar item
+     * @param icon Bootstrap icon class (e.g., "bi-plugin")
+     * @param label Tooltip label
+     * @param element The content element to show in the sidebar
+     */
+    public addSidebarItem(id: string, icon: string, label: string, element: HTMLElement) {
+        // 1. Create the toggle button
+        const btn = document.createElement("button");
+        btn.id = `sidebar-btn-${id}`;
+        btn.innerHTML = `<i class="bi ${icon}"></i>`;
+        btn.title = label; // Simple tooltip
+
+        // Add to ToggleButtons container
+        this.toggleButtonsDiv.appendChild(btn);
+
+        // 2. Create the content container (sidebar pane)
+        const paneId = `sidebar-pane-${id}`;
+        const pane = document.createElement("div");
+        pane.id = paneId;
+        pane.style.display = "none";
+        // Styling to match existing sidebars (absolute positioned, right side)
+        // We might need to copy styles from #audio-loop-browser in CSS, 
+        // but for now let's assume it shares a class or we apply similar styles.
+        // Looking at style.css would be ideal, but we'll try to mimic the structure.
+        // Actually, existing sidebars seem to be direct children of body or #app?
+        // AppTemplate.html shows them at root level: <div id="audio-loop-browser"></div>
+        pane.className = "sidebar-pane"; // We might need to add this class or style it manually
+        // Copy basic styles from what we know about audio-loop-browser if it doesn't have a shared class
+        pane.style.position = "absolute";
+        pane.style.top = "50px"; // Height of menu bar?
+        pane.style.right = "50px"; // Width of toggle bar?
+        pane.style.bottom = "0";
+        pane.style.width = "300px"; // Default width
+        pane.style.backgroundColor = "#222";
+        pane.style.borderLeft = "1px solid #444";
+        pane.style.zIndex = "99";
+
+        pane.appendChild(element);
+        document.body.appendChild(pane); // Append to body to be safe, or #app
+
+        // 3. Add toggle logic
+        btn.addEventListener("click", () => {
+            const isVisible = pane.style.display !== "none";
+
+            // Close others
+            this.closeAllSidebars();
+
+            if (!isVisible) {
+                pane.style.display = "flex"; // Or block
+                btn.classList.add("active");
+            }
+        });
+
+        // Track this sidebar (optional, if we want to manage them)
+    }
+
+    private closeAllSidebars() {
+        // Close core sidebars
+        this.audioLoopBrowserDiv.style.display = "none";
+        this.aiAssistantBrowserDiv.style.display = "none";
+
+        // Close custom sidebars (naively find by class or ID pattern)
+        document.querySelectorAll('[id^="sidebar-pane-"]').forEach(el => {
+            (el as HTMLElement).style.display = "none";
+        });
+
+        // Reset active buttons
+        this.toggleButtonsDiv.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+    }
+
     toggleAudioLoopBrowser = this.soundLoopBtn.addEventListener("click", () => {
-        this.audioLoopBrowserDiv.style.display = this.audioLoopBrowserDiv.style.display !== "flex" ? "flex" : "none";
-        // Close AI Assistant if open
-        if (this.audioLoopBrowserDiv.style.display === "flex") {
-            this.aiAssistantBrowserDiv.style.display = "none";
+        const wasOpen = this.audioLoopBrowserDiv.style.display === "flex";
+        this.closeAllSidebars();
+
+        if (!wasOpen) {
+            this.audioLoopBrowserDiv.style.display = "flex";
         }
     });
 
     toggleAiAssistantBrowser = this.aiAssistantBtn.addEventListener("click", () => {
-        this.aiAssistantBrowserDiv.style.display = this.aiAssistantBrowserDiv.style.display !== "flex" ? "flex" : "none";
-        // Close Audio Loop Browser if open
-        if (this.aiAssistantBrowserDiv.style.display === "flex") {
-            this.audioLoopBrowserDiv.style.display = "none";
+        const wasOpen = this.aiAssistantBrowserDiv.style.display === "flex";
+        this.closeAllSidebars();
+
+        if (!wasOpen) {
+            this.aiAssistantBrowserDiv.style.display = "flex";
         }
     });
 

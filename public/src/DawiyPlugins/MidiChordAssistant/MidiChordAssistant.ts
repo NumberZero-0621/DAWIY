@@ -43,7 +43,7 @@ export default class MidiChordAssistant extends DawiyPluginBase {
      * プラグインのUIをレンダリングします。
      * @param container UIを挿入するHTMLElement
      */
-    render(container: HTMLElement): void {
+    override render(container: HTMLElement): void {
         container.innerHTML = `
             <style>
                 .midi-chord-assistant {

@@ -32,10 +32,23 @@ When generating plugins, follow these configuration rules:
 
 5. **Grouping [Optional]**:
     - To specify a plugin group, set the `group` property (default is "General").
+    - In the future, classification based on the following category IDs will be reinforced.
+
     ```typescript
-    group = "My Custom Group";
+    group = "generator"; // or "modifier", "analysis", "io", "ui"
     ```
 
+## Plugin Category Definitions
+
+Plugins are classified into the following 5 categories based on their function and role.
+
+| Category ID | Name | Overview | Implementation Examples |
+| :--- | :--- | :--- | :--- |
+| `generator` | **Generator** | Generates notes, audio, or patterns and adds them to tracks. | Rhythm generation, chord progression generation, AI melody generation |
+| `modifier` | **Modifier** | Selects and processes existing note or audio data. | Quantization, velocity adjustment, humanization, batch transposition |
+| `analysis` | **Analysis** | Visualizes and analyzes song information. Often involves UI display. | Spectrum analyzer, chord analysis display, song structure visualization |
+| `io` | **IO** | Adds import/export functionality for external file formats. | MusicXML import, proprietary score data export, other DAW format support |
+| `ui` | **UI** | Changes the overall appearance or extends language, shortcuts, etc. | Theme changes, dark mode extensions, language packs, keybind changes |
 
 ## External Libraries (Dynamic Import)
 
@@ -69,17 +82,27 @@ export default class MyAgentPlugin extends DawiyPluginBase {
     }
 
     /**
-     * Renders the UI
+     * Initialization (Receive HostAPI)
+     */
+    public override onInit(host: any) {
+        super.onInit(host);
+        
+        // Example: Registering to sidebar
+        /*
+        const div = document.createElement("div");
+        div.innerText = "Hello Sidebar";
+        host.ui.registerSidebarItem("my-sidebar", "bi-star", "My Sidebar", div);
+        */
+    }
+
+    /**
+     * Renders the UI (Used in Plugin Manager preview, etc.)
      * @param container The drawing area assigned to the plugin (e.g., a div)
      */
     public override render(container: HTMLElement) {
-        this.container = container; // Optional: DawiyPluginBase already holds this if you assign it, but usually you just use the arg.
-        container.innerHTML = ''; // Clear for re-rendering
-        
-        // Styling (inline styles recommended, or class definitions)
+        container.innerHTML = '';
         container.style.padding = "10px";
         container.style.color = "#ecf0f1";
-        container.style.overflowY = "auto";
 
         const title = document.createElement("h3");
         title.textContent = this.name;
@@ -87,6 +110,7 @@ export default class MyAgentPlugin extends DawiyPluginBase {
 
         const btn = document.createElement("button");
         btn.textContent = "Execute";
+        btn.className = "btn btn-primary";
         btn.onclick = () => this.doAction();
         container.appendChild(btn);
     }
@@ -96,6 +120,7 @@ export default class MyAgentPlugin extends DawiyPluginBase {
      */
     public override onActivate() {
         // Register event listeners if necessary
+        console.log("MyPlugin activated");
     }
 
     /**
@@ -106,21 +131,52 @@ export default class MyAgentPlugin extends DawiyPluginBase {
     }
 
     private async doAction() {
-        console.log("Action executed by " + this.name);
+        // HostAPI Usage Example
+        this.app.hostAPI.ui.showToast("Action executed!");
         
-        // Example: Dynamic Import
-        // const lib = await this.dynamicImport('https://example.com/lib.js');
+        // File System Usage Example
+        // await this.app.hostAPI.fs.writeFile("test.txt", "Hello World");
     }
 }
-```
 
-## API Access and Operations (Context)
+## API Access and Operations (HostAPI)
 
-You can access the DAW's main components through the `this.app` instance (of the `App` class).
+You can access enhanced features such as UI construction, file operations, and Import/Export via `this.app.hostAPI`.
 
-### Key Controllers
+### UI Extensions (`hostAPI.ui`)
 
-- **`app.tracksController`**: Track management
+- **`hostAPI.ui.registerSidebarItem(id, iconClass, label, element)`**:
+  Adds a new tab to the sidebar.
+  - `iconClass`: Bootstrap Icons class (e.g., "bi-star")
+  - `element`: The HTMLElement that forms the content of the panel.
+- **`hostAPI.ui.showToast(message, isError?)`**: Displays a toast notification.
+- **`hostAPI.ui.openWindow(title, content)`**: Opens a floating window (Experimental).
+
+### File System (`hostAPI.fs`)
+
+An abstraction layer that works in both Tauri and Web environments.
+
+- **`hostAPI.fs.readFile(path?)`**: Reads a text file. Opens a file picker in Web environment.
+- **`hostAPI.fs.writeFile(path, content)`**: Saves a file. Triggers a download in Web environment.
+- **`hostAPI.fs.showOpenDialog(options)`**: Opens a file selection dialog (Tauri only).
+
+### I/O Extensions (`hostAPI.io`)
+
+- **`hostAPI.io.registerImporter(extension, callback)`**:
+  Defines drag-and-drop behavior for specific file extensions (e.g., `.sampletext`).
+  - `callback`: `async (file: File) => void`
+- **`hostAPI.io.registerExporter(name, callback)`**:
+  Adds an item to the export menu.
+  - `callback`: `async () => void`
+- **`hostAPI.io.renderMasterAudio()`**: Renders the master output and returns an `AudioBuffer`.
+
+---
+
+### Core Component Access (`this.app`)
+
+You can also access internal DAW controllers directly through `this.app` (for advanced users).
+
+- **`app.tracksController`**: Track management.
   - `app.tracksController.selectedTrack`: The currently selected track.
   - `app.tracksController.trackList`: Array of tracks.
   - `app.tracksController.createAudioTrack()`: Create new tracks, etc. (Verify method names in implementation).
