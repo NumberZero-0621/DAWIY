@@ -4,8 +4,7 @@
 
 「**自分好みのDAW環境をDIYする共通プラットフォーム**」…を目指している
 
-![2026-2-12時点のDAWIY]()
-<img width="1918" height="1197" alt="dawiy_desktop" src="https://github.com/user-attachments/assets/bc0e3b00-bd96-48c5-b5d6-fc604208e222" />
+![2026-2-12時点のDAWIY](https://github.com/user-attachments/assets/bc0e3b00-bd96-48c5-b5d6-fc604208e222)
 
 ※画像は2026年2月12日時点
 
