@@ -4,9 +4,10 @@
 
 「**自分好みのDAW環境をDIYする共通プラットフォーム**」…を目指している
 
-![2025-12-28時点のDAWIY](https://github.com/user-attachments/assets/4e275fc2-b5f3-4795-b554-5ea1f6a50a06)
+![2026-2-12時点のDAWIY]()
+<img width="1918" height="1197" alt="dawiy_desktop" src="https://github.com/user-attachments/assets/bc0e3b00-bd96-48c5-b5d6-fc604208e222" />
 
-※画像は2025年12月28日時点
+※画像は2026年2月12日時点
 
 ***
 
@@ -101,7 +102,7 @@ Rust環境(`cargo`)がインストールされている必要があります
   - etc.
     - まだまだ改良の余地あり
 
-  ![ピアノロール画面](https://github.com/user-attachments/assets/6c42081a-fe5c-4da3-86cb-cbced9aa7ad9)
+  ![ピアノロール画面](https://github.com/user-attachments/assets/ec14a454-26d8-4de3-8406-5a5929d372ad)
 
 - dawprojectファイルの入出力機能の追加
   - dawprojectを読み込み、プロジェクトとして展開
@@ -118,7 +119,7 @@ Rust環境(`cargo`)がインストールされている必要があります
    ![Stochastic Note Generator](https://github.com/user-attachments/assets/b2da422e-fc52-42f2-b166-5ee1c0600f01)
 - プラグインのパッケージマネージャーのプロトタイプも実装
 
-   ![パッケージマネージャー](https://github.com/user-attachments/assets/26e19b7e-673c-49b8-8a91-de243f38f251)
+   ![パッケージマネージャー](https://github.com/user-attachments/assets/135041bc-a71e-47e9-8be5-1a4a27344a61)
 
 - 機能の自由な追加・削除には程遠い
   - サーバとの連携・インストール等々･･･ 課題は山積み
