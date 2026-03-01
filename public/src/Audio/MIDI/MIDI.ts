@@ -506,6 +506,31 @@ export class MIDI extends MIDIView {
         this.duration = target_duration
     }
 
+    /**
+     * Stretch the MIDI track by a ratio (useful for tempo changes)
+     * @param ratio The multiplier to apply to all time values
+     */
+    stretch(ratio: number) {
+        this._duration *= ratio
+        this._instant_duration *= ratio
+
+        for (let i = 0; i < this._instants.length; i++) {
+            const instant = this._instants[i]
+            for (let j = 0; j < instant.length; j++) {
+                const item = instant[j]
+                item.offset *= ratio
+
+                // MIDINote properties are readonly, so we create a new instance
+                item.note = new MIDINote(
+                    item.note.note,
+                    item.note.velocity,
+                    item.note.channel,
+                    item.note.duration * ratio
+                )
+            }
+        }
+    }
+
     /** SERIALIZATION */
 
     /**

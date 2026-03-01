@@ -39,6 +39,13 @@ button {
     margin: 5px;
     border-radius: 4px;
     width: max-content;
+    cursor: pointer;
+    padding: 8px 16px;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background-color: #555;
 }
 
 #log {
@@ -110,7 +117,7 @@ export default class SaveProjectElement extends HTMLElement {
 
     constructor() {
         super();
-        this.attachShadow({mode: "open"});
+        this.attachShadow({ mode: "open" });
     }
 
     connectedCallback() {
@@ -146,7 +153,7 @@ export default class SaveProjectElement extends HTMLElement {
         this.progressBarContainer.style.display = "none";
         this.progressText.style.display = "none";
     }
-    
+
     private _placeHolderErrorLog() {
         this.log.innerHTML = "<br>";
     }
@@ -174,7 +181,7 @@ export default class SaveProjectElement extends HTMLElement {
         this._showLog(message, "green");
     }
 
-    showConfirm(message: string, yesCallback: ()=>void) {
+    showConfirm(message: string, yesCallback: () => void) {
         this.log.innerHTML = message;
         this.saveProjectButton.style.display = "none";
         this.confirm.style.display = "";
@@ -214,7 +221,7 @@ export default class SaveProjectElement extends HTMLElement {
     }
 
     get confirmLabel() {
-            return this.shadowRoot?.getElementById("confirm-label") as HTMLLabelElement;
+        return this.shadowRoot?.getElementById("confirm-label") as HTMLLabelElement;
     }
 
     get yes() {

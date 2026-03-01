@@ -2,7 +2,7 @@ import songs from "../../static/songs.json";
 import App from "../App";
 import WebAudioPeakMeter from "../Audio/Utils/PeakMeter";
 import VuMeter from "../Components/VuMeterElement";
-import { setTempo, SONGS_FILE_URL, ZOOM_LEVEL } from "../Env";
+import { setTempo, TEMPO, SONGS_FILE_URL, ZOOM_LEVEL } from "../Env";
 import DraggableWindow from "../Utils/DraggableWindow";
 import HostView from "../Views/HostView";
 import { audioCtx } from "../index";
@@ -605,27 +605,50 @@ export default class HostController {
         this._view.tempoSelector.tempo = Math.max(5, Math.min(600, newTempo))
         return
       }
+
+      const oldTempo = TEMPO;
+      const ratio = oldTempo / newTempo;
+
       this._app.hostView.metronome.tempo = newTempo
       setTempo(newTempo)
-      this._app.playheadController.moveTo(this._app.host.playhead, false)
+
+      const newPlayhead = this._app.host.playhead * ratio;
+      this._app.playheadController.moveTo(newPlayhead, false)
+      this._app.host.playhead = newPlayhead;
+
+      const currentLoopRange = this._app.host.loopRange;
+      if (currentLoopRange) {
+        this.setLoop([currentLoopRange[0] * ratio, currentLoopRange[1] * ratio]);
+      }
 
       // redraw all tracks according to new tempo
       this._app.tracksController.tracks.forEach((track) => {
         // redraw all regions taking into account the new tempo
-        // RATIO_MILLS_BY_PX has been updated by updateTemponew(Tempo)
-        // for all track regions, update their start properties
         for (const region of track.regions) {
-          // TEMPO_DELTA (that represents the ration newTempo/oldTempo) has been updated
-          // region pos should not change when the tempo changes
-          // a region that starts at 2000ms at 120bpm, when tempo changes to 60bpm
-          // should now start at 2000/TEMPO_DELTA, in other words 2000/0.5 = 4000ms
-          // TODO: Useful for what ? region.start=region.start / TEMPO
+          region.start *= ratio;
+
+          if (region.regionType === "MIDI" && 'midi' in region) {
+            const midiObj = (region as any).midi;
+            if (midiObj && typeof midiObj.stretch === 'function') {
+              midiObj.stretch(ratio);
+            }
+          } else if (region.regionType === "Automation" && 'points' in region) {
+            const points = (region as any).points;
+            if (Array.isArray(points)) {
+              for (const p of points) {
+                p.time *= ratio;
+              }
+            }
+          }
         }
 
-        track.modified = true
-
+        track.modified = true;
         this._app.editorView.drawRegions(track);
       });
+
+      if (this._app.editorView.loop.active) {
+        this._app.editorView.loop.updateActive(true);
+      }
     })
 
     // MENU BUTTONS

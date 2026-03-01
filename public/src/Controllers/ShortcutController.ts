@@ -383,8 +383,8 @@ export default class ShortcutController {
         }
     }
 
-    private deleteShortcut(actionId: string, index: number) {
-        if (confirm(t("messages.confirm_delete_shortcut"))) {
+    private async deleteShortcut(actionId: string, index: number) {
+        if (await confirm(t("messages.confirm_delete_shortcut"))) {
             const shortcuts = this._shortcuts.get(actionId);
             if (shortcuts) {
                 shortcuts.splice(index, 1);
@@ -396,8 +396,8 @@ export default class ShortcutController {
 
     private bindUIEvents() {
         if (this._app.keyboardShortcutsView && this._app.keyboardShortcutsView.resetBtn) {
-            this._app.keyboardShortcutsView.resetBtn.onclick = () => {
-                if (confirm(t("messages.confirm_reset_shortcuts"))) {
+            this._app.keyboardShortcutsView.resetBtn.onclick = async () => {
+                if (await confirm(t("messages.confirm_reset_shortcuts"))) {
                     this.resetToDefault();
                     this.refreshUI();
                 }

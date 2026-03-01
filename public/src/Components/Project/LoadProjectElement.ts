@@ -83,6 +83,13 @@ button {
     margin: 5px;
     border-radius: 4px;
     width: max-content;
+    cursor: pointer;
+    padding: 8px 16px;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background-color: #555;
 }
 
 #log {
@@ -138,7 +145,7 @@ export default class LoadProjectElement extends HTMLElement {
 
     constructor() {
         super();
-        this.attachShadow({mode: "open"});
+        this.attachShadow({ mode: "open" });
     }
 
     connectedCallback() {

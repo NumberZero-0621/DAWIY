@@ -398,6 +398,11 @@ body {
 
 .dropdown-item {
     color: lightgray !important;
+    cursor: pointer !important;
+    padding: 8px 20px !important;
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .dropdown-item:hover {

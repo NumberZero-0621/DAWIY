@@ -31,8 +31,8 @@ export default class MenuCustomizationView extends DraggableWindow {
     }
 
     private bindEvents() {
-        this.resetBtn.onclick = () => {
-            if (confirm(t("messages.confirm_reset_shortcuts"))) {
+        this.resetBtn.onclick = async () => {
+            if (await confirm(t("messages.confirm_reset_shortcuts"))) {
                 const defaults = MenuConfig.reset();
                 this.renderList(defaults);
                 this.app.hostController.refreshHamburgerMenu();

@@ -56,6 +56,19 @@ progress {
     color: #ddd;
 }
 
+button {
+    margin: 5px;
+    border-radius: 4px;
+    width: max-content;
+    cursor: pointer;
+    padding: 8px 16px;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background-color: #555;
+}
+
 </style>
 
 <div id="main">
@@ -95,7 +108,7 @@ export default class ExportProjectElement extends HTMLElement {
 
     constructor() {
         super();
-        this.attachShadow({mode: "open"});
+        this.attachShadow({ mode: "open" });
     }
 
     connectedCallback() {
@@ -157,7 +170,7 @@ export default class ExportProjectElement extends HTMLElement {
         if (this.tracksContainer.children.length > 0) {
             this.tracksContainer.innerHTML = "";
         }
-        
+
         // Reset Select All
         this.selectAllInput.checked = false;
 

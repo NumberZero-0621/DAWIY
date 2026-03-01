@@ -175,8 +175,8 @@ export default class DawiyPluginController {
         this.refreshBottomPanel();
     }
 
-    public disableAllPlugins() {
-        if (confirm("Disable all plugins in the list?")) {
+    public async disableAllPlugins() {
+        if (await confirm("Disable all plugins in the list?")) {
             // Only disable currently visible plugins (based on installedExtensions)
             // or we could disable ALL known plugins. 
             // Let's just disable all installed extensions for now.
@@ -190,8 +190,8 @@ export default class DawiyPluginController {
         }
     }
 
-    public enableAllPlugins() {
-        if (confirm("Enable all plugins in the list?")) {
+    public async enableAllPlugins() {
+        if (await confirm("Enable all plugins in the list?")) {
             this.disabledPluginIds.clear(); // Simple clear for "Enable All"
             this.saveDisabledPlugins();
             this.app.showToast("All plugins enabled.", false);
@@ -1040,8 +1040,8 @@ export default class ${className} extends DawiyPluginBase {
         });
     }
 
-    public uninstallPlugin(plugin: IDawiyPlugin) {
-        if (!confirm(`Are you sure you want to uninstall "${plugin.name}"?\nThis will delete all Global User Data for this plugin.`)) return;
+    public async uninstallPlugin(plugin: IDawiyPlugin) {
+        if (!await confirm(`Are you sure you want to uninstall "${plugin.name}"?\nThis will delete all Global User Data for this plugin.`)) return;
 
         // 1. Deactivate if active
         if (this.activeExtensionId === plugin.id) {

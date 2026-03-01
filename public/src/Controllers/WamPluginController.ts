@@ -279,8 +279,8 @@ export default class WamPluginController {
         this.refreshList();
     }
 
-    private uninstallWam(url: string) {
-        if (confirm(t("plugin.wam.uninstall_confirm"))) {
+    private async uninstallWam(url: string) {
+        if (await confirm(t("plugin.wam.uninstall_confirm"))) {
             this.installedWams = this.installedWams.filter(w => w.url !== url);
             this.saveInstalledWams();
             this.app.showToast(t("plugin.wam.uninstalled_message"), false);
