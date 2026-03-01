@@ -86,11 +86,7 @@ module.exports = (env, argv) => {
                             return;
                         }
 
-                        // Check if file already exists
-                        if (fs.existsSync(targetPath)) {
-                            res.status(409).send('File already exists');
-                            return;
-                        }
+                        // 既存ファイルのチェックを削除（上書き保存を許可）
 
                         // Create directories recursively
                         const dir = path.dirname(targetPath);

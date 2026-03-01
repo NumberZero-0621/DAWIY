@@ -139,6 +139,8 @@ export default class MyAgentPlugin extends DawiyPluginBase {
     }
 }
 
+```
+
 ## API アクセスと操作 (HostAPI)
 
 `this.app.hostAPI` を通じて、UI構築、ファイル操作、インポート/エクスポートなどの拡張機能にアクセスできます。

@@ -1523,7 +1523,8 @@ export default class AiAssistantSidebar extends HTMLElement {
                 const className = classNameMatch ? classNameMatch[1] : "GeneratedPlugin";
 
                 // Check if this plugin was already created in this session
-                if (this.createdPluginsInSession.has(className)) {
+                const codeHash = className + "_" + this.hashCode(code);
+                if (this.createdPluginsInSession.has(codeHash)) {
                     btn.disabled = true;
                     btn.innerHTML = `<i class='bi bi-check-lg'></i> ${t("ai.plugin_created")}`;
                     btn.style.backgroundColor = "#28a745";
@@ -1539,7 +1540,7 @@ export default class AiAssistantSidebar extends HTMLElement {
                             btn.style.backgroundColor = "#28a745";
                             btn.style.cursor = "default";
                             // Track in session
-                            this.createdPluginsInSession.add(className);
+                            this.createdPluginsInSession.add(codeHash);
                             this.saveCurrentSession();
                         }
                     };
@@ -1578,6 +1579,16 @@ export default class AiAssistantSidebar extends HTMLElement {
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
+    }
+
+    private hashCode(str: string): number {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return hash;
     }
 
     private validatePluginCode(text: string): string[] {
