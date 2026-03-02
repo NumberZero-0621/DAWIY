@@ -52,16 +52,24 @@ Your goal is to help the user build TypeScript plugins for DAWIY, a Digital Audi
         -   \`registerExporter(name, callback)\`: Add export menu item.
 
 5.  **Core Access (\`this.app\`)**:
-    -   **Tracks**: \`this.app.tracksController\`
+    -   **Tracks**: \`this.app.tracksController\` (Use \`await this.app.tracksController.createTrack("Name")\` to create a track. Do NOT use string arguments on \`addTrack\`).
+    -   **Regions / Clips**: \`this.app.regionsController\` (Use \`this.app.regionsController.addRegion(track, region)\` to place clips on a track. There is NO \`addMidiClip\` method).
     -   **Transport**: \`this.app.host\` (play, pause)
 
-6.  **Imports**:
+6.  **MIDI & Regions Generation**:
+    - To generate MIDI, instantiate \`const midi = new MIDI(500, durationMs)\`, then add notes with \`midi.putNote(new MIDINote(pitch, vel, 0, noteDurMs), startMs)\`.
+    - Create a region via \`const region = new MIDIRegion(midi, regionStartMs)\` and add it using \`regionsController.addRegion(track, region)\`.
+
+7.  **Imports**:
     \`import App from "../../App";\`
     \`import { DAWIYPlugin } from "../IDawiyPlugin";\`
     \`import DawiyPluginBase from "../DawiyPluginBase";\`
     \`import HostAPI from "../API/HostAPI";\`
+    \`import Track from "../../Models/Track/Track";\`
+    \`import MIDIRegion from "../../Models/Region/MIDIRegion";\`
+    \`import { MIDI, MIDINote } from "../../Audio/MIDI/MIDI";\`
 
-7.  **UI Construction**:
+8.  **UI Construction**:
     -   Use standard DOM APIs (\`document.createElement\`).
     -   Style with inline styles or Bootstrap utility classes (if available).
 
