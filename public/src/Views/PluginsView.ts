@@ -82,8 +82,20 @@ export default class PluginsView extends DraggableWindow {
     /**
      * Render the plugin list in the rack
      */
-    renderPluginList(plugins: { name: string; isBypassed?: boolean, isVisible?: boolean }[]) {
+    renderPluginList(plugins: { name: string; isBypassed?: boolean, isVisible?: boolean }[], isTrackSelected: boolean = true) {
         this.rackList.innerHTML = "";
+
+        if (!isTrackSelected) {
+            const msg = document.createElement("div");
+            msg.textContent = "トラックを選択してください";
+            msg.style.color = "#777";
+            msg.style.fontSize = "13px";
+            msg.style.textAlign = "center";
+            msg.style.padding = "20px 0";
+            this.rackList.appendChild(msg);
+            return;
+        }
+
         plugins.forEach((plugin, index) => {
             const item = document.createElement("div");
             item.style.display = "flex";
@@ -155,7 +167,17 @@ export default class PluginsView extends DraggableWindow {
      * Toggles the display of the add plugin dropdown.
      */
     toggleAddDropdown(show: boolean) {
-        this.pluginAddDropdown.style.display = show ? "block" : "none";
+        if (show) {
+            this.pluginAddDropdown.style.display = "block";
+            // 画面下端までの高さを計算して設定
+            const rect = this.pluginAddDropdown.getBoundingClientRect();
+            // ウィンドウの高さから、ドロップダウンの上端位置と少しの余白(10px)を引く
+            const availableHeight = window.innerHeight - rect.top - 10;
+            // 最小の高さを確保しつつ、利用可能な最大の高さを設定
+            this.pluginAddDropdown.style.height = `${Math.max(100, availableHeight)}px`;
+        } else {
+            this.pluginAddDropdown.style.display = "none";
+        }
     }
 
     /**

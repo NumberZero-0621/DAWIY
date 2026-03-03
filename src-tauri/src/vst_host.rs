@@ -23,8 +23,8 @@ use vst3_com::{IID, VstPtr, ComInterface};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM, RECT};
 use windows::Win32::System::LibraryLoader::{GetModuleHandleW, LoadLibraryW, GetProcAddress};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, LoadCursorW,
-    PostQuitMessage, RegisterClassW, TranslateMessage, CS_HREDRAW, CS_VREDRAW,
+    CreateWindowExW, DefWindowProcW, LoadCursorW,
+    RegisterClassW, CS_HREDRAW, CS_VREDRAW,
     CW_USEDEFAULT, IDC_ARROW, MSG, WINDOW_EX_STYLE,
     WM_DESTROY, WM_SIZE, WM_CLOSE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
     AdjustWindowRect, SetWindowLongPtrW, GetWindowLongPtrW, GWLP_USERDATA,
@@ -40,6 +40,7 @@ use windows::core::{PCWSTR, s, w};
 
 enum VstCommand {
     Load(String, Sender<Result<(), String>>),
+    Midi(String, u8, u8, u8), // path, status(0x90=NoteOn, 0x80=NoteOff), data1(note), data2(velocity)
     // Future: Close(HWND), Panic
 }
 
@@ -47,9 +48,9 @@ struct VstInstance {
     hwnd: HWND,
     lib_handle: windows::Win32::Foundation::HMODULE,
     factory: Option<VstPtr<dyn IPluginFactory>>,
-    component: VstPtr<dyn IComponent>,
-    edit_controller: VstPtr<dyn IEditController>,
-    view: Option<VstPtr<dyn IPlugView>>,
+    pub component: Option<VstPtr<dyn IComponent>>,
+    pub edit_controller: Option<VstPtr<dyn IEditController>>,
+    pub view: Option<VstPtr<dyn IPlugView>>,
     // Keep other interfaces alive if necessary?
     // connection points?
 }
@@ -400,6 +401,93 @@ fn create_host_message() -> *mut c_void {
 }
 
 // ----------------------------------------
+// --- IEventList Implementation ---
+// ----------------------------------------
+use vst3_sys::vst::{IEventList, Event};
+
+#[repr(C)]
+struct IEventListVTableLayout {
+    pub query_interface: unsafe extern "system" fn(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> tresult,
+    pub add_ref: unsafe extern "system" fn(this: *mut c_void) -> u32,
+    pub release: unsafe extern "system" fn(this: *mut c_void) -> u32,
+    pub get_event_count: unsafe extern "system" fn(this: *mut c_void) -> i32,
+    pub get_event: unsafe extern "system" fn(this: *mut c_void, index: i32, event: *mut Event) -> tresult,
+    pub add_event: unsafe extern "system" fn(this: *mut c_void, event: *mut Event) -> tresult,
+}
+
+#[repr(C)]
+struct HostEventList {
+    pub vptr: *const IEventListVTableLayout,
+    ref_count: AtomicI32,
+    events: Mutex<Vec<Event>>,
+}
+
+unsafe extern "system" fn eventlist_query_interface(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> tresult {
+    let check = *iid;
+    if check == <dyn IUnknown as ComInterface>::IID || check == <dyn IEventList as ComInterface>::IID {
+        *obj = this;
+        eventlist_add_ref(this);
+        return kResultOk;
+    }
+    kNoInterface
+}
+
+unsafe extern "system" fn eventlist_add_ref(this: *mut c_void) -> u32 {
+    let s = &*(this as *const HostEventList);
+    s.ref_count.fetch_add(1, Ordering::Relaxed) as u32 + 1
+}
+
+unsafe extern "system" fn eventlist_release(this: *mut c_void) -> u32 {
+    let s = &*(this as *const HostEventList);
+    let val = s.ref_count.fetch_sub(1, Ordering::Relaxed);
+    if val == 1 {
+        let _ = Box::from_raw(this as *mut HostEventList);
+    }
+    val as u32 - 1
+}
+
+unsafe extern "system" fn eventlist_get_event_count(this: *mut c_void) -> i32 {
+    let s = &*(this as *const HostEventList);
+    s.events.lock().unwrap().len() as i32
+}
+
+unsafe extern "system" fn eventlist_get_event(this: *mut c_void, index: i32, event: *mut Event) -> tresult {
+    if event.is_null() { return kInvalidArgument; }
+    let s = &*(this as *const HostEventList);
+    let events = s.events.lock().unwrap();
+    if index >= 0 && (index as usize) < events.len() {
+        *event = events[index as usize];
+        return kResultOk;
+    }
+    kInvalidArgument
+}
+
+unsafe extern "system" fn eventlist_add_event(this: *mut c_void, event: *mut Event) -> tresult {
+    if event.is_null() { return kInvalidArgument; }
+    let s = &*(this as *const HostEventList);
+    s.events.lock().unwrap().push(*event);
+    kResultOk
+}
+
+static EVENTLIST_VTBL: IEventListVTableLayout = IEventListVTableLayout {
+    query_interface: eventlist_query_interface,
+    add_ref: eventlist_add_ref,
+    release: eventlist_release,
+    get_event_count: eventlist_get_event_count,
+    get_event: eventlist_get_event,
+    add_event: eventlist_add_event,
+};
+
+fn create_host_event_list() -> *mut HostEventList {
+    let list = Box::new(HostEventList {
+        vptr: &EVENTLIST_VTBL,
+        ref_count: AtomicI32::new(1),
+        events: Mutex::new(Vec::new()),
+    });
+    Box::into_raw(list)
+}
+
+// ----------------------------------------
 
 #[repr(C)]
 struct UnifiedHost {
@@ -415,7 +503,7 @@ unsafe extern "system" fn ComponentHandler_begin_edit(_this: *mut c_void, id: u3
     println!("[Native] ComponentHandler::begin_edit id={}", id);
     kResultOk
 }
-unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, id: u32, value: f64) -> i32 {
+unsafe extern "system" fn ComponentHandler_perform_edit(_this: *mut c_void, _id: u32, _value: f64) -> i32 {
     // println!("[Native] ComponentHandler::perform_edit id={} val={}", id, value);
     kResultOk
 }
@@ -955,10 +1043,128 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                          }
                      }
                 }
+                 VstCommand::Midi(_path, status, data1, data2) => {
+                     // For PoC: Broadcast to all active instances.
+                     
+                     for inst in &instances {
+                         unsafe {
+                             use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, Event, EventTypes, NoteOnEvent, NoteOffEvent};
+                             let processor_iid = <dyn IAudioProcessor as ComInterface>::IID;
+                             let mut processor_ptr: *mut c_void = std::ptr::null_mut();
+                             if inst.component.as_ref().unwrap().query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
+                                 let processor = VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
+                                 
+                                 // 1. Create Event
+                                 let mut event = std::mem::zeroed::<Event>();
+                                 event.bus_index = 0;
+                                 event.sample_offset = 0;
+                                 event.ppq_position = 0.0;
+                                 event.flags = 0;
+                                 
+                                 let is_note_on = (status & 0xF0) == 0x90 && data2 > 0;
+                                 let is_note_off = (status & 0xF0) == 0x80 || ((status & 0xF0) == 0x90 && data2 == 0);
+                                 
+                                 if is_note_on {
+                                     event.type_ = EventTypes::kNoteOnEvent as u16;
+                                     event.event.note_on = NoteOnEvent {
+                                         channel: (status & 0x0F) as i16,
+                                         pitch: data1 as i16,
+                                         tuning: 0.0,
+                                         velocity: (data2 as f32) / 127.0,
+                                         length: 0,
+                                         note_id: -1,
+                                     };
+                                 } else if is_note_off {
+                                     event.type_ = EventTypes::kNoteOffEvent as u16;
+                                     event.event.note_off = NoteOffEvent {
+                                         channel: (status & 0x0F) as i16,
+                                         pitch: data1 as i16,
+                                         velocity: (data2 as f32) / 127.0,
+                                         note_id: -1,
+                                         tuning: 0.0,
+                                     };
+                                 } else {
+                                     // Not a note event, skip for now
+                                     continue;
+                                 }
+
+                                 // 2. Create EventList
+                                 let event_list_ptr = create_host_event_list();
+                                 let event_list_vtbl = (*event_list_ptr).vptr;
+                                 ((*event_list_vtbl).add_event)(event_list_ptr as *mut c_void, &mut event);
+
+                                 // 3. Create ProcessData and dummy AudioBusBuffers
+                                 use vst3_sys::vst::AudioBusBuffers;
+                                 let mut outputs = vec![AudioBusBuffers {
+                                     num_channels: 2,
+                                     silence_flags: 3, // bitmask for channels (1|2)
+                                     buffers: std::ptr::null_mut(), // or allocate dummy buffer if plugin crashes
+                                 }];
+
+                                 // Allocate a tiny dummy buffer for 256 samples * 2 channels just in case
+                                 let mut dummy_l = vec![0.0f32; 256];
+                                 let mut dummy_r = vec![0.0f32; 256];
+                                 let mut dummy_channels = vec![dummy_l.as_mut_ptr() as *mut std::ffi::c_void, dummy_r.as_mut_ptr() as *mut std::ffi::c_void];
+                                 outputs[0].buffers = dummy_channels.as_mut_ptr();
+
+                                 let mut data = std::mem::zeroed::<ProcessData>();
+                                 data.process_mode = ProcessModes::kRealtime as i32;
+                                 data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
+                                 data.num_samples = 256; // Dummy processing size
+                                 data.num_inputs = 0;
+                                 data.num_outputs = 1;
+                                 data.outputs = outputs.as_mut_ptr();
+                                 data.input_events = std::mem::transmute(event_list_ptr);
+                                 
+                                 // Call SetupProcessing if needed (usually done earlier but let's try just process)
+                                 // Actually, VST3 requires setupProcessing, setActive before process.
+                                 // We assume set_active(1) is called in create_instance (Wait, let's check if it is)
+                                 
+                                 let _res = processor.process(&mut data);
+                                 println!("[Native] Coordinator: Sent MIDI NoteOn/Off Process. Result: {:?}", _res);
+                                 
+                                 // Release EventList
+                                 ((*event_list_vtbl).release)(event_list_ptr as *mut c_void);
+                             }
+                         }
+                     }
+                }
             },
             Err(std::sync::mpsc::TryRecvError::Empty) => {
                 // Yield
                 thread::sleep(std::time::Duration::from_millis(10));
+                
+                // --- Dummy Audio Engine Loop ---
+                for inst in &instances {
+                    unsafe {
+                        use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, AudioBusBuffers};
+                        let processor_iid = <dyn IAudioProcessor as vst3_com::ComInterface>::IID;
+                        let mut processor_ptr: *mut c_void = std::ptr::null_mut();
+                        if inst.component.as_ref().unwrap().query_interface(&processor_iid, &mut processor_ptr) == vst3_sys::base::kResultOk {
+                            let processor = vst3_com::VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
+                            
+                            let mut outputs = vec![AudioBusBuffers {
+                                num_channels: 2,
+                                silence_flags: 3,
+                                buffers: std::ptr::null_mut(),
+                            }];
+                            let mut dummy_l = vec![0.0f32; 441];
+                            let mut dummy_r = vec![0.0f32; 441];
+                            let mut dummy_channels = vec![dummy_l.as_mut_ptr() as *mut std::ffi::c_void, dummy_r.as_mut_ptr() as *mut std::ffi::c_void];
+                            outputs[0].buffers = dummy_channels.as_mut_ptr();
+
+                            let mut data = std::mem::zeroed::<ProcessData>();
+                            data.process_mode = ProcessModes::kRealtime as i32;
+                            data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
+                            data.num_samples = 441;
+                            data.num_inputs = 0;
+                            data.num_outputs = 1;
+                            data.outputs = outputs.as_mut_ptr();
+                            
+                            let _res = processor.process(&mut data);
+                        }
+                    }
+                }
             },
             Err(_) => {
                 println!("[Native] Coordinator Channel Disconnected. Exiting...");
@@ -1186,7 +1392,7 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
      }
 
     // 4. Edit Controller
-    let mut edit_controller: VstPtr<dyn IEditController>;
+    let edit_controller: VstPtr<dyn IEditController>;
     
     // Check if Component implements IEditController
     let i_edit_controller_iid = <dyn IEditController as ComInterface>::IID;
@@ -1671,6 +1877,13 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
         } else {
              println!("[Native] Failed to setup processing.");
         }
+        
+        println!("[Native] Setting processing to true...");
+        if processor.set_processing(1) == kResultOk {
+             println!("[Native] set_processing(1) successful.");
+        } else {
+             println!("[Native] Failed to set_processing(1).");
+        }
     }
     
     // Activate Component
@@ -1776,8 +1989,8 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
         hwnd,
         lib_handle,
         factory: Some(factory),
-        component,
-        edit_controller,
+        component: Some(component),
+        edit_controller: Some(edit_controller),
         view,
     })
 }
@@ -1891,31 +2104,32 @@ impl Drop for VstInstance {
     fn drop(&mut self) {
         println!("[Native] VstInstance Dropping... Cleaning up resources.");
         unsafe {
-            // 1. Deactivate
-            println!("[Native] Deactivating component...");
-            self.component.set_active(0);
-            
-            // 2. Remove View
-            if let Some(ref v) = self.view {
-                println!("[Native] Removing view...");
-                v.removed();
+            if let Some(component) = self.component.take() {
+                // 1. Deactivate
+                println!("[Native] Deactivating component...");
+                component.set_active(0);
+                
+                // 2. Remove View
+                if let Some(v) = self.view.take() {
+                    println!("[Native] Removing view...");
+                    v.removed();
+                }
+                
+                if let Some(edit_controller) = self.edit_controller.take() {
+                    let has_separate_controller = component.as_ptr() as *mut c_void != edit_controller.as_ptr() as *mut c_void;
+                    if has_separate_controller {
+                         println!("[Native] Terminating EditController...");
+                         edit_controller.terminate();
+                    }
+                }
+                
+                // 4. Terminate Component
+                println!("[Native] Terminating Component...");
+                component.terminate();
             }
-            
-            // 3. Terminate Controller (if separate and created/initialized)
-            // Ideally we check if it is same as component, but safe to call terminate if different interface?
-            // For Safety, let's try to terminate if it casts to IEditController
-            // Logic from before:
-            let has_separate_controller = (self.component.as_ptr() as *mut c_void) != (self.edit_controller.as_ptr() as *mut c_void);
-            if has_separate_controller {
-                 println!("[Native] Terminating EditController...");
-                 self.edit_controller.terminate();
-            }
-            
-            // 4. Terminate Component
-            println!("[Native] Terminating Component...");
-            self.component.terminate();
 
-            // Pointers (Smart Pointers) will drop automatically here.
+            // Drop factory before FreeLibrary
+            let _ = self.factory.take();
             
             // 5. RefCounted ExitDll
             let mut should_exit = false;
@@ -1950,5 +2164,16 @@ impl Drop for VstInstance {
             }
         }
         println!("[Native] VstInstance Drop Complete.");
+    }
+}
+
+
+pub fn send_midi(path: String, status: u8, data1: u8, data2: u8) -> Result<(), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        coordinator.tx.send(VstCommand::Midi(path, status, data1, data2)).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
     }
 }

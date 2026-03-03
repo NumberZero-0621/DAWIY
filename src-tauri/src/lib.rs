@@ -105,6 +105,11 @@ fn open_vst_editor(path: String) -> Result<(), String> {
     vst_host::load_and_open(path)
 }
 
+#[command]
+fn send_vst_midi(path: String, status: u8, data1: u8, data2: u8) -> Result<(), String> {
+    vst_host::send_midi(path, status, data1, data2)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -113,6 +118,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
         scan_plugins, 
         open_vst_editor,
+        send_vst_midi,
         midi::list_midi_outputs,
         midi::open_midi_output,
         midi::close_midi_output,

@@ -20,6 +20,7 @@ export default class VstPluginController {
 
     constructor(app: App) {
         this.app = app;
+        this.scannedPlugins = SettingsPersistenceController.get<{ name: string, path: string, vendor: string }[]>("vstScannedPlugins", []);
     }
 
     public async scanVstPlugins() {
@@ -42,8 +43,13 @@ export default class VstPluginController {
                 console.log("Loaded VST3 Plugins:", plugins);
                 this.scannedPlugins = plugins;
             }
+            SettingsPersistenceController.save("vstScannedPlugins", this.scannedPlugins);
+
             if (this.app.vstPluginManagerController) {
                 this.app.vstPluginManagerController.refreshPluginsList();
+            }
+            if (this.app.pluginsController) {
+                this.app.pluginsController.updatePluginList();
             }
         } catch (e) {
             console.error(e);

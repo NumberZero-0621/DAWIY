@@ -1,19 +1,73 @@
 import WebAudioModule from "../utils/sdk/src/WebAudioModule.js";
+import CompositeAudioNode from "../utils/sdk-parammgr/src/CompositeAudioNode.js";
+import ParamMgrFactory from "../utils/sdk-parammgr/src/ParamMgrFactory.js";
 
-class VstProxyNode extends AudioWorkletNode {
-    constructor(context) {
-        super(context, "vst-proxy-processor");
+// VstProxy用のCompositeAudioNode
+// ParamMgrNode（本物のWamNode/AudioWorkletNode）に委譲し、MIDIイベントをTauriに転送する
+class VstProxyNode extends CompositeAudioNode {
+    /** @type {string | null} */
+    vstPath = null;
+
+    setup(paramMgr) {
+        this._wamNode = paramMgr;
+        // ParamMgrNodeが受け取ったwam-midiイベントをlistenしてTauriに転送する
+        paramMgr.addEventListener("wam-midi", (e) => {
+            const bytes = e.detail?.data?.bytes;
+            if (bytes && bytes.length >= 3 && window.__TAURI__ && this.vstPath) {
+                const status = bytes[0];
+                const data1 = bytes[1];
+                const data2 = bytes[2];
+                if ((status & 0xF0) === 0x90 || (status & 0xF0) === 0x80) {
+                    console.log('[VstProxy] Forwarding MIDI to Tauri:', status, data1, data2);
+                    window.__TAURI__.core.invoke("send_vst_midi", {
+                        path: this.vstPath,
+                        status,
+                        data1,
+                        data2
+                    }).catch(e => console.error("VST MIDI failed:", e));
+                }
+            }
+        });
+    }
+
+    /** VSTへのパスを設定する */
+    setVstPath(path) {
+        this.vstPath = path;
+    }
+
+    /** VSTのGUIを開く */
+    async showVstUi() {
+        if (window.__TAURI__ && this.vstPath) {
+            try {
+                await window.__TAURI__.core.invoke("open_vst_editor", { path: this.vstPath });
+            } catch (e) {
+                console.error("Failed to open VST editor", e);
+            }
+        }
+    }
+
+    // getState/setState を上書きしてvstPathも保存する
+    async getState() {
+        const parentState = await super.getState();
+        return { ...parentState, vstPath: this.vstPath };
+    }
+
+    async setState(state) {
+        if (state?.vstPath) {
+            this.setVstPath(state.vstPath);
+        }
+        return super.setState(state);
     }
 }
 
-
-const getBasetUrl = (relativeURL) => {
+const getBaseUrl = (relativeURL) => {
     const baseURL = relativeURL.href.substring(0, relativeURL.href.lastIndexOf("/"));
     return baseURL;
 };
 
+// === VstProxy WAM Module ===
 export default class VstProxy extends WebAudioModule {
-    _baseURL = getBasetUrl(new URL(".", import.meta.url));
+    _baseURL = getBaseUrl(new URL(".", import.meta.url));
     _descriptorUrl = `${this._baseURL}/descriptor.json`;
 
     async _loadDescriptor() {
@@ -26,48 +80,27 @@ export default class VstProxy extends WebAudioModule {
 
     async initialize(state) {
         await this._loadDescriptor();
-
-        // This is where we receive the VST path
-        // state should contain { vstPath: "..." }
-        console.log("Initializing VST Proxy with state:", state);
-
-        // For now, bypass
+        console.log("[VstProxy] Initializing with state:", state);
         return super.initialize(state);
     }
 
     async createAudioNode(initialState) {
-        // Just a simple Gain node for now to pass audio through
-        const node = this.audioContext.createGain();
+        // ParamMgrFactory を使って標準的なWamNode(ParamMgrNode)を生成する
+        // これにより AudioWorkletProcessor が正しく登録・初期化される
+        const paramMgrNode = await ParamMgrFactory.create(this, {
+            internalParamsConfig: {},  // VstProxyにはWebAudioパラメータは不要
+        });
 
-        // Store VST info
-        node.vstPath = initialState ? initialState.vstPath : null;
+        // CompositeAudioNode を作り、ParamMgrNode に委譲させる
+        const node = new VstProxyNode(this.audioContext);
+        node.setup(paramMgrNode);
 
-        // Add a "Show UI" method that the host can call
-        node.showVstUi = async () => {
-            if (window.__TAURI__) {
-                const { invoke } = window.__TAURI__.core; // Or .tauri depending on version
-                try {
-                    console.log("Requesting to open VST editor for:", node.vstPath);
-                    await invoke("open_vst_editor", { path: node.vstPath });
-                    // alert("VST Editor Open Request sent for: " + node.vstPath);
-                } catch (e) {
-                    console.error("Failed to open VST editor", e);
-                }
-            } else {
-                alert("VST hosting only available in Desktop mode.");
-            }
-        };
+        // VSTパスを設定
+        if (initialState?.vstPath) {
+            node.setVstPath(initialState.vstPath);
+        }
 
-        // Add WAM state methods required by Plugin.ts
-        node.setState = async (state) => {
-            if (state && state.vstPath) {
-                node.vstPath = state.vstPath;
-            }
-        };
-
-        node.getState = async () => {
-            return { vstPath: node.vstPath };
-        };
+        if (initialState) node.setState(initialState);
 
         return node;
     }
@@ -87,7 +120,7 @@ export default class VstProxy extends WebAudioModule {
 
         const btn = div.querySelector("#open-vst-btn");
         btn.onclick = () => {
-            if (this.audioNode.showVstUi) this.audioNode.showVstUi();
+            if (this.audioNode?.showVstUi) this.audioNode.showVstUi();
         };
 
         return div;

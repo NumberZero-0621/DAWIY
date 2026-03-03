@@ -11,7 +11,6 @@ export default class VstPluginManagerView extends DraggableWindow {
     resetPathsBtn = document.getElementById("vst-reset-paths-btn") as HTMLButtonElement;
     autoScanSelect = document.getElementById("vst-auto-scan-select") as HTMLSelectElement;
     scanExecuteBtn = document.getElementById("vst-scan-execute-btn") as HTMLButtonElement;
-    scannedListContainer = document.getElementById("vst-scanned-list") as HTMLDivElement;
 
     constructor() {
         super(document.getElementById("vst-plugin-manager-header") as HTMLDivElement, document.getElementById("vst-plugin-manager-window") as HTMLDivElement);

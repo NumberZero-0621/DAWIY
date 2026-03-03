@@ -52,6 +52,7 @@ export default class PluginsController {
 
         this._view.maximized = false;
         this.updateRackSize();
+        this.updatePluginList();
     }
 
 
@@ -81,7 +82,8 @@ export default class PluginsController {
                 isVst = true;
                 realVstPath = url.replace("vst://", "");
                 // Redirect to VstProxy
-                url = `${BACKEND_URL}/plugins/VstProxy/index.js`;
+                const baseUrl = BACKEND_URL.endsWith("/") ? BACKEND_URL.slice(0, -1) : BACKEND_URL;
+                url = `${baseUrl}/plugins/VstProxy/index.js`;
             }
 
             try {
@@ -212,11 +214,14 @@ export default class PluginsController {
      */
     private bindEvents(): void {
         this._view.onAddClick = async (plugin_name) => {
-            if (!this.selected) return;
+            if (!this.selected) {
+                this._app.showToast("プラグインを追加するトラックを選択してください", true);
+                return;
+            }
 
             // Handle VST plugins specifically
-            if (plugin_name.startsWith("[VST] ")) {
-                const actualName = plugin_name.replace("[VST] ", "");
+            if (plugin_name.startsWith("[VST3] ")) {
+                const actualName = plugin_name.replace("[VST3] ", "");
                 const vstPlugin = this._app.vstPluginController.scannedPlugins.find(p => p.name === actualName);
                 if (vstPlugin) {
                     const vstUrl = `vst://${vstPlugin.path}`;
@@ -226,23 +231,33 @@ export default class PluginsController {
                     this._app.vstPluginController.launchVstStandalone(vstPlugin.path);
 
                     // Add the VST wrapper to the rack
-                    const plugin = await this.fetchPlugin(actualName);
-                    if (plugin) {
-                        await this.selected.addPlugin(plugin);
-                        this.updatePluginList();
+                    try {
+                        const plugin = await this.fetchPlugin(actualName);
+                        if (plugin) {
+                            await this.selected.addPlugin(plugin);
+                            this.updatePluginList();
+                        } else {
+                            this._app.showToast(`Failed to fetch plugin: ${actualName}`, true);
+                        }
+                    } catch (e) {
+                        console.error("Error adding VST to rack:", e);
+                        this._app.showToast(`Error adding VST to rack: ${e}`, true);
                     }
                 }
                 return;
             }
 
-            const pluginInfo = this.WAM_LIST[plugin_name];
+            // Remove WAM prefix if it exists
+            const actualName = plugin_name.startsWith("[WAM] ") ? plugin_name.replace("[WAM] ", "") : plugin_name;
+
+            const pluginInfo = this.WAM_LIST[actualName];
 
             if (pluginInfo && pluginInfo.url && pluginInfo.url.startsWith("vst://")) {
                 const vstPath = pluginInfo.url.replace("vst://", "");
                 this._app.vstPluginController.launchVstStandalone(vstPath);
 
                 // Add the VST wrapper to the rack
-                const plugin = await this.fetchPlugin(plugin_name);
+                const plugin = await this.fetchPlugin(actualName);
                 if (plugin) {
                     await this.selected.addPlugin(plugin);
                     this.updatePluginList();
@@ -250,7 +265,7 @@ export default class PluginsController {
                 return;
             }
 
-            const plugin = await this.fetchPlugin(plugin_name);
+            const plugin = await this.fetchPlugin(actualName);
             if (plugin) {
                 await this.selected.addPlugin(plugin);
                 this.updatePluginList();
@@ -305,16 +320,19 @@ export default class PluginsController {
     /**
      * Update the dom of the plugin list.
      */
-    private updatePluginList() {
+    public updatePluginList() {
         const wamNames = Object.keys(this.WAM_LIST);
         const vstPlugins = this._app.vstPluginController?.scannedPlugins || [];
-        const vstNames = vstPlugins.map(p => `[VST] ${p.name}`);
-        const filteredWamNames = wamNames.filter(name => !vstPlugins.some(p => p.name === name));
+        const vstNames = vstPlugins.map(p => `[VST3] ${p.name}`);
+        const filteredWamNames = wamNames.filter(name => !vstPlugins.some(p => p.name === name)).map(name => {
+            if (name === "Pedalboard2") return `[WAM] ${name}`;
+            return name;
+        });
         const allNames = [...filteredWamNames, ...vstNames];
 
         if (!this.selected) {
-            this._view.renderPluginList([]);
-            this._view.renderAddDropdown([]);
+            this._view.renderPluginList([], false);
+            this._view.renderAddDropdown(allNames);
             this.hidePlugin();
         } else {
             const pluginDocs = this.selected.plugins.map((p, i) => ({

@@ -59,55 +59,7 @@ export default class VstPluginManagerController {
     }
 
     public refreshPluginsList() {
-        if (!this.view || !this.view.scannedListContainer) return;
-        const container = this.view.scannedListContainer;
-
-        container.innerHTML = '';
-        const plugins = this.app.vstPluginController.scannedPlugins || [];
-
-        if (plugins.length === 0) {
-            container.innerHTML = `<div style="padding: 10px; color: #888; text-align: center; font-size: 0.9em;">No plugins scanned yet.</div>`;
-            return;
-        }
-
-        plugins.forEach(plugin => {
-            const item = document.createElement('div');
-            item.style.display = 'flex';
-            item.style.justifyContent = 'space-between';
-            item.style.alignItems = 'center';
-            item.style.padding = '8px';
-            item.style.borderBottom = '1px solid #444';
-            item.style.background = '#2a2a2a';
-            item.style.marginBottom = '4px';
-
-            const infoDiv = document.createElement('div');
-            const nameEl = document.createElement('div');
-            nameEl.style.fontWeight = 'bold';
-            nameEl.style.color = '#fff';
-            nameEl.innerText = plugin.name;
-
-            const pathEl = document.createElement('div');
-            pathEl.style.fontSize = '0.8em';
-            pathEl.style.color = '#aaa';
-            pathEl.style.wordBreak = 'break-all';
-            pathEl.innerText = `${plugin.vendor ? `[${plugin.vendor}] ` : ''}${plugin.path}`;
-
-            infoDiv.appendChild(nameEl);
-            infoDiv.appendChild(pathEl);
-
-            const actionDiv = document.createElement('div');
-            const openBtn = document.createElement('button');
-            openBtn.className = 'btn btn-sm btn-primary';
-            openBtn.innerText = t("vst.open_plugin");
-            openBtn.onclick = () => {
-                this.app.vstPluginController.launchVstStandalone(plugin.path);
-            };
-            actionDiv.appendChild(openBtn);
-
-            item.appendChild(infoDiv);
-            item.appendChild(actionDiv);
-            container.appendChild(item);
-        });
+        // Scanned plugins are no longer displayed in the manager window
     }
 
     private refreshUI() {
