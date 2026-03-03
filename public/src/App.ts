@@ -24,6 +24,7 @@ import RecorderController from "./Controllers/Recording/RecorderController";
 import SettingsController from "./Controllers/SettingsController";
 import DawiyPluginController from "./Controllers/DawiyPluginController";
 import VstPluginController from "./Controllers/VstPluginController";
+import VstPluginManagerController from "./Controllers/VstPluginManagerController";
 import WamPluginController from "./Controllers/WamPluginController";
 import Loader from "./Loader/Loader";
 import Host from "./Models/Track/Host";
@@ -39,6 +40,7 @@ import ProjectView from "./Views/ProjectView";
 import SettingsView from "./Views/SettingsView";
 import DawiyPluginView from "./Views/DawiyPluginView";
 import WamPluginView from "./Views/WamPluginView";
+import VstPluginManagerView from "./Views/VstPluginManagerView";
 import TracksView from "./Views/TracksView";
 import PianoRollController from "./Controllers/Editor/PianoRoll/PianoRollController";
 import AutoSaveController from "./Controllers/AutoSaveController";
@@ -61,6 +63,8 @@ export default class App {
     dawiyPluginController: DawiyPluginController;
     dawiyPluginView: DawiyPluginView;
     vstPluginController: VstPluginController;
+    vstPluginManagerController: VstPluginManagerController;
+    vstPluginManagerView: VstPluginManagerView;
     wamPluginController: WamPluginController;
     wamPluginView: WamPluginView;
 
@@ -112,6 +116,7 @@ export default class App {
         this.settingsView = new SettingsView();
         this.dawiyPluginView = new DawiyPluginView();
         this.wamPluginView = new WamPluginView();
+        this.vstPluginManagerView = new VstPluginManagerView();
         this.projectView = new ProjectView();
         this.editorView = new EditorView();
         this.aboutView = new AboutView();
@@ -130,9 +135,12 @@ export default class App {
         this.automationController = new AutomationController(this);
         this.recorderController = new RecorderController(this);
         this.latencyController = new LatencyController(this);
+        this.midiOutputController = new MidiOutputController(this);
         this.settingsController = new SettingsController(this);
         this.dawiyPluginController = new DawiyPluginController(this);
         this.vstPluginController = new VstPluginController(this);
+        this.vstPluginManagerController = new VstPluginManagerController(this);
+        this.vstPluginManagerController.setView(this.vstPluginManagerView);
         this.dawiyPluginController.setView(this.dawiyPluginView);
 
         this.wamPluginController = new WamPluginController(this);
@@ -146,10 +154,9 @@ export default class App {
         this.autoSaveController = new AutoSaveController(this);
         this.contextMenuController = new ContextMenuController(this);
         this.shortcutController = new ShortcutController(this);
-        this.midiOutputController = new MidiOutputController(this);
 
         this.hostController.addDraggableWindow(this.pluginsView, this.latencyView, this.settingsView,
-            this.projectView, this.aboutView, this.keyboardShortcutsView, this.dawiyPluginView, this.wamPluginView, this.menuCustomizationView);
+            this.projectView, this.aboutView, this.keyboardShortcutsView, this.dawiyPluginView, this.wamPluginView, this.vstPluginManagerView, this.menuCustomizationView);
 
         this.undoManager = new UndoManager();
         const old = this.undoManager.add.bind(this.undoManager)
@@ -370,6 +377,9 @@ export default class App {
             console.log("Session restored from auto-save.");
         }
         this.autoSaveController.start();
+
+        // 起動時VST自動スキャンの実行
+        await this.vstPluginController.initAutoScan();
     }
 
     /**

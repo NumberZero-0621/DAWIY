@@ -244,7 +244,7 @@ export default class AutomationController {
     private async initializeRegionPoints(track: Track, region: AutomationRegion) {
         const paramId = region.paramId;
         let initialVal = 0.5;
-        const plugin = track.plugin;
+        const plugin = track.plugins.length > 0 ? track.plugins[0] : null;
 
         if (plugin?.instance) {
             const values = await plugin.instance._audioNode.getParameterValues(false, paramId);
@@ -276,12 +276,12 @@ export default class AutomationController {
      * プラグインのパラメータ変更に伴い、オートメーションの状態を同期する
      */
     public async syncAutomationParams(track: Track) {
-        if (!track.plugin || !track.plugin.instance) return;
+        if (track.plugins.length === 0 || !track.plugins[0].instance) return;
 
         // 現在のプラグインパラメータを取得
         let params: any = {};
         try {
-            params = await track.plugin.instance._audioNode.getParameterInfo();
+            params = await track.plugins[0].instance._audioNode.getParameterInfo();
         } catch (e) {
             console.error("Failed to get parameter info", e);
             return;
@@ -331,8 +331,8 @@ export default class AutomationController {
         paramList.push({ id: AutomationController.PARAM_VOLUME, label: "Volume" });
         paramList.push({ id: AutomationController.PARAM_PAN, label: "Pan" });
 
-        if (track.plugin?.instance) {
-            let params = await track.plugin.instance._audioNode.getParameterInfo();
+        if (track.plugins.length > 0 && track.plugins[0].instance) {
+            let params = await track.plugins[0].instance._audioNode.getParameterInfo();
             for (let paramId in params) {
                 paramList.push({
                     id: paramId,
@@ -482,8 +482,8 @@ export default class AutomationController {
         // 全ノードのイベントをクリア
         const tracks = this._app.tracksController.tracks;
         for (const track of tracks) {
-            if (track.plugin?.instance?._audioNode) {
-                track.plugin.instance._audioNode.clearEvents();
+            if (track.plugins.length > 0 && track.plugins[0].instance?._audioNode) {
+                track.plugins[0].instance._audioNode.clearEvents();
             }
             // AudioParamのスケジュールもキャンセル
             const currentTime = this._app.host.audioContext.currentTime;
@@ -535,8 +535,8 @@ export default class AutomationController {
             }
 
             // 2. プラグインパラメータはストリーミングでスケジュール
-            if (!track.plugin?.instance?._audioNode) continue;
-            const audioNode = track.plugin.instance._audioNode;
+            if (track.plugins.length === 0 || !track.plugins[0].instance?._audioNode) continue;
+            const audioNode = track.plugins[0].instance._audioNode;
 
             // Current Automation (Active Regions)
             for (const region of track.automationRegions) {
@@ -794,10 +794,10 @@ export default class AutomationController {
     }
 
     private async getParamNormalizationInfo(track: Track, paramId: string): Promise<{ min: number, max: number }> {
-        if (!track.plugin?.instance?._audioNode) return { min: 0, max: 1 };
+        if (track.plugins.length === 0 || !track.plugins[0].instance?._audioNode) return { min: 0, max: 1 };
 
         // Cache could be added here if performance is an issue
-        const params = await track.plugin.instance._audioNode.getParameterInfo();
+        const params = await track.plugins[0].instance._audioNode.getParameterInfo();
         if (params && params[paramId]) {
             return {
                 min: params[paramId].minValue ?? 0,

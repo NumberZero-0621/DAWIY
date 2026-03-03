@@ -2,9 +2,21 @@ import App from "../App";
 // @ts-ignore
 import { invoke } from "@tauri-apps/api/core";
 import { isDesktop } from "../Utils/Environment";
+import SettingsPersistenceController from "./SettingsPersistenceController";
+
+export const DEFAULT_VST3_PATHS = [
+    "C:\\Program Files\\Common Files\\VST3",
+    "C:\\Program Files (x86)\\Common Files\\VST3",
+    "C:\\Program Files (x86)\\Steinberg",
+    "C:\\Program Files (x86)\\VstPlugins",
+    "C:\\Program Files\\Cakewalk\\VstPlugins",
+    "C:\\Program Files\\Steinberg",
+    "C:\\Program Files\\VstPlugins"
+];
 
 export default class VstPluginController {
     app: App;
+    public scannedPlugins: { name: string, path: string, vendor: string }[] = [];
 
     constructor(app: App) {
         this.app = app;
@@ -18,29 +30,31 @@ export default class VstPluginController {
 
         try {
             this.app.showToast("Scanning for VST3 plugins...");
-            const plugins = await invoke<{ name: string, path: string, vendor: string }[]>("scan_plugins");
+            const customPaths = SettingsPersistenceController.get<string[]>("vstPluginPaths", [...DEFAULT_VST3_PATHS]);
+
+            const plugins = await invoke<{ name: string, path: string, vendor: string }[]>("scan_plugins", { customPaths });
 
             if (plugins.length === 0) {
                 this.app.showToast("No VST3 plugins found.", true);
+                this.scannedPlugins = [];
             } else {
                 this.app.showToast(`Found ${plugins.length} VST3 plugins!`);
                 console.log("Loaded VST3 Plugins:", plugins);
-
-                // Add to available WAMs list so they appear in the UI
-                plugins.forEach(p => {
-                    const wamInfo = {
-                        name: p.name,
-                        url: `vst://${p.path}`, // Virtual URL for identification
-                        vendor: p.vendor,
-                        description: p.path
-                    };
-
-                    this.app.wamPluginController.addAvailableWam(wamInfo);
-                });
+                this.scannedPlugins = plugins;
+            }
+            if (this.app.vstPluginManagerController) {
+                this.app.vstPluginManagerController.refreshPluginsList();
             }
         } catch (e) {
             console.error(e);
             this.app.showToast("Failed to scan VST plugins: " + e, true);
+        }
+    }
+
+    public async initAutoScan() {
+        const isAutoScan = SettingsPersistenceController.get<boolean>("vstAutoScan", false);
+        if (isAutoScan) {
+            await this.scanVstPlugins();
         }
     }
 

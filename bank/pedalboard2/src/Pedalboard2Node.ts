@@ -322,13 +322,33 @@ export class Pedalboard2Node extends WamNode {
     connect(destinationNode: AudioNode, output?: number, input?: number): AudioNode;
     connect(destinationParam: AudioParam, output?: number): void;
     connect(destinationNode: unknown, output?: unknown, input?: unknown): void | AudioNode {
+        if (output === undefined) {
+            //@ts-ignore
+            return this._outputNode.connect(destinationNode);
+        }
+        if (input === undefined) {
+            //@ts-ignore
+            return this._outputNode.connect(destinationNode, output);
+        }
         //@ts-ignore
-        return this._outputNode.connect(destinationNode, output, input)
+        return this._outputNode.connect(destinationNode, output, input);
     }
 
     disconnect(destinationNode?: unknown, output?: unknown, input?: unknown): void {
+        if (destinationNode === undefined) {
+            //@ts-ignore
+            return this._outputNode.disconnect();
+        }
+        if (output === undefined) {
+            //@ts-ignore
+            return this._outputNode.disconnect(destinationNode);
+        }
+        if (input === undefined) {
+            //@ts-ignore
+            return this._outputNode.disconnect(destinationNode, output);
+        }
         //@ts-ignore
-        return this._outputNode.disconnect(destinationNode, output, input)
+        return this._outputNode.disconnect(destinationNode, output, input);
     }
 
     connectEvents(toId: string, output?: number): void { }

@@ -10,6 +10,7 @@ import MenuBarTemplate from "./Templates/MenuBarTemplate.html";
 import AppTemplate from "./Templates/AppTemplate.html";
 import MenuCustomizationTemplate from "./Templates/MenuCustomizationTemplate.html";
 import WamPluginTemplate from "./Templates/WamPluginTemplate.html";
+import VstPluginManagerTemplate from "./Templates/VstPluginManagerTemplate.html";
 
 export default class TemplateLoader {
 
@@ -27,6 +28,7 @@ export default class TemplateLoader {
         this.inject("plugin-window", PluginWindowTemplate);
         this.inject("dawiy-plugin-window", DawiyPluginTemplate);
         this.inject("wam-plugin-window", WamPluginTemplate);
+        this.inject("vst-plugin-manager-window", VstPluginManagerTemplate);
         this.inject("menu-customization-window", MenuCustomizationTemplate);
     }
 

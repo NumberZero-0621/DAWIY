@@ -193,7 +193,9 @@ export default class HostController {
     const host = this._app.host
     if (host.isPlaying) {
       this._app.tracksController.tracks.forEach((track) => {
-        if (track.plugin && track.plugin.instance) track.plugin.instance?.audioNode?.clearEvents()
+        track.plugins.forEach(p => {
+          if (p.instance) p.instance?.audioNode?.clearEvents()
+        })
       })
 
       // ストリーミングを停止
@@ -693,7 +695,8 @@ export default class HostController {
     })
 
     this._view.vstScanBtn.addEventListener("click", () => {
-      this._app.vstPluginController.scanVstPlugins();
+      this._app.vstPluginManagerController.openWindow();
+      this.focus(this._app.vstPluginManagerView);
     })
 
     this._view.aboutBtn.addEventListener("click", () => {

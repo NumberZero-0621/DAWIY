@@ -35,7 +35,7 @@ export default class MidiOutputController {
             const result = await invoke<string>("open_midi_output", { portName });
             console.log("[MIDI]", result);
             this.connectedPort = portName;
-            this.app.showToast(`Connected to MIDI Out: ${portName}`);
+            // this.app.showToast(`Connected to MIDI Out: ${portName}`);
             return true;
         } catch (e) {
             console.error("[MIDI] Connection failed:", e);

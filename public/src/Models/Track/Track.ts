@@ -181,7 +181,7 @@ export default class Track extends SoundProvider {
         const players = await Promise.all([...that.merged_regions.values()].map(region => region[0].createPlayer(groupId, audioContext)))
         for (const player of players) {
           player.connect(audioProviderInstance.inputNode)
-          if (audioProviderInstance.plugin) player.connectEvents(audioProviderInstance.plugin.audioNode)
+          if (audioProviderInstance.plugins.length > 0) player.connectEvents(audioProviderInstance.plugins[0].audioNode)
         }
         return new TrackGraphInstance(audioProviderInstance, players)
       },

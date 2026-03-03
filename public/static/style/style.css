@@ -545,6 +545,31 @@ body {
     z-index: 20;
     border: 1px solid #000;
     background: #212529;
+    resize: both;
+    overflow: hidden;
+    min-width: 200px;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ウィンドウのヘッダー以外のコンテンツ部分をスクロールさせる */
+.floating-window> :not(.header-window) {
+    flex-grow: 1;
+    overflow: auto;
+    min-height: 0;
+    /* Flexboxの子要素でスクロールを効かせるための必須設定 */
+}
+
+/* プラグイン等のリストを持つウィンドウの初期サイズおよび安全装置 */
+#wam-plugin-window,
+#dawiy-plugin-window,
+#vst-plugin-manager-window,
+#plugin-window {
+    width: 600px;
+    height: 500px;
+    max-height: 90vh;
+    max-width: 90vw;
 }
 
 .header-window {
@@ -555,6 +580,7 @@ body {
     padding-bottom: 5px;
     font-size: 13px;
     font-weight: bold;
+    flex-shrink: 0;
 }
 
 .title {
@@ -796,7 +822,6 @@ body.loading>*:not(.loading-overlay) {
     background-color: #333;
     border-radius: 4px;
     overflow-y: auto;
-    max-height: 400px;
 }
 
 .pm-item {

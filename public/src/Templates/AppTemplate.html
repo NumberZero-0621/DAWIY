@@ -65,37 +65,29 @@
             <div id="main-track" style="color: #0c85d0">
                 <!-- HERE PLACE THE HOST TRACK VIEW -->
             </div>
-            <div id="add-plugins"></div>
-            <div id="remove-plugins" class="new-track">
-                <div class="new-track-text">
-                    Remove [WAM PLUGIN]
+            <div id="plugin-rack"
+                style="display: flex; flex-direction: column; width: 300px; padding: 10px; box-sizing: border-box; overflow-y: auto;">
+                <div id="plugin-rack-header"
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; position: relative;">
+                    <button id="rack-bypass-btn" class="btn btn-sm" title="Bypass All Tracks Plugins"
+                        style="background: transparent; border: 1px solid #777; color: #ccc;">
+                        <i class="bi bi-power"></i>
+                    </button>
+                    <span style="color: #ccc; font-weight: bold; font-size: 14px;">Plugin Rack</span>
+                    <button id="rack-add-btn" class="btn btn-sm" title="Add WAM/VST Plugin"
+                        style="background: transparent; border: 1px solid #777; color: #ccc;">
+                        <i class="bi bi-plus"></i> <span style="font-size: 12px">Add</span>
+                    </button>
+                    <!-- ドロップダウンメニュー -->
+                    <div id="plugin-add-dropdown"
+                        style="display: none; position: absolute; right: 0; top: 100%; margin-top: 5px; background: #333; border: 1px solid #555; border-radius: 4px; z-index: 1000; max-height: 200px; overflow-y: auto; width: 220px; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+                        <div id="plugin-add-dropdown-list" style="display: flex; flex-direction: column;">
+                            <!-- 動的に追加 -->
+                        </div>
+                    </div>
                 </div>
-                <div class="icon">
-                    <i class="close-icon" style="width: 40px"></i>
-                </div>
-            </div>
-            <div id="hide-pedalboard" class="new-track">
-                <div class="new-track-text">
-                    Hide [WAM PLUGIN]
-                </div>
-                <div class="icon">
-                    <i class="arrow-down-left-icon"></i>
-                </div>
-            </div>
-            <div id="show-pedalboard" class="new-track">
-                <div class="new-track-text">
-                    Show [WAM PLUGIN]
-                </div>
-                <div class="icon">
-                    <i class="arrow-up-right-icon"></i>
-                </div>
-            </div>
-            <div id="loading-pedalboard" class="new-track">
-                <div class="new-track-text">
-                    Loading [WAM PLUGIN]
-                </div>
-                <div class="icon">
-                    <i class="loading-icon"></i>
+                <div id="plugin-rack-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- 動的にここにプラグインアイテムが追加される -->
                 </div>
             </div>
 

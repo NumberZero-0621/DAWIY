@@ -14,7 +14,7 @@ import Plugin, { PluginInstance } from "../Plugin";
  * 
  * The internal audio graph of a sound provider is the following:
  * Without any plugin attached: audioInputNode -> pannerNode -> gainNode -> outputNode
- * With a plugin attached: audioInputNode -> pluginNode -> pannerNode -> gainNode -> outputNode
+ * With a plugin attached: audioInputNode -> pluginNode[0] -> ... -> pluginNode[N] -> pannerNode -> gainNode -> outputNode
  */
 export default abstract class SoundProvider {
 
@@ -173,52 +173,99 @@ export default abstract class SoundProvider {
 
 
   /** ~ PLUGINS ~ **/
-  private _plugin: PluginInstance | null = null // The plugin associated to the track.
+  private _plugins: PluginInstance[] = [] // The plugins associated to the track in order.
 
-  get plugin(): PluginInstance | null { return this._plugin }
+  get plugins(): PluginInstance[] { return this._plugins }
 
   /**
-   * Connect the track to a plugin and disconnect it from the previous one.
-   * @param node 
+   * (Deprecated: Use plugins instead) Returns the first plugin for backward compatibility in some modules.
+   */
+  get plugin(): PluginInstance | null { return this._plugins.length > 0 ? this._plugins[0] : null }
+
+  /**
+   * Update the audio routing based on the current plugins array.
+   */
+  private updatePluginRouting() {
+    // First, disconnect everything from the input and between plugins
+    this.audioInputNode.disconnect()
+    this.audioInputNode.disconnectEvents()
+
+    for (const p of this._plugins) {
+      p.audioNode.disconnect()
+      p.audioNode.disconnectEvents()
+    }
+
+    // If no plugins
+    if (this._plugins.length === 0) {
+      this.audioInputNode.connect(this.pannerNode)
+      this.element.hasPlugin = false
+      return
+    }
+
+    // Connect input to the first plugin
+    this.audioInputNode.connect(this._plugins[0].audioNode)
+    this.audioInputNode.connectEvents(this._plugins[0].audioNode.instanceId)
+
+    // Connect plugins in series
+    for (let i = 0; i < this._plugins.length - 1; i++) {
+      this._plugins[i].audioNode.connect(this._plugins[i + 1].audioNode)
+      this._plugins[i].audioNode.connectEvents(this._plugins[i + 1].audioNode.instanceId)
+    }
+
+    // Connect the last plugin to the panner
+    const lastPlugin = this._plugins[this._plugins.length - 1]
+    lastPlugin.audioNode.connect(this.pannerNode)
+
+    this.element.hasPlugin = true
+  }
+
+  /**
+   * Add a plugin to the end of the rack.
+   */
+  public async addPlugin(plugin: Plugin): Promise<PluginInstance | null> {
+    const pluginInstance = await plugin.instantiate(this.audioContext, this.groupId)
+    if (!pluginInstance) return null
+
+    this._plugins.push(pluginInstance)
+
+    // Listen for parameter changes
+    pluginInstance.audioNode.addEventListener("wam-info", () => {
+      if (this.onPluginParamChange) this.onPluginParamChange(this);
+    });
+
+    this.updatePluginRouting()
+    return pluginInstance
+  }
+
+  /**
+   * Remove a plugin by its index in the rack.
+   */
+  public removePlugin(index: number) {
+    if (index < 0 || index >= this._plugins.length) return
+    const pluginInstance = this._plugins[index]
+    this._plugins.splice(index, 1)
+
+    this.updatePluginRouting()
+    pluginInstance.dispose()
+  }
+
+  public removeAllPlugins() {
+    const pluginsToDispose = [...this._plugins]
+    this._plugins = []
+    this.updatePluginRouting()
+    for (const p of pluginsToDispose) {
+      p.dispose()
+    }
+  }
+
+  /**
+   * (Deprecated: For backward compatibility with older connections)
    */
   public async connectPlugin(plugin: Plugin | null) {
-    // Create the instance first
-    const pluginInstance = plugin ? await plugin.instantiate(this.audioContext, this.groupId) : null
-
-    // Disconnect the previous plugin node if it exists.
-    if (this.plugin) {
-      const wam = this.plugin.instance
-      if (wam) {
-        wam.audioNode.disconnect(this.pannerNode)
-        this.audioInputNode.disconnect(wam.audioNode)
-        this.audioInputNode.disconnectEvents(wam.audioNode.instanceId)
-      }
-      this.plugin.dispose()
-      this._plugin = null
+    this.removeAllPlugins()
+    if (plugin) {
+      await this.addPlugin(plugin)
     }
-    // Disconnect from panner node
-    else {
-      this.audioInputNode.disconnect(this.pannerNode)
-    }
-
-    // Connect to a plugin node
-    if (pluginInstance) {
-      this._plugin = pluginInstance
-      this.audioInputNode.connect(pluginInstance.audioNode)
-      this.audioInputNode.connectEvents(pluginInstance.audioNode.instanceId)
-      pluginInstance.audioNode.connect(this.pannerNode)
-
-      // Listen for parameter changes
-      pluginInstance.audioNode.addEventListener("wam-info", () => {
-        if (this.onPluginParamChange) this.onPluginParamChange(this);
-      });
-    }
-    // Connect to panner node
-    else {
-      this.audioInputNode.connect(this.pannerNode)
-    }
-
-    this.element.hasPlugin = !!this._plugin // !!value = Convert value to boolean
   }
 
 
@@ -267,9 +314,13 @@ export default abstract class SoundProvider {
         pannerNode.pan.value = that.pannerNode.pan.value
         pannerNode.connect(gainNode)
 
-        let plugin_instance = await that.plugin?.cloneInto(audioContext, groupId) ?? null
-        if (plugin_instance) plugin_instance.audioNode.connect(pannerNode)
-        return new SoundProviderGraphInstance(gainNode, pannerNode, plugin_instance, groupId)
+        const plugin_instances: PluginInstance[] = []
+        for (const p of that.plugins) {
+          const inst = await p.cloneInto(audioContext, groupId)
+          if (inst) plugin_instances.push(inst)
+        }
+
+        return new SoundProviderGraphInstance(gainNode, pannerNode, plugin_instances, groupId)
       }
     }
   }
@@ -308,26 +359,45 @@ export class SoundProviderGraphInstance {
   constructor(
     public gainNode: GainNode,
     public pannerNode: StereoPannerNode,
-    public plugin: PluginInstance | null,
+    public plugins: PluginInstance[],
     public groupId: string,
-  ) { }
+  ) {
+    this.updateRouting()
+  }
+
+  updateRouting() {
+    if (this.plugins.length === 0) {
+      // Input goes straight to panner? SoundProviderGraphInstance's inputNode is where clients connect.
+      // Wait, let's look at `get inputNode()`.
+    } else {
+      for (let i = 0; i < this.plugins.length - 1; i++) {
+        this.plugins[i].audioNode.connect(this.plugins[i + 1].audioNode)
+        this.plugins[i].audioNode.connectEvents(this.plugins[i + 1].audioNode.instanceId)
+      }
+      this.plugins[this.plugins.length - 1].audioNode.connect(this.pannerNode)
+    }
+  }
 
   connect(destination: AudioNode): void { this.gainNode.connect(destination) }
   disconnect(destination?: AudioNode): void { destination ? this.gainNode.disconnect(destination) : this.gainNode.disconnect() }
 
-  connectEvents(destination: WamNode): void { if (this.plugin) this.plugin.audioNode.connectEvents(destination.instanceId) }
+  connectEvents(destination: WamNode): void {
+    if (this.plugins.length > 0) {
+      this.plugins[this.plugins.length - 1].audioNode.connectEvents(destination.instanceId)
+    }
+  }
   disconnectEvents(destination?: WamNode | undefined): void {
-    if (this.plugin) {
-      if (destination) this.plugin.audioNode.disconnectEvents(destination.instanceId)
-      else this.plugin.audioNode.disconnectEvents()
+    if (this.plugins.length > 0) {
+      if (destination) this.plugins[this.plugins.length - 1].audioNode.disconnectEvents(destination.instanceId)
+      else this.plugins[this.plugins.length - 1].audioNode.disconnectEvents()
     }
   }
 
   dispose(): void {
     this.gainNode.disconnect()
     this.pannerNode.disconnect()
-    this.plugin?.dispose()
+    for (const p of this.plugins) { p.dispose() }
   }
 
-  get inputNode() { return this.plugin ? this.plugin.audioNode : this.pannerNode }
+  get inputNode() { return this.plugins.length > 0 ? this.plugins[0].audioNode : this.pannerNode }
 }

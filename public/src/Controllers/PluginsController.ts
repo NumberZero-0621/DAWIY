@@ -1,7 +1,7 @@
 import { WebAudioModule } from "@webaudiomodules/sdk";
 import App, { crashOnDebug } from "../App";
 import { BACKEND_URL } from "../Env";
-import Plugin from "../Models/Plugin";
+import Plugin, { PluginInstance } from "../Models/Plugin";
 import SoundProvider from "../Models/Track/SoundProvider";
 import PluginsView from "../Views/PluginsView";
 
@@ -49,7 +49,6 @@ export default class PluginsController {
         this._view = this._app.pluginsView;
 
         this.bindEvents();
-        this.hideAllButtons();
 
         this._view.maximized = false;
         this.updateRackSize();
@@ -164,54 +163,47 @@ export default class PluginsController {
     }
 
     /**
-     * Connect a plugin to a track.
-     * @param track The track
-     * @param plugin The plugin to connect
+     * Connect a plugin to a track. (DEPRECATED: Use track.addPlugin)
      */
     public async connectPlugin(track: SoundProvider, plugin: Plugin | null) {
-        await track.connectPlugin(plugin)
+        if (plugin) {
+            await track.addPlugin(plugin);
+        } else {
+            track.removeAllPlugins();
+        }
         this.updatePluginList()
     }
 
-    /**
-     * Handler for the FX button. It shows the plugins of the track or hides them if they are already shown.
-     *
-     * @param track - The track that was clicked.
-     */
     public async fxButtonClicked(track: SoundProvider) {
-        this._app.tracksController.select(track)
-
-        // Create a plugin if there is none
-        if (!track.plugin) {
-            this.hideAllButtons()
-            this._view.setLoadingPlugin(this.DEFAULT_WAM)
-            const plugin = await this.fetchPlugin(this.DEFAULT_WAM)
-            if (!plugin) return
-            await this.connectPlugin(track, plugin)
-            this.showPlugin()
+        this._app.tracksController.select(track);
+        // We do not auto-instantiate Pedalboard anymore.
+        // We just toggle the visibility of the rack itself, but rack is always partially visible if not collapsed.
+        // For now, let's just make sure rack is minimized/maximized or just focus it.
+        if (this._view.maximized) {
+            this._view.minimize();
+        } else {
+            this._view.maximize();
         }
-        else {
-            // Show or hide the plugin
-            if (this.isPluginShown) this.hidePlugin()
-            else this.showPlugin()
-        }
+        this._app.hostController.focus(this._view);
     }
 
-    private isPluginShown = false
+    private isPluginShown = false;
+    private visiblePluginIndex = -1;
 
-    private showPlugin() {
+    private showPlugin(plugin: PluginInstance, index: number) {
+        if (!plugin || !plugin.gui) return;
         this._view.showFloatingWindow(true);
-        this.isPluginShown = true
-        this._view.setShowPlugin(null);
-        this._view.setHidePlugin(this.selected?.plugin?.name ?? "NO PLUGIN")
+        this.isPluginShown = true;
+        this.visiblePluginIndex = index;
+        this._view.setPluginView(plugin.gui);
         this._app.hostController.focus(this._view);
     }
 
     private hidePlugin() {
-        this._view.showFloatingWindow(false)
-        this.isPluginShown = false
-        this._view.setHidePlugin(null)
-        this._view.setShowPlugin(this.selected?.plugin?.name ?? "NO PLUGIN")
+        this._view.showFloatingWindow(false);
+        this.isPluginShown = false;
+        this.visiblePluginIndex = -1;
+        this._view.setPluginView(null);
     }
 
     /**
@@ -219,110 +211,146 @@ export default class PluginsController {
      * @private
      */
     private bindEvents(): void {
-        // On plugin selected
-        this._view.onPluginClick = async (plugin_name) => {
-            const pluginInfo = this.WAM_LIST[plugin_name];
-            if (pluginInfo && pluginInfo.url && pluginInfo.url.startsWith("vst://")) {
-                const vstPath = pluginInfo.url.replace("vst://", "");
-                this._app.vstPluginController.launchVstStandalone(vstPath);
+        this._view.onAddClick = async (plugin_name) => {
+            if (!this.selected) return;
+
+            // Handle VST plugins specifically
+            if (plugin_name.startsWith("[VST] ")) {
+                const actualName = plugin_name.replace("[VST] ", "");
+                const vstPlugin = this._app.vstPluginController.scannedPlugins.find(p => p.name === actualName);
+                if (vstPlugin) {
+                    const vstUrl = `vst://${vstPlugin.path}`;
+                    // Automatically add the VST to WAM_LIST so it can be fetched
+                    this.addWam(vstUrl, actualName);
+
+                    this._app.vstPluginController.launchVstStandalone(vstPlugin.path);
+
+                    // Add the VST wrapper to the rack
+                    const plugin = await this.fetchPlugin(actualName);
+                    if (plugin) {
+                        await this.selected.addPlugin(plugin);
+                        this.updatePluginList();
+                    }
+                }
                 return;
             }
 
-            const plugin = await this.fetchPlugin(plugin_name)
-            if (this.selected != null && this.selected.plugin == null) {
-                this.hideAllButtons()
-                this._view.setLoadingPlugin(this.DEFAULT_WAM)
-                await this.connectPlugin(this.selected, plugin)
-                this.updatePluginList()
-                this.showPlugin()
-            }
-        }
+            const pluginInfo = this.WAM_LIST[plugin_name];
 
-        // On plugin removed
-        this._view.removePlugin.addEventListener("click", async () => {
-            if (this.selected !== null) {
-                await this.connectPlugin(this.selected, null)
-                this.updatePluginList()
+            if (pluginInfo && pluginInfo.url && pluginInfo.url.startsWith("vst://")) {
+                const vstPath = pluginInfo.url.replace("vst://", "");
+                this._app.vstPluginController.launchVstStandalone(vstPath);
+
+                // Add the VST wrapper to the rack
+                const plugin = await this.fetchPlugin(plugin_name);
+                if (plugin) {
+                    await this.selected.addPlugin(plugin);
+                    this.updatePluginList();
+                }
+                return;
             }
+
+            const plugin = await this.fetchPlugin(plugin_name);
+            if (plugin) {
+                await this.selected.addPlugin(plugin);
+                this.updatePluginList();
+            }
+        };
+
+        this._view.onRemovePluginClick = (index) => {
+            if (!this.selected) return;
+
+            // If deleting the currently visible plugin, hide it
+            if (this.isPluginShown && this.visiblePluginIndex === index) {
+                this.hidePlugin();
+            } else if (this.visiblePluginIndex > index) {
+                // Adjust index if a previous plugin was deleted
+                this.visiblePluginIndex--;
+            }
+
+            this.selected.removePlugin(index);
+            this.updatePluginList();
+        };
+
+        this._view.onToggleShowPluginClick = (pluginId, index) => {
+            if (!this.selected) return;
+            const targetPlugin = this.selected.plugins[index];
+            if (!targetPlugin) return;
+
+            if (this.isPluginShown && this.visiblePluginIndex === index) {
+                this.hidePlugin();
+                this.updatePluginList();
+            } else {
+                this.showPlugin(targetPlugin, index);
+                this.updatePluginList();
+            }
+        };
+
+        this._view.closeWindowButton.addEventListener("click", () => {
+            this.hidePlugin();
+            this.updatePluginList();
         });
 
-        // On plugin shown
-        this._view.showPlugin.addEventListener("click", () => this.showPlugin());
-
-        // On plugin hidden
-        this._view.hidePlugin.addEventListener("click", () => this.hidePlugin());
-
-        this._view.closeWindowButton.addEventListener("click", () => this.hidePlugin())
-
-        // Update size
         this._view.maxMinBtn.addEventListener("click", () => {
             this.updateRackSize();
         });
 
-        // Host selection
         this._view.mainTrack.addEventListener("click", () => {
-            // TODO Host selection
-            this._app.tracksController.select(this._app.host)
+            this._app.tracksController.select(this._app.host);
         });
 
-        // Selection
-        this._app.tracksController.afterSelectedChange.add((before, after) => this.updatePluginList())
+        this._app.tracksController.afterSelectedChange.add(() => this.updatePluginList());
     }
 
     /**
      * Update the dom of the plugin list.
      */
     private updatePluginList() {
-        this.hideAllButtons()
+        const wamNames = Object.keys(this.WAM_LIST);
+        const vstPlugins = this._app.vstPluginController?.scannedPlugins || [];
+        const vstNames = vstPlugins.map(p => `[VST] ${p.name}`);
+        const filteredWamNames = wamNames.filter(name => !vstPlugins.some(p => p.name === name));
+        const allNames = [...filteredWamNames, ...vstNames];
 
         if (!this.selected) {
-            // No sound provider is selected => an empty plugin window
-            this._view.showFloatingWindow(false)
-            this._view.setPluginView(null)
-        }
-        else {
-            if (this.selected.plugin == null) {
-                // Selected but no plugin => Available plugins list
-                this._view.showFloatingWindow(false)
-                this._view.setPluginView(null)
-                this._view.setNewPlugins(Object.keys(this.WAM_LIST))
-            }
-            else {
-                // Selected and plugin => Remove plugin button + Show plugin button + Set plugin view
-                this._view.setRemovePlugin(this.selected.plugin.name)
-                if (this._view.windowOpened) this._view.setHidePlugin(this.selected.plugin.name)
-                else this._view.setShowPlugin(this.selected.plugin.name)
-                if (this.isPluginShown) this._view.showFloatingWindow(true)
-                this._view.setPluginView(this.selected.plugin.gui)
+            this._view.renderPluginList([]);
+            this._view.renderAddDropdown([]);
+            this.hidePlugin();
+        } else {
+            const pluginDocs = this.selected.plugins.map((p, i) => ({
+                name: p.name,
+                isBypassed: false, // implementation needed later
+                isVisible: this.isPluginShown && this.visiblePluginIndex === i
+            }));
+
+            this._view.renderPluginList(pluginDocs);
+            this._view.renderAddDropdown(allNames);
+
+            // Ensure GUI reflects current plugin state
+            if (this.isPluginShown) {
+                const p = this.selected.plugins[this.visiblePluginIndex];
+                if (!p) {
+                    this.hidePlugin();
+                } else {
+                    this._view.setPluginView(p.gui);
+                }
+            } else {
+                this._view.setPluginView(null);
             }
         }
     }
 
-    /**
-     * Hides all the buttons in the plugins view.
-     */
-    private hideAllButtons(): void {
-        this._view.setNewPlugins([]);
-        this._view.setShowPlugin(null);
-        this._view.setRemovePlugin(null);
-        this._view.setHidePlugin(null);
-        this._view.setLoadingPlugin(null);
-    }
-
-    /**
-     * Shows or hides the plugins rack.
-     * @private
-     */
     private updateRackSize(): void {
         const maximized = !this._view.maximized;
         this._view.maximized = maximized;
         if (maximized) {
+            // Un-collapse
             this._view.minimize(); // Confusing, but this EXPANDS the view
             this._app.editorView.resizeCanvas();
         } else {
+            // Collapse
             this._view.maximize(); // This COLLAPSES the view
             this._app.editorView.resizeCanvas();
         }
     }
-
 }

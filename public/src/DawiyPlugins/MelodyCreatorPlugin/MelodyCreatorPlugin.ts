@@ -24,7 +24,7 @@ export default class MelodyCreatorPlugin extends DawiyPluginBase {
      */
     public override onInit(host: HostAPI) {
         // Just show a toast for initialization, the button is in render() now.
-        host.ui.showToast("Melody Creator Plugin initialized!");
+        // host.ui.showToast("Melody Creator Plugin initialized!");
     }
 
     /**

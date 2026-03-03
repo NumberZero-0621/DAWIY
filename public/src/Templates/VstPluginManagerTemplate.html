@@ -1,0 +1,48 @@
+<div id="vst-plugin-manager-header" class="header-window">
+    <span class="title" data-i18n="window.vst_manager">VST Plugin Manager</span>
+    <button id="vst-plugin-manager-close-button" class="close-button">X</button>
+</div>
+<div class="settings-body" id="vst-plugin-manager-body"
+    style="padding: 0; display: flex; flex-direction: column; height: calc(100% - 30px);">
+    <div class="plugin-manager-container"
+        style="flex-grow: 1; display: flex; flex-direction: column; padding: 10px; overflow: hidden;">
+
+        <div
+            style="margin-bottom: 15px; background: #222; padding: 10px; border: 1px solid #444; display: flex; flex-direction: column; flex-grow: 1; min-height: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h5 style="color: #fff; margin: 0;" data-i18n="vst.search_paths">Search Paths</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-danger" id="vst-reset-paths-btn" style="margin-right: 5px;"
+                        data-i18n="vst.reset_paths">Reset List</button>
+                    <button class="btn btn-sm btn-outline-light" id="vst-add-path-btn" data-i18n="vst.add_path">Add
+                        Path</button>
+                </div>
+            </div>
+            <div id="vst-paths-list"
+                style="flex-grow: 1; min-height: 0; overflow-y: auto; background: #1a1a1a; border: 1px solid #333; padding: 5px;">
+                <!-- Paths will be injected here -->
+            </div>
+            <div style="margin-top: 10px; flex-shrink: 0;">
+                <select id="vst-auto-scan-select" class="form-control form-control-sm"
+                    style="background: #333; color: white; border: 1px solid #444;">
+                    <option value="true" data-i18n="vst.auto_scan_startup">Auto-scan on startup</option>
+                    <option value="false" data-i18n="vst.manual_scan_only">Manual scan only</option>
+                </select>
+            </div>
+        </div>
+
+        <div
+            style="display: flex; justify-content: center; margin-top: auto; padding-top: 10px; padding-bottom: 10px; border-top: 1px solid #444;">
+            <button id="vst-scan-execute-btn" class="btn btn-primary" style="width: 100%; font-weight: bold;"
+                data-i18n="vst.scan_plugins">Scan Plugins</button>
+        </div>
+
+        <div style="flex-grow: 1; display: flex; flex-direction: column; min-height: 0; margin-top: 10px;">
+            <h5 style="color: #fff; margin-bottom: 10px;" data-i18n="vst.scanned_plugins">Scanned Plugins</h5>
+            <div id="vst-scanned-list"
+                style="flex-grow: 1; overflow-y: auto; background: #1a1a1a; border: 1px solid #333; padding: 5px; min-height: 150px;">
+                <!-- Scanned plugins will be injected here -->
+            </div>
+        </div>
+    </div>
+</div>

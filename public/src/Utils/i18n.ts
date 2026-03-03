@@ -25,7 +25,18 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "menu.settings": "Settings",
         "menu.dawiy_plugin": "DAWIY Plugin",
         "menu.wam_plugin": "WAM Plugin",
-        "menu.vst_scan": "VST scan",
+        "menu.vst_scan": "VST Plugins",
+        "window.vst_manager": "VST Plugin Manager",
+        "vst.scan_plugins": "Scan Plugins",
+        "vst.search_paths": "Search Paths",
+        "vst.auto_scan_startup": "Auto-scan on startup",
+        "vst.manual_scan_only": "Manual scan only",
+        "vst.add_path": "Add path",
+        "vst.reset_paths": "Reset List",
+        "vst.scanned_plugins": "Scanned Plugins",
+        "vst.open_plugin": "Open",
+        "vst.confirm_delete_path": "Remove this search path?",
+        "vst.confirm_reset_paths": "Reset the search path list to default?",
         "menu.login": "Login (Administrator)",
         "menu.logout": "Log out (Administrator)",
 
@@ -213,7 +224,7 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "ai.send_mode.enter": "Enter",
         "ai.send_mode.ctrl_enter": "Ctrl + Enter",
         "ai.voice_input": "Voice Input",
-        "ai.stop_recording":"Stop Recording"
+        "ai.stop_recording": "Stop Recording"
     },
     "ja": {
         "loading": "読み込み中",
@@ -235,7 +246,18 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "menu.settings": "設定",
         "menu.dawiy_plugin": "DAWIYプラグイン",
         "menu.wam_plugin": "WAMプラグイン",
-        "menu.vst_scan": "VSTスキャン",
+        "menu.vst_scan": "VSTプラグイン",
+        "window.vst_manager": "VSTプラグイン管理",
+        "vst.scan_plugins": "プラグインをスキャン",
+        "vst.search_paths": "検索パスの管理",
+        "vst.auto_scan_startup": "起動時に自動スキャン",
+        "vst.manual_scan_only": "手動でのみスキャン",
+        "vst.add_path": "パスを追加",
+        "vst.reset_paths": "リストを初期化",
+        "vst.scanned_plugins": "スキャン済みプラグイン",
+        "vst.open_plugin": "開く",
+        "vst.confirm_delete_path": "この検索パスを削除しますか？",
+        "vst.confirm_reset_paths": "検索パスのリストを初期設定に戻しますか？",
         "menu.login": "ログイン（管理者用）",
         "menu.logout": "ログアウト",
 
@@ -423,7 +445,7 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "ai.send_mode.enter": "Enter",
         "ai.send_mode.ctrl_enter": "Ctrl + Enter",
         "ai.voice_input": "音声入力",
-        "ai.stop_recording":"音声入力を停止"
+        "ai.stop_recording": "音声入力を停止"
     }
 };
 

@@ -15,17 +15,13 @@ struct VstPlugin {
 }
 
 #[command]
-fn scan_plugins() -> Vec<VstPlugin> {
+fn scan_plugins(custom_paths: Vec<String>) -> Vec<VstPlugin> {
     let mut plugins = Vec::new();
-    let vst_dirs = vec![
-        r"C:\Program Files\Common Files\VST3",
-        r"C:\Program Files (x86)\Common Files\VST3",
-        r"C:\Program Files (x86)\Steinberg",
-        r"C:\Program Files (x86)\VstPlugins",
-        r"C:\Program Files\Cakewalk\VstPlugins",
-        r"C:\Program Files\Steinberg",
-        r"C:\Program Files\VstPlugins",
-    ];
+    let mut vst_dirs = Vec::new();
+
+    for custom in custom_paths {
+        vst_dirs.push(Box::leak(custom.into_boxed_str()));
+    }
 
     for vst_dir in vst_dirs {
         let path = Path::new(vst_dir);

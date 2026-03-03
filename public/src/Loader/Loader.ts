@@ -54,6 +54,10 @@ export interface ProjectData {
             name: string;
             state: any;
         };
+        pluginArray?: {
+            name: string;
+            state: any;
+        }[];
         // Plugins project data (ID -> Data)
         plugins?: { [id: string]: any };
     }
@@ -68,6 +72,10 @@ export interface ProjectData {
             name: string;
             state: any;
         };
+        pluginArray?: {
+            name: string;
+            state: any;
+        }[];
         automationOpened?: boolean;
         currentAutomationParam?: string;
         currentAutomationParams?: string[];
@@ -106,7 +114,13 @@ export default class Loader {
      */
     async saveProject(): Promise<[ProjectData, RegionContent[]]> {
 
-        let pluginHostState = await this._app.host.plugin?.getState();
+        // Get host plugins state
+        let hostPluginArray: { name: string, state: any }[] = [];
+        for (const p of this._app.host.plugins) {
+            const state = await p.getState();
+            hostPluginArray.push({ name: p.name, state });
+        }
+        let pluginHostState = hostPluginArray.length > 0 ? hostPluginArray[0] : undefined;
         const pluginsData = this._app.dawiyPluginController.getPluginsProjectData();
 
 
@@ -116,8 +130,12 @@ export default class Loader {
         for (let track of this._app.tracksController.tracks) {
             // Add automations to the track
             let automations: ProjectData['tracks'][0]['automations'] = [];
-            let pluginState = await track.plugin?.getState()
-            let pluginData = pluginState ? { name: track.plugin!.name, state: pluginState } : undefined
+            let pluginArray: { name: string, state: any }[] = [];
+            for (const p of track.plugins) {
+                const state = await p.getState();
+                pluginArray.push({ name: p.name, state });
+            }
+            let pluginData = pluginArray.length > 0 ? pluginArray[0] : undefined;
 
             // Save Automation Data
             // 1. Current Regions (Active Lanes)
@@ -174,6 +192,7 @@ export default class Loader {
                 volume: track.volume,
                 balance: track.balance,
                 plugin: pluginData,
+                pluginArray: pluginArray,
                 regions: regions,
                 automations: automations,
                 automationOpened: track.isAutomationOpened,
@@ -190,6 +209,7 @@ export default class Loader {
                 time_signature: this._app.hostView.timeSignatureSelector.timeSignature,
                 volume: this._app.host.volume,
                 plugin: pluginHostState,
+                pluginArray: hostPluginArray,
                 plugins: pluginsData
             },
             tracks: tracks
@@ -225,11 +245,23 @@ export default class Loader {
         this._app.hostView.tempoSelector.tempo = project.host.tempo
         this._app.hostView.timeSignatureSelector.timeSignature = project.host.time_signature
 
-        if (project.host.plugin) {
-            const plugin = await this._app.pluginsController.fetchPlugin(project.host.plugin.name)
+        // Restore Host Plugins
+        // NOTE: project.host.plugins is used for DAWIY extensions data. The rack is in pluginArray.
+        const hDataArray = (project.host as any).pluginArray || (project.host.plugin ? [project.host.plugin] : []);
+        for (const pData of hDataArray) {
+            const plugin = await this._app.pluginsController.fetchPlugin(pData.name)
             if (plugin) {
-                await this._app.host.connectPlugin(plugin);
-                await this._app.host.plugin?.setState(project.host.plugin.state)
+                const inst = await this._app.host.addPlugin(plugin);
+                if (inst) {
+                    try {
+                        await Promise.race([
+                            inst.setState(pData.state),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error("State load timeout")), 5000))
+                        ]);
+                    } catch (e) {
+                        console.error(`Failed to load state for host plugin ${pData.name}`, e);
+                    }
+                }
             }
         }
 
@@ -250,15 +282,25 @@ export default class Loader {
             track.volume = trackJson.volume
             this._app.tracksController.setColor(track, trackJson.color)
 
-            const pluginData = trackJson.plugin;
-            console.log("Load Plugin", pluginData)
-            if (pluginData) {
-                const plugin = await this._app.pluginsController.fetchPlugin(pluginData.name)
+            const pDataArray = trackJson.pluginArray || (trackJson.plugin ? [trackJson.plugin] : []);
+            for (const pData of pDataArray) {
+                const plugin = await this._app.pluginsController.fetchPlugin(pData.name)
                 if (plugin) {
-                    await this._app.pluginsController.connectPlugin(track, plugin);
-                    await track.plugin?.setState(pluginData.state)
-                    await this._app.automationController.updateAutomations(track);
+                    const inst = await track.addPlugin(plugin);
+                    if (inst) {
+                        try {
+                            await Promise.race([
+                                inst.setState(pData.state),
+                                new Promise((_, reject) => setTimeout(() => reject(new Error("State load timeout")), 5000))
+                            ]);
+                        } catch (e) {
+                            console.error(`Failed to load state for track plugin ${pData.name}`, e);
+                        }
+                    }
                 }
+            }
+            if (pDataArray.length > 0) {
+                await this._app.automationController.updateAutomations(track);
             }
             // Load Automations
             let automations = trackJson.automations;
