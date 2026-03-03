@@ -63,13 +63,16 @@ const initializeWamGroup = (groupId, groupKey) => {
 			});
 			this._processors.delete(wam.instanceId);
 		}
-	
+
 		/**
 		 * @param {string} fromId
 		 * @param {string} toId
 		 * @param {number} [output]
 		 */
 		connectEvents(fromId, toId, output) {
+			// outputがundefinedの場合、配列の非数値プロパティとして格納されてしまい
+			// Array.forEachが走査しないバグを防ぐためデフォルト値0を設定
+			if (output === undefined) output = 0;
 			/** @type {IWamProcessor} */
 			const from = this._processors.get(fromId);
 			/** @type {IWamProcessor} */
@@ -100,7 +103,7 @@ const initializeWamGroup = (groupId, groupKey) => {
 		disconnectEvents(fromId, toId, output) {
 			/** @type {IWamProcessor} */
 			const from = this._processors.get(fromId);
-			
+
 			if (!this._eventGraph.has(from)) return;
 			const outputMap = this._eventGraph.get(from);
 			if (typeof toId === 'undefined') {
@@ -108,8 +111,8 @@ const initializeWamGroup = (groupId, groupKey) => {
 					if (set) set.clear();
 				});
 				return;
-			} 
-			
+			}
+
 			/** @type {IWamProcessor} */
 			const to = this._processors.get(toId);
 

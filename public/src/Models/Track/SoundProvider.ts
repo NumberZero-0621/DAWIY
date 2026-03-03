@@ -195,6 +195,17 @@ export default abstract class SoundProvider {
       p.audioNode.disconnectEvents()
     }
 
+    // audioInputNodeのscheduleEventsフックをリセット
+    if ((this.audioInputNode as any)._origScheduleEvents) {
+      (this.audioInputNode as any).scheduleEvents = (this.audioInputNode as any)._origScheduleEvents;
+      delete (this.audioInputNode as any)._origScheduleEvents;
+    }
+    // audioInputNodeのMIDIイベントリスナーをリセット
+    if ((this.audioInputNode as any)._midiEventListener) {
+      this.audioInputNode.removeEventListener('wam-midi', (this.audioInputNode as any)._midiEventListener);
+      delete (this.audioInputNode as any)._midiEventListener;
+    }
+
     // If no plugins
     if (this._plugins.length === 0) {
       this.audioInputNode.connect(this.pannerNode)
@@ -215,6 +226,39 @@ export default abstract class SoundProvider {
     // Connect the last plugin to the panner
     const lastPlugin = this._plugins[this._plugins.length - 1]
     lastPlugin.audioNode.connect(this.pannerNode)
+
+    // --- MIDI転送フック ---
+    // WAMの connectEvents はAudioWorklet間のイベント転送に依存しているが、
+    // ParamMgrProcessor等では正しくMIDIが転送されない場合があるため、
+    // メインスレッド側で直接MIDIを転送する。
+    const firstPluginNode = this._plugins[0].audioNode;
+    const inputNode = this.audioInputNode;
+
+    // フック1: メインスレッドからの直接scheduleEvents呼び出し用（ピアノロールのプレビュー等）
+    const origScheduleEvents = inputNode.scheduleEvents.bind(inputNode);
+    (inputNode as any)._origScheduleEvents = origScheduleEvents;
+
+    (inputNode as any).scheduleEvents = (...events: any[]) => {
+      const midiEvents = events.filter((e: any) => e.type === 'wam-midi');
+      if (midiEvents.length > 0) {
+
+        firstPluginNode.scheduleEvents(...midiEvents);
+      }
+      return origScheduleEvents(...events);
+    };
+
+    // フック2: AudioWorkletから戻ってくるMIDIイベント用（再生時のMIDIプレイヤー等）
+    // MIDIPlayerProcessor → emitEvents → PassthroughWAMProcessor → メインスレッドに書き戻し
+    // → PassthroughWAMNode上でCustomEvent('wam-midi')が発火される
+    const midiEventListener = (e: Event) => {
+      const event = (e as CustomEvent).detail;
+      if (event) {
+
+        firstPluginNode.scheduleEvents(event);
+      }
+    };
+    (inputNode as any)._midiEventListener = midiEventListener;
+    inputNode.addEventListener('wam-midi', midiEventListener);
 
     this.element.hasPlugin = true
   }

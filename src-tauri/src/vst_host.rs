@@ -40,8 +40,8 @@ use windows::core::{PCWSTR, s, w};
 
 enum VstCommand {
     Load(String, Sender<Result<(), String>>),
-    Midi(String, u8, u8, u8), // path, status(0x90=NoteOn, 0x80=NoteOff), data1(note), data2(velocity)
-    // Future: Close(HWND), Panic
+    Midi(String, u8, u8, u8), // path, status, data1, data2
+    GetAudio(String, usize, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // path, req_samples, response
 }
 
 struct VstInstance {
@@ -51,10 +51,9 @@ struct VstInstance {
     pub component: Option<VstPtr<dyn IComponent>>,
     pub edit_controller: Option<VstPtr<dyn IEditController>>,
     pub view: Option<VstPtr<dyn IPlugView>>,
-    // Keep other interfaces alive if necessary?
-    // connection points?
+    pub path: String,
+    pub midi_events: std::collections::VecDeque<(u8, u8, u8)>,
 }
-// We need to implement Drop for VstInstance to handle cleanup that was in run_vst_session
 
 struct VstCoordinator {
     tx: Sender<VstCommand>,
@@ -1043,91 +1042,189 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                          }
                      }
                 }
-                 VstCommand::Midi(_path, status, data1, data2) => {
-                     // For PoC: Broadcast to all active instances.
-                     
-                     for inst in &instances {
-                         unsafe {
-                             use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, Event, EventTypes, NoteOnEvent, NoteOffEvent};
-                             let processor_iid = <dyn IAudioProcessor as ComInterface>::IID;
-                             let mut processor_ptr: *mut c_void = std::ptr::null_mut();
-                             if inst.component.as_ref().unwrap().query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
-                                 let processor = VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
-                                 
-                                 // 1. Create Event
-                                 let mut event = std::mem::zeroed::<Event>();
-                                 event.bus_index = 0;
-                                 event.sample_offset = 0;
-                                 event.ppq_position = 0.0;
-                                 event.flags = 0;
-                                 
-                                 let is_note_on = (status & 0xF0) == 0x90 && data2 > 0;
-                                 let is_note_off = (status & 0xF0) == 0x80 || ((status & 0xF0) == 0x90 && data2 == 0);
-                                 
-                                 if is_note_on {
-                                     event.type_ = EventTypes::kNoteOnEvent as u16;
-                                     event.event.note_on = NoteOnEvent {
-                                         channel: (status & 0x0F) as i16,
-                                         pitch: data1 as i16,
-                                         tuning: 0.0,
-                                         velocity: (data2 as f32) / 127.0,
-                                         length: 0,
-                                         note_id: -1,
-                                     };
-                                 } else if is_note_off {
-                                     event.type_ = EventTypes::kNoteOffEvent as u16;
-                                     event.event.note_off = NoteOffEvent {
-                                         channel: (status & 0x0F) as i16,
-                                         pitch: data1 as i16,
-                                         velocity: (data2 as f32) / 127.0,
-                                         note_id: -1,
-                                         tuning: 0.0,
-                                     };
-                                 } else {
-                                     // Not a note event, skip for now
-                                     continue;
+                 VstCommand::Midi(midi_path, status, data1, data2) => {
+                     // MIDIイベントをキューに蓄積（get_audio時にまとめてprocessに渡す）
+                     for inst in instances.iter_mut() {
+                         if inst.path == midi_path {
+                             inst.midi_events.push_back((status, data1, data2));
+                             println!("[Native] MIDI queued for {}: s={:#X} d1={} d2={}", midi_path, status, data1, data2);
+                             
+                             // 旧実装と同じく、MIDIを受けた瞬間にダミーバッファ付きで即座にprocess()を呼ぶ
+                             unsafe {
+                                 use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, AudioBusBuffers, Event, EventTypes, NoteOnEvent, NoteOffEvent};
+                                 let processor_iid = <dyn IAudioProcessor as ComInterface>::IID;
+                                 let mut processor_ptr: *mut c_void = std::ptr::null_mut();
+                                 if let Some(comp) = &inst.component {
+                                     if comp.query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
+                                         let processor = VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
+                                         
+                                         // EventList作成
+                                         let event_list_ptr = create_host_event_list();
+                                         let event_list_vtbl = (*event_list_ptr).vptr;
+                                         
+                                         // キューから全イベントを取り出してEventListに追加
+                                         while let Some((s, d1, d2)) = inst.midi_events.pop_front() {
+                                             let mut event = std::mem::zeroed::<Event>();
+                                             event.bus_index = 0;
+                                             event.sample_offset = 0;
+                                             event.ppq_position = 0.0;
+                                             event.flags = 0;
+                                             
+                                             let is_note_on = (s & 0xF0) == 0x90 && d2 > 0;
+                                             let is_note_off = (s & 0xF0) == 0x80 || ((s & 0xF0) == 0x90 && d2 == 0);
+                                             
+                                             if is_note_on {
+                                                 event.type_ = EventTypes::kNoteOnEvent as u16;
+                                                 event.event.note_on = NoteOnEvent {
+                                                     channel: (s & 0x0F) as i16,
+                                                     pitch: d1 as i16,
+                                                     tuning: 0.0,
+                                                     velocity: (d2 as f32) / 127.0,
+                                                     length: 0,
+                                                     note_id: -1,
+                                                 };
+                                                 ((*event_list_vtbl).add_event)(event_list_ptr as *mut c_void, &mut event);
+                                             } else if is_note_off {
+                                                 event.type_ = EventTypes::kNoteOffEvent as u16;
+                                                 event.event.note_off = NoteOffEvent {
+                                                     channel: (s & 0x0F) as i16,
+                                                     pitch: d1 as i16,
+                                                     velocity: (d2 as f32) / 127.0,
+                                                     note_id: -1,
+                                                     tuning: 0.0,
+                                                 };
+                                                 ((*event_list_vtbl).add_event)(event_list_ptr as *mut c_void, &mut event);
+                                             }
+                                         }
+                                         
+                                         // ダミーバッファでprocess()を即実行
+                                         let mut outputs = vec![AudioBusBuffers {
+                                             num_channels: 2,
+                                             silence_flags: 3,
+                                             buffers: std::ptr::null_mut(),
+                                         }];
+                                         let mut dummy_l = vec![0.0f32; 256];
+                                         let mut dummy_r = vec![0.0f32; 256];
+                                         let mut dummy_channels = vec![dummy_l.as_mut_ptr() as *mut std::ffi::c_void, dummy_r.as_mut_ptr() as *mut std::ffi::c_void];
+                                         outputs[0].buffers = dummy_channels.as_mut_ptr();
+                                         
+                                         let mut data = std::mem::zeroed::<ProcessData>();
+                                         data.process_mode = ProcessModes::kRealtime as i32;
+                                         data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
+                                         data.num_samples = 256;
+                                         data.num_inputs = 0;
+                                         data.num_outputs = 1;
+                                         data.outputs = outputs.as_mut_ptr();
+                                         data.input_events = std::mem::transmute(event_list_ptr);
+                                         
+                                         let _res = processor.process(&mut data);
+                                         println!("[Native] Immediate MIDI process done. Result: {:?}", _res);
+                                         
+                                         ((*event_list_vtbl).release)(event_list_ptr as *mut c_void);
+                                     }
                                  }
-
-                                 // 2. Create EventList
-                                 let event_list_ptr = create_host_event_list();
-                                 let event_list_vtbl = (*event_list_ptr).vptr;
-                                 ((*event_list_vtbl).add_event)(event_list_ptr as *mut c_void, &mut event);
-
-                                 // 3. Create ProcessData and dummy AudioBusBuffers
-                                 use vst3_sys::vst::AudioBusBuffers;
-                                 let mut outputs = vec![AudioBusBuffers {
-                                     num_channels: 2,
-                                     silence_flags: 3, // bitmask for channels (1|2)
-                                     buffers: std::ptr::null_mut(), // or allocate dummy buffer if plugin crashes
-                                 }];
-
-                                 // Allocate a tiny dummy buffer for 256 samples * 2 channels just in case
-                                 let mut dummy_l = vec![0.0f32; 256];
-                                 let mut dummy_r = vec![0.0f32; 256];
-                                 let mut dummy_channels = vec![dummy_l.as_mut_ptr() as *mut std::ffi::c_void, dummy_r.as_mut_ptr() as *mut std::ffi::c_void];
-                                 outputs[0].buffers = dummy_channels.as_mut_ptr();
-
-                                 let mut data = std::mem::zeroed::<ProcessData>();
-                                 data.process_mode = ProcessModes::kRealtime as i32;
-                                 data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
-                                 data.num_samples = 256; // Dummy processing size
-                                 data.num_inputs = 0;
-                                 data.num_outputs = 1;
-                                 data.outputs = outputs.as_mut_ptr();
-                                 data.input_events = std::mem::transmute(event_list_ptr);
-                                 
-                                 // Call SetupProcessing if needed (usually done earlier but let's try just process)
-                                 // Actually, VST3 requires setupProcessing, setActive before process.
-                                 // We assume set_active(1) is called in create_instance (Wait, let's check if it is)
-                                 
-                                 let _res = processor.process(&mut data);
-                                 println!("[Native] Coordinator: Sent MIDI NoteOn/Off Process. Result: {:?}", _res);
-                                 
-                                 // Release EventList
-                                 ((*event_list_vtbl).release)(event_list_ptr as *mut c_void);
                              }
+                             break;
                          }
                      }
+                }
+                VstCommand::GetAudio(audio_path, req_samples, tx_audio) => {
+                    // 対象インスタンスのプロセスを呼び出してオーディオ生成
+                    let mut found = false;
+                    for inst in instances.iter_mut() {
+                        if inst.path == audio_path {
+                            found = true;
+                            unsafe {
+                                use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, AudioBusBuffers};
+                                let processor_iid = <dyn IAudioProcessor as vst3_com::ComInterface>::IID;
+                                let mut processor_ptr: *mut c_void = std::ptr::null_mut();
+                                if let Some(comp) = &inst.component {
+                                    if comp.query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
+                                        let processor = vst3_com::VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
+                                        
+                                        let num_samples = req_samples.min(4096);
+                                        let mut out_l = vec![0.0f32; num_samples];
+                                        let mut out_r = vec![0.0f32; num_samples];
+                                        let mut channels = vec![out_l.as_mut_ptr() as *mut std::ffi::c_void, out_r.as_mut_ptr() as *mut std::ffi::c_void];
+                                        
+                                        let mut outputs = vec![AudioBusBuffers {
+                                            num_channels: 2,
+                                            silence_flags: 0,
+                                            buffers: channels.as_mut_ptr(),
+                                        }];
+                                        
+                                        let mut data = std::mem::zeroed::<ProcessData>();
+                                        data.process_mode = ProcessModes::kRealtime as i32;
+                                        data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
+                                        data.num_samples = num_samples as i32;
+                                        data.num_inputs = 0;
+                                        data.num_outputs = 1;
+                                        data.outputs = outputs.as_mut_ptr();
+                                        
+                                        // MIDIキューにイベントがあれば一緒に処理
+                                        let has_midi = !inst.midi_events.is_empty();
+                                        let event_list_ptr = if has_midi {
+                                            use vst3_sys::vst::{Event, EventTypes, NoteOnEvent, NoteOffEvent};
+                                            let elp = create_host_event_list();
+                                            let elvtbl = (*elp).vptr;
+                                            while let Some((s, d1, d2)) = inst.midi_events.pop_front() {
+                                                let mut event = std::mem::zeroed::<Event>();
+                                                event.bus_index = 0;
+                                                event.sample_offset = 0;
+                                                event.ppq_position = 0.0;
+                                                event.flags = 0;
+                                                let is_note_on = (s & 0xF0) == 0x90 && d2 > 0;
+                                                let is_note_off = (s & 0xF0) == 0x80 || ((s & 0xF0) == 0x90 && d2 == 0);
+                                                if is_note_on {
+                                                    event.type_ = EventTypes::kNoteOnEvent as u16;
+                                                    event.event.note_on = NoteOnEvent {
+                                                        channel: (s & 0x0F) as i16,
+                                                        pitch: d1 as i16,
+                                                        tuning: 0.0,
+                                                        velocity: (d2 as f32) / 127.0,
+                                                        length: 0,
+                                                        note_id: -1,
+                                                    };
+                                                    ((*elvtbl).add_event)(elp as *mut c_void, &mut event);
+                                                } else if is_note_off {
+                                                    event.type_ = EventTypes::kNoteOffEvent as u16;
+                                                    event.event.note_off = NoteOffEvent {
+                                                        channel: (s & 0x0F) as i16,
+                                                        pitch: d1 as i16,
+                                                        velocity: (d2 as f32) / 127.0,
+                                                        note_id: -1,
+                                                        tuning: 0.0,
+                                                    };
+                                                    ((*elvtbl).add_event)(elp as *mut c_void, &mut event);
+                                                }
+                                            }
+                                            data.input_events = std::mem::transmute(elp);
+                                            Some(elp)
+                                        } else {
+                                            None
+                                        };
+                                        
+                                        let _res = processor.process(&mut data);
+                                        
+                                        if let Some(elp) = event_list_ptr {
+                                            let elvtbl = (*elp).vptr;
+                                            ((*elvtbl).release)(elp as *mut c_void);
+                                        }
+                                        
+                                        let _ = tx_audio.send(Ok((out_l, out_r)));
+                                    } else {
+                                        let _ = tx_audio.send(Err("Failed to get IAudioProcessor".into()));
+                                    }
+                                } else {
+                                    let _ = tx_audio.send(Err("No component".into()));
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    if !found {
+                        let _ = tx_audio.send(Err(format!("Instance not found: {}", audio_path)));
+                    }
                 }
             },
             Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -1992,6 +2089,8 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
         component: Some(component),
         edit_controller: Some(edit_controller),
         view,
+        path: path.to_string(),
+        midi_events: std::collections::VecDeque::new(),
     })
 }
 
@@ -2173,6 +2272,18 @@ pub fn send_midi(path: String, status: u8, data1: u8, data2: u8) -> Result<(), S
     if let Some(coordinator) = coord_lock.as_ref() {
         coordinator.tx.send(VstCommand::Midi(path, status, data1, data2)).map_err(|e| e.to_string())?;
         Ok(())
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
+    }
+}
+
+pub fn get_audio(path: String, req_samples: usize) -> Result<(Vec<f32>, Vec<f32>), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        let (tx_res, rx_res) = channel();
+        coordinator.tx.send(VstCommand::GetAudio(path, req_samples, tx_res)).map_err(|e| e.to_string())?;
+        drop(coord_lock); // ロックを解放してからレスポンスを待つ
+        rx_res.recv().map_err(|e| e.to_string())?
     } else {
         Err("Coordinator not running. VST must be loaded first.".to_string())
     }

@@ -124,6 +124,37 @@ export default class Track extends SoundProvider {
       const player = await merged.createPlayer(this.groupId, this.audioContext)
       player.connect(this.junctionNode)
       player.connectEvents(this.audioInputNode)
+
+      // WAM SDKのconnectEventsバグ回避：
+      // MIDIPlayerProcessorは再生時にpostMessage({type:'midi_out_trigger'})でメインスレッドに通知する。
+      // このメッセージをリッスンし、audioInputNode.scheduleEventsに直接MIDIを転送することで、
+      // SoundProviderのフックを経由してVstProxy等にMIDIが届くようにする。
+      if ('node' in player && (player as any).node?.port) {
+        const midiNode = (player as any).node;
+        const origOnMessage = midiNode._onMessage?.bind(midiNode);
+        const audioInput = this.audioInputNode;
+        midiNode.port.addEventListener('message', (e: MessageEvent) => {
+          if (e.data?.type === 'midi_out_trigger') {
+            const { channel, note, velocity, duration } = e.data;
+            const currentTime = this.audioContext.currentTime;
+            // Note On
+            audioInput.scheduleEvents({
+              type: 'wam-midi',
+              time: currentTime,
+              data: { bytes: [0x90 | channel, note, velocity] }
+            });
+            // Note Off (duration ms後)
+            setTimeout(() => {
+              audioInput.scheduleEvents({
+                type: 'wam-midi',
+                time: this.audioContext.currentTime,
+                data: { bytes: [0x80 | channel, note, 0] }
+              });
+            }, duration);
+          }
+        });
+      }
+
       new_merged_regions.set(type, [merged, player])
     }
 

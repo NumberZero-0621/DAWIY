@@ -110,6 +110,26 @@ fn send_vst_midi(path: String, status: u8, data1: u8, data2: u8) -> Result<(), S
     vst_host::send_midi(path, status, data1, data2)
 }
 
+#[command]
+fn get_vst_audio(path: String, req_samples: usize) -> Result<tauri::ipc::Response, String> {
+    let (out_l, out_r) = vst_host::get_audio(path, req_samples)?;
+    
+    // Float32のバイナリ表現としてシリアライズする
+    // フォーマット: [サンプル数(u32)], [Lチャンネル...], [Rチャンネル...]
+    let samples = out_l.len() as u32;
+    let mut bytes = Vec::with_capacity(4 + (out_l.len() + out_r.len()) * 4);
+    
+    bytes.extend_from_slice(&samples.to_le_bytes());
+    
+    let l_bytes: &[u8] = unsafe { std::slice::from_raw_parts(out_l.as_ptr() as *const u8, out_l.len() * 4) };
+    bytes.extend_from_slice(l_bytes);
+    
+    let r_bytes: &[u8] = unsafe { std::slice::from_raw_parts(out_r.as_ptr() as *const u8, out_r.len() * 4) };
+    bytes.extend_from_slice(r_bytes);
+    
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -119,6 +139,7 @@ pub fn run() {
         scan_plugins, 
         open_vst_editor,
         send_vst_midi,
+        get_vst_audio,
         midi::list_midi_outputs,
         midi::open_midi_output,
         midi::close_midi_output,
