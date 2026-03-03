@@ -59,31 +59,6 @@ export default class VstPluginController {
     }
 
     /**
-     * Carlaを使用してVSTプラグインのGUIを開く
-     * @param pluginPath VSTプラグインへのパス
-     * @param carlaPath Carla実行ファイルへのパス（オプション）
-     */
-    public async openVstWithCarla(pluginPath: string, carlaPath?: string): Promise<void> {
-        if (!isDesktop()) {
-            this.app.showToast("VST GUI is only available in Desktop mode.", true);
-            return;
-        }
-
-        try {
-            this.app.showToast("Opening VST plugin with Carla...");
-            const result = await invoke<string>("open_vst_with_carla", {
-                pluginPath,
-                carlaPath: carlaPath || null
-            });
-            console.log("[VST] Carla result:", result);
-            this.app.showToast("VST plugin GUI opened successfully!");
-        } catch (e) {
-            console.error("[VST] Carla error:", e);
-            this.app.showToast("Failed to open VST with Carla: " + e, true);
-        }
-    }
-
-    /**
      * VSTプラグインのスタンドアロン版を起動（推奨）
      * @param pluginPath VSTプラグインへのパス
      */
@@ -105,72 +80,5 @@ export default class VstPluginController {
         }
     }
 
-    /**
-     * 任意の実行ファイルを起動
-     * @param exePath 実行ファイルへのパス
-     */
-    public async launchExecutable(exePath: string): Promise<void> {
-        if (!isDesktop()) {
-            return;
-        }
 
-        try {
-            const result = await invoke<string>("launch_executable", { exePath });
-            console.log("[VST] Executable launched:", result);
-            this.app.showToast("Launched: " + exePath);
-        } catch (e) {
-            console.error("[VST] Launch error:", e);
-            this.app.showToast("Failed to launch: " + e, true);
-        }
-    }
-
-    /**
-     * すべてのVSTプロセスを停止
-     */
-    public async stopAllVst(): Promise<void> {
-        if (!isDesktop()) {
-            return;
-        }
-
-        try {
-            await invoke("stop_all_vst");
-            console.log("[VST] All VST processes stopped");
-        } catch (e) {
-            console.error("[VST] Failed to stop VSTs:", e);
-        }
-    }
-
-    /**
-     * Carlaを停止
-     */
-    public async stopCarla(): Promise<void> {
-        if (!isDesktop()) {
-            return;
-        }
-
-        try {
-            await invoke("stop_carla");
-            console.log("[VST] Carla stopped");
-        } catch (e) {
-            console.error("[VST] Failed to stop Carla:", e);
-        }
-    }
-
-    /**
-     * VSTプラグインのGUIを開く（古いopen_vst_editorを使用 - Carla推奨）
-     * @deprecated 代わりにopenVstWithCarlaを使用してください
-     */
-    public async openVstEditor(pluginPath: string): Promise<void> {
-        if (!isDesktop()) {
-            this.app.showToast("VST editing is only available in Desktop mode.", true);
-            return;
-        }
-
-        try {
-            await invoke("open_vst_editor", { path: pluginPath });
-        } catch (e) {
-            console.error("[VST] Editor error:", e);
-            this.app.showToast("Failed to open VST editor: " + e, true);
-        }
-    }
 }

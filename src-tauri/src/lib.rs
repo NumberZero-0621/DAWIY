@@ -98,8 +98,6 @@ fn try_load_vst(path: &Path) -> bool {
 
 
 mod vst_host;
-mod carla_host;  // Carla統合モジュール（Windows非対応のため使用停止）
-mod vst_launcher;
 mod midi;  // スタンドアロンVST起動モジュール
 
 #[command]
@@ -115,11 +113,6 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
         scan_plugins, 
         open_vst_editor,
-        carla_host::open_vst_with_carla,
-        carla_host::stop_carla,
-        vst_launcher::launch_vst_standalone,
-        vst_launcher::stop_all_vst,
-        vst_launcher::launch_executable,
         midi::list_midi_outputs,
         midi::open_midi_output,
         midi::close_midi_output,
