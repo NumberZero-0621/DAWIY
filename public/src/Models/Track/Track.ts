@@ -221,9 +221,9 @@ export default class Track extends SoundProvider {
 
   private _track_graph: AudioGraph<TrackGraphInstance> | null = null
 
-  protected override updateVolume() {
-    if (!this.isMuted && !this.isSoloMuted) this.gainNode.gain.value = this.volume
-    else this.gainNode.gain.value = 0
+  protected override updateMute() {
+    if (this.isMuted || this.isSoloMuted) this.muteNode.gain.value = 0
+    else this.muteNode.gain.value = 1
   }
 
   /**
@@ -232,7 +232,7 @@ export default class Track extends SoundProvider {
   @observed({
     set(this: Track, value: boolean) {
       this.element.isSoloMuted = value
-      this.updateVolume()
+      this.updateMute()
     },
   })
   public isSoloMuted: boolean = false
@@ -248,7 +248,7 @@ export default class Track extends SoundProvider {
         this.isSoloMuted = false
       }
       this.element.isSolo = value
-      this.updateVolume()
+      this.updateMute()
     },
   })
   public isSolo: boolean = false

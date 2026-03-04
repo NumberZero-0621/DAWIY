@@ -100,14 +100,18 @@ export default class AutomationController {
 
         // 色復元
         const savedColor = track.automationColors.get(nextParamId);
-        if (savedColor) region.color = savedColor;
-
-        this._app.regionsController.addRegion(track, region);
+        if (savedColor) {
+            region.color = savedColor;
+        } else {
+            region.color = track.color;
+        }
 
         // ポイントがない場合の初期化（初期値取得など）
         if (region.points.length === 0) {
             await this.initializeRegionPoints(track, region);
         }
+
+        this._app.regionsController.addRegion(track, region);
 
         // 5. AutomationTrackElement (UI) の作成と追加
         this.createAutomationTrackElement(track, region, paramList);
@@ -231,13 +235,13 @@ export default class AutomationController {
         if (savedColor) {
             region.color = savedColor;
         } else {
-            region.color = ""; // リセット
+            region.color = track.color; // 新規パラメータの時はトラックカラーを初期値に
         }
 
         // Redraw
         const regionView = this._app.editorView.getWaveFormViewById(track.id)?.getRegionViewById(region.id);
         if (regionView) {
-            regionView.redraw("", region);
+            regionView.redraw(region.color, region);
         }
     }
 

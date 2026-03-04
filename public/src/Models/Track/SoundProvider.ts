@@ -19,8 +19,11 @@ import Plugin, { PluginInstance } from "../Plugin";
 export default abstract class SoundProvider {
 
   /* -~- OUTPUT NODES -~- */
-  /** The gain node associated to the track. It is used to control the volume of the track and is the outputNode of the track. **/
+  /** The gain node associated to the track. It is used to control the volume of the track. **/
   protected gainNode: GainNode
+
+  /** The gain node associated to the track for muting. It cuts audio signal regardless of volume. **/
+  protected muteNode: GainNode
 
   /** The panner node associated to the track. It is used to control the balance of the track. **/
   private pannerNode: StereoPannerNode
@@ -45,8 +48,11 @@ export default abstract class SoundProvider {
     // Audio Nodes
     this.gainNode = audioContext.createGain();
     this.gainNode.gain.value = 0.5;
+    this.muteNode = audioContext.createGain();
+    this.muteNode.gain.value = 1.0;
     this.pannerNode = audioContext.createStereoPanner();
     this.pannerNode.connect(this.gainNode)
+    this.gainNode.connect(this.muteNode)
 
     // Track properties
     this._element = element;
@@ -91,8 +97,11 @@ export default abstract class SoundProvider {
   private _volume: number
 
   protected updateVolume() {
-    if (!this.isMuted) this.gainNode.gain.value = this._volume
-    else this.gainNode.gain.value = 0
+    this.gainNode.gain.value = this._volume
+  }
+
+  protected updateMute() {
+    this.muteNode.gain.value = this.isMuted ? 0 : 1
   }
 
 
@@ -117,7 +126,7 @@ export default abstract class SoundProvider {
   public set isMuted(value: boolean) {
     this._muted = value
     this.element.isMuted = value
-    this.updateVolume()
+    this.updateMute()
   }
 
   public get isMuted() { return this._muted }
@@ -168,7 +177,7 @@ export default abstract class SoundProvider {
   /**
    * The output node of the sound provider.
    */
-  public get outputNode(): AudioNode { return this.gainNode }
+  public get outputNode(): AudioNode { return this.muteNode }
 
 
 
@@ -368,9 +377,13 @@ export default abstract class SoundProvider {
         const gainNode = audioContext.createGain()
         gainNode.gain.value = that.gainNode.gain.value
 
+        const muteNode = audioContext.createGain()
+        muteNode.gain.value = that.muteNode.gain.value
+
         const pannerNode = audioContext.createStereoPanner()
         pannerNode.pan.value = that.pannerNode.pan.value
         pannerNode.connect(gainNode)
+        gainNode.connect(muteNode)
 
         const plugin_instances: PluginInstance[] = []
         for (const p of that.plugins) {
@@ -378,7 +391,7 @@ export default abstract class SoundProvider {
           if (inst) plugin_instances.push(inst)
         }
 
-        return new SoundProviderGraphInstance(gainNode, pannerNode, plugin_instances, groupId, that.isGlobalPluginBypass)
+        return new SoundProviderGraphInstance(gainNode, muteNode, pannerNode, plugin_instances, groupId, that.isGlobalPluginBypass)
       }
     }
   }
@@ -416,6 +429,7 @@ export class SoundProviderGraphInstance {
 
   constructor(
     public gainNode: GainNode,
+    public muteNode: GainNode,
     public pannerNode: StereoPannerNode,
     public plugins: PluginInstance[],
     public groupId: string,
@@ -438,8 +452,8 @@ export class SoundProviderGraphInstance {
     }
   }
 
-  connect(destination: AudioNode): void { this.gainNode.connect(destination) }
-  disconnect(destination?: AudioNode): void { destination ? this.gainNode.disconnect(destination) : this.gainNode.disconnect() }
+  connect(destination: AudioNode): void { this.muteNode.connect(destination) }
+  disconnect(destination?: AudioNode): void { destination ? this.muteNode.disconnect(destination) : this.muteNode.disconnect() }
 
   connectEvents(destination: WamNode): void {
     if (this.plugins.length > 0) {
@@ -455,6 +469,7 @@ export class SoundProviderGraphInstance {
 
   dispose(): void {
     this.gainNode.disconnect()
+    this.muteNode.disconnect()
     this.pannerNode.disconnect()
     for (const p of this.plugins) { p.dispose() }
   }
