@@ -1,7 +1,6 @@
 import { crashOnDebug } from "../App";
 
-function escapeHtml(unsafe: String)
-{
+function escapeHtml(unsafe: String) {
     return unsafe
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -18,34 +17,34 @@ function escapeHtml(unsafe: String)
  * @param values 
  * @returns 
  */
-export function doc(strings: TemplateStringsArray, ...values:any[]): DocumentFragment{
-    let result= ""
-    let nodes:Node[]= []
+export function doc(strings: TemplateStringsArray, ...values: any[]): DocumentFragment {
+    let result = ""
+    let nodes: Node[] = []
 
     // Built the inner html and fetch the nodes
-    function addValue(value: any){
-        if(value===null || value===undefined)result
-        else if(value instanceof Node){
-            result+=`<span id="_sam_frament_target_${nodes.length}"></span>`
+    function addValue(value: any) {
+        if (value === null || value === undefined) result
+        else if (value instanceof Node) {
+            result += `<span id="_sam_frament_target_${nodes.length}"></span>`
             nodes.push(value)
         }
-        else if(typeof value === "string")result+=escapeHtml(value)
-        else if(typeof value[Symbol.iterator]==="function"){
-            for(const v of value)addValue(v)
+        else if (typeof value === "string") result += escapeHtml(value)
+        else if (typeof value[Symbol.iterator] === "function") {
+            for (const v of value) addValue(v)
         }
-        else result+=escapeHtml(value)
+        else result += escapeHtml(value)
     }
-    for(let i=0; i<values.length; i++){
-        result+=strings[i]
+    for (let i = 0; i < values.length; i++) {
+        result += strings[i]
         addValue(values[i])
     }
-    result+=strings[strings.length-1]
+    result += strings[strings.length - 1]
 
 
     // Create the fragment and replace the placeholders
-    const fragment= document.createRange().createContextualFragment(result)
-    for(let i=0; i<nodes.length; i++){
-        const target= fragment.getElementById(`_sam_frament_target_${i}`)
+    const fragment = document.createRange().createContextualFragment(result)
+    for (let i = 0; i < nodes.length; i++) {
+        const target = fragment.getElementById(`_sam_frament_target_${i}`)
         target?.replaceWith(nodes[i])
     }
     return fragment
@@ -55,53 +54,53 @@ export function doc(strings: TemplateStringsArray, ...values:any[]): DocumentFra
  * Create an element from a template string with a specific tag type.
  * @param type The tag type.
  */
-export function adoc<T extends keyof HTMLElementTagNameMap>(type: T): (strings: TemplateStringsArray, ...values:any[])=>HTMLElementTagNameMap[T]; 
+export function adoc<T extends keyof HTMLElementTagNameMap>(type: T): (strings: TemplateStringsArray, ...values: any[]) => HTMLElementTagNameMap[T];
 /**
  * Create an element from a template string.
  */
-export function adoc(strings: TemplateStringsArray, ...values:any[]): HTMLElement;
-export function adoc(strings_or_type: TemplateStringsArray|keyof HTMLElementTagNameMap, ...values:any[]): any{
-    if(typeof strings_or_type==="string"){
-        return (strings: TemplateStringsArray, ...values:any[])=>{
-            const ret= adoc(strings, ...values)
-            if(ret?.tagName.toLowerCase()!==strings_or_type)crashOnDebug("Invalid tag type")
+export function adoc(strings: TemplateStringsArray, ...values: any[]): HTMLElement;
+export function adoc(strings_or_type: TemplateStringsArray | keyof HTMLElementTagNameMap, ...values: any[]): any {
+    if (typeof strings_or_type === "string") {
+        return (strings: TemplateStringsArray, ...values: any[]) => {
+            const ret = adoc(strings, ...values)
+            if (ret?.tagName.toLowerCase() !== strings_or_type) crashOnDebug("Invalid tag type")
             return ret
         }
     }
-    else{
-        const fragment= doc(strings_or_type, ...values)
-        if(fragment.children.length!==1)crashOnDebug("adoc html string must have a single root element")
+    else {
+        const fragment = doc(strings_or_type, ...values)
+        if (fragment.children.length !== 1) crashOnDebug("adoc html string must have a single root element")
         return fragment.firstElementChild
     }
 }
 
-export function createSelect<T>(target: HTMLSelectElement, id: string, noStr: string, items: Iterable<T>, optionFactory: (item: T)=>[name:string,id:string], select: (item: T|null)=>void, selected?: string|null|number){
+export function createSelect<T>(target: HTMLSelectElement, id: string, noStr: string, items: Iterable<T>, optionFactory: (item: T) => [name: string, id: string], select: (item: T | null) => void, selected?: string | null | number) {
     // Get previously selected value
     const oldSelection = target.value
     const savedSelection = localStorage.getItem(`wamstudio.select.${id}`)
-    
+
     // Create map
-    const itemMap: {[key:string]:{name:string, value:T}}= {}
-    const itemArray: string[]= []
-    for(const item of items){
-        const [name,id]= optionFactory(item)
-        itemMap[id]= {name:name, value:item}
+    const itemMap: { [key: string]: { name: string, value: T } } = {}
+    const itemArray: string[] = []
+    for (const item of items) {
+        const [name, id] = optionFactory(item)
+        itemMap[id] = { name: name, value: item }
         itemArray.push(id)
     }
 
     target.replaceChildren(doc`
         <option value="NOTHING_SELECTED">${noStr}</option>
-        ${ Object.entries(itemMap).map( ([id,{name,value}]) => doc`<option value="${id}">${name}</option>` ) }
+        ${Object.entries(itemMap).map(([id, { name, value }]) => doc`<option value="${id}">${name}</option>`)}
     `)
 
-    target.onchange = ()=>{
-        if(target.value=="NOTHING_SELECTED"){
+    target.onchange = () => {
+        if (target.value == "NOTHING_SELECTED") {
             select(null)
-            localStorage.removeItem(`wamstudio.select.${id}`)
+            localStorage.setItem(`wamstudio.select.${id}`, "NOTHING_SELECTED")
         }
-        else{
-            const selected= itemMap[target.value]
-            if(selected){
+        else {
+            const selected = itemMap[target.value]
+            if (selected) {
                 localStorage.setItem(`wamstudio.select.${id}`, target.value)
                 select(selected.value)
             }
@@ -110,32 +109,39 @@ export function createSelect<T>(target: HTMLSelectElement, id: string, noStr: st
 
     // Select default
     {
-        const selectedId= (()=>{
+        const selectedId = (() => {
             // Try reselecting the previous value if it still exists
-            if(oldSelection=="NOTHING_SELECTED") return null
-            if(oldSelection && itemMap[oldSelection]!=undefined) return oldSelection
+            if (oldSelection == "NOTHING_SELECTED") return "NOTHING_SELECTED"
+            if (oldSelection && itemMap[oldSelection] != undefined) return oldSelection
 
             // Try the stored value
-            if(savedSelection!=null && itemMap[savedSelection]!=undefined) return savedSelection
+            if (savedSelection === "NOTHING_SELECTED") return "NOTHING_SELECTED"
+            if (savedSelection != null && itemMap[savedSelection] != undefined) return savedSelection
 
-            if(selected==undefined || selected==null) return null
+            if (selected == undefined || selected == null) return null
 
             // Select by index
-            if(typeof selected=="number"){
-                selected= itemArray[selected>=0 ? selected : itemArray.length+selected]
+            if (typeof selected == "number") {
+                selected = itemArray[selected >= 0 ? selected : itemArray.length + selected]
             }
 
             // Select by id
             return selected
         })()
-        const selectedOption= selectedId!=null ? itemMap[selectedId] : null
-        if(selectedOption!=null){
-            target.value=selectedId!
-            select(selectedOption.value)
-        }
-        else {
-            target.value="NOTHING_SELECTED"
+
+        if (selectedId === "NOTHING_SELECTED") {
+            target.value = "NOTHING_SELECTED"
             select(null)
+        } else {
+            const selectedOption = selectedId != null ? itemMap[selectedId] : null
+            if (selectedOption != null) {
+                target.value = selectedId!
+                select(selectedOption.value)
+            }
+            else {
+                target.value = "NOTHING_SELECTED"
+                select(null)
+            }
         }
     }
 }

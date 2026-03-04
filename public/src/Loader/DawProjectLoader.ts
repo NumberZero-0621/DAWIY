@@ -67,13 +67,59 @@ export default class DawProjectLoader {
                 const id = trackEl.getAttribute("id");
                 const name = trackEl.getAttribute("name") || "Track";
                 const color = trackEl.getAttribute("color") || "#ff0000";
-                
+
                 const track = await this._app.tracksController.createTrack();
                 track.element.name = name;
                 track.element.trackNameInput.value = name;
                 this._app.tracksController.setColor(track, color);
-                
+
                 if (id) this._tracksMap.set(id, track);
+
+                // Load Plugins
+                const channelEl = trackEl.querySelector("Channel");
+                if (channelEl) {
+                    const pluginsEl = channelEl.querySelector("Plugins");
+                    if (pluginsEl) {
+                        for (const pluginEl of Array.from(pluginsEl.children)) {
+                            const pName = pluginEl.getAttribute("name");
+                            const pUrl = pluginEl.getAttribute("url");
+                            const stateFile = pluginEl.getAttribute("stateFile");
+
+                            if (pName && pUrl) {
+                                // Register WAM if it's not registered
+                                if (!this._app.pluginsController.WAM_LIST[pName]) {
+                                    this._app.pluginsController.addWam(pUrl, pName);
+                                }
+
+                                // Launch VST if it is a VST
+                                if (pUrl.startsWith("vst://")) {
+                                    const vstPath = pUrl.replace("vst://", "");
+                                    await this._app.vstPluginController.launchVstStandalone(vstPath);
+                                }
+
+                                // Fetch and add plugin
+                                const plugin = await this._app.pluginsController.fetchPlugin(pName);
+                                if (plugin) {
+                                    const instance = await track.addPlugin(plugin);
+
+                                    // Restore state
+                                    if (stateFile && instance) {
+                                        const zipFile = this._zip.file(stateFile);
+                                        if (zipFile) {
+                                            const stateStr = await zipFile.async("string");
+                                            try {
+                                                const state = JSON.parse(stateStr);
+                                                await instance.setState(state);
+                                            } catch (e) {
+                                                console.error("Failed to parse or set plugin state", e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -132,11 +178,11 @@ export default class DawProjectLoader {
                 if (warpsEl) {
                     const internalAudioEl = warpsEl.querySelector("Audio");
                     if (internalAudioEl) {
-                         const sampleRegion = await this.parseAudio(internalAudioEl, startTimeMs);
-                         if (sampleRegion) {
-                             this._app.regionsController.addRegion(track, sampleRegion);
-                             audioLoaded = true;
-                         }
+                        const sampleRegion = await this.parseAudio(internalAudioEl, startTimeMs);
+                        if (sampleRegion) {
+                            this._app.regionsController.addRegion(track, sampleRegion);
+                            audioLoaded = true;
+                        }
                     }
                 }
 
@@ -168,9 +214,9 @@ export default class DawProjectLoader {
 
     private async parseNotes(notesEl: Element, startTimeMs: number, timeUnit: string): Promise<MIDIRegion> {
         const notes = notesEl.querySelectorAll("Note");
-        
+
         // 1. Collect notes and calculate required duration
-        const notesData: {key:number, vel:number, channel:number, start:number, duration:number}[] = [];
+        const notesData: { key: number, vel: number, channel: number, start: number, duration: number }[] = [];
         let maxEnd = 0;
 
         for (const noteEl of Array.from(notes)) {
@@ -182,22 +228,22 @@ export default class DawProjectLoader {
 
             const startMs = this.convertToMs(time, timeUnit);
             const durMs = this.convertToMs(duration, timeUnit);
-            
-            notesData.push({key, vel, channel, start: startMs, duration: durMs});
+
+            notesData.push({ key, vel, channel, start: startMs, duration: durMs });
 
             if (startMs + durMs > maxEnd) maxEnd = startMs + durMs;
         }
 
         // 2. Initialize MIDI with correct duration
         // Use a small instant duration (e.g. 16ms) but ensure total duration covers all notes
-        const midi = new MIDI(16, maxEnd > 0 ? maxEnd : 1000); 
-        
+        const midi = new MIDI(16, maxEnd > 0 ? maxEnd : 1000);
+
         // 3. Add notes
         for (const n of notesData) {
             const note = new MIDINote(n.key, n.vel, n.channel, n.duration);
             midi.putNote(note, n.start);
         }
-        
+
         return new MIDIRegion(midi, startTimeMs);
     }
 
@@ -217,7 +263,7 @@ export default class DawProjectLoader {
         const buffer = await zipFile.async("arraybuffer");
         const audioBuffer = await audioCtx.decodeAudioData(buffer);
         const operableAudioBuffer = OperableAudioBuffer.make(audioBuffer).makeStereo();
-        
+
         return new SampleRegion(operableAudioBuffer, startTimeMs);
     }
 

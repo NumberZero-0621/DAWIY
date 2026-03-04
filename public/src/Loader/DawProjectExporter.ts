@@ -10,6 +10,7 @@ export default class DawProjectExporter {
     private _zip: JSZip;
     private _xmlDoc: Document;
     private _audioFileCounter: number = 0;
+    private _pluginStates: { filename: string, data: string }[] = [];
 
     constructor(app: App) {
         this._app = app;
@@ -20,16 +21,17 @@ export default class DawProjectExporter {
     public async export(): Promise<void> {
         this._app.editorView.setLoading(true);
         try {
-            this.buildProjectXml();
+            await this.buildProjectXml();
             this.buildMetadataXml();
-            
+
             await this.addAudioFiles();
+            this.addPluginStates();
 
             const projectXmlStr = new XMLSerializer().serializeToString(this._xmlDoc);
             this._zip.file("project.xml", projectXmlStr);
 
             const content = await this._zip.generateAsync({ type: "blob" });
-            
+
             if ('showSaveFilePicker' in window) {
                 try {
                     const handle = await (window as any).showSaveFilePicker({
@@ -61,7 +63,7 @@ export default class DawProjectExporter {
     private buildMetadataXml() {
         const doc = document.implementation.createDocument(null, "MetaData", null);
         const root = doc.documentElement;
-        
+
         const title = doc.createElement("Title");
         title.textContent = "WAM-Studio Project"; // Could add a project title input later
         root.appendChild(title);
@@ -74,7 +76,7 @@ export default class DawProjectExporter {
         this._zip.file("metadata.xml", xmlStr);
     }
 
-    private buildProjectXml() {
+    private async buildProjectXml() {
         const root = this._xmlDoc.documentElement;
         root.setAttribute("version", "1.0");
 
@@ -101,8 +103,8 @@ export default class DawProjectExporter {
         // Structure (Tracks)
         const structure = this._xmlDoc.createElement("Structure");
         const tracks = this._app.tracksController.tracks;
-        
-        tracks.forEach(track => {
+
+        for (const track of tracks) {
             const trackEl = this._xmlDoc.createElement("Track");
             trackEl.setAttribute("id", `track-${track.id}`);
             trackEl.setAttribute("name", track.element.name);
@@ -124,44 +126,70 @@ export default class DawProjectExporter {
             const channelEl = this._xmlDoc.createElement("Channel");
             channelEl.setAttribute("audioChannels", "2");
             channelEl.setAttribute("role", "regular");
-            
+
             const volumeEl = this._xmlDoc.createElement("Volume");
-            volumeEl.setAttribute("value", track.volume.toString()); 
+            volumeEl.setAttribute("value", track.volume.toString());
             volumeEl.setAttribute("unit", "linear");
             channelEl.appendChild(volumeEl);
 
             const panEl = this._xmlDoc.createElement("Pan");
-            const normPan = (track.balance + 1) / 2; 
+            const normPan = (track.balance + 1) / 2;
             panEl.setAttribute("value", normPan.toString());
             panEl.setAttribute("unit", "normalized");
             channelEl.appendChild(panEl);
 
+            // Add Plugins
+            const pluginsEl = this._xmlDoc.createElement("Plugins");
+            for (const pluginInstance of track.plugins) {
+                const pluginEl = this._xmlDoc.createElement("Plugin");
+                pluginEl.setAttribute("name", pluginInstance.name);
+
+                // Get URL from PluginsController
+                const pluginInfo = this._app.pluginsController.WAM_LIST[pluginInstance.name];
+                if (pluginInfo && pluginInfo.url) {
+                    pluginEl.setAttribute("url", pluginInfo.url);
+                }
+
+                // Get state
+                const state = await pluginInstance.getState();
+                if (state) {
+                    const stateStr = JSON.stringify(state);
+                    const stateFilename = `plugins/track-${track.id}-plugin-${pluginInstance.instance.instanceId}-state.json`;
+                    pluginEl.setAttribute("stateFile", stateFilename);
+
+                    this._pluginStates.push({ filename: stateFilename, data: stateStr });
+                }
+
+                pluginsEl.appendChild(pluginEl);
+            }
+            channelEl.appendChild(pluginsEl);
+
             trackEl.appendChild(channelEl);
             structure.appendChild(trackEl);
-        });
+        } // CHANGED to for-of from forEach because of await
         root.appendChild(structure);
 
         // Arrangement
         const arrangement = this._xmlDoc.createElement("Arrangement");
         const lanes = this._xmlDoc.createElement("Lanes");
-        lanes.setAttribute("timeUnit", "beats"); 
+        lanes.setAttribute("timeUnit", "beats");
 
         tracks.forEach(track => {
             const trackLanes = this._xmlDoc.createElement("Lanes");
             trackLanes.setAttribute("track", `track-${track.id}`);
-            
+
             const clips = this._xmlDoc.createElement("Clips");
-            
+
             track.regions.forEach(region => {
                 const clipEl = this._xmlDoc.createElement("Clip");
-                
+
                 // Convert start/duration from ms to beats
                 const startBeats = this.msToBeats(region.start);
                 const durationBeats = this.msToBeats(region.duration);
-                
+
                 clipEl.setAttribute("time", startBeats.toFixed(6));
                 clipEl.setAttribute("duration", durationBeats.toFixed(6));
-                clipEl.setAttribute("playStart", "0"); 
+                clipEl.setAttribute("playStart", "0");
 
                 if (region instanceof MIDIRegion) {
                     const notesEl = this._xmlDoc.createElement("Notes");
@@ -177,7 +205,7 @@ export default class DawProjectExporter {
                     clipEl.appendChild(notesEl);
                 } else if (region instanceof SampleRegion) {
                     const clipsContainerEl = this._xmlDoc.createElement("Clips");
-                    
+
                     const innerClipEl = this._xmlDoc.createElement("Clip");
                     innerClipEl.setAttribute("time", "0"); // Relative to outer clip
                     innerClipEl.setAttribute("duration", durationBeats.toFixed(6));
@@ -193,14 +221,14 @@ export default class DawProjectExporter {
                     const filename = `audio/track-${track.id}-region-${region.id}.wav`;
                     const durationSec = region.duration / 1000;
                     audioEl.setAttribute("duration", durationSec.toFixed(6));
-                    audioEl.setAttribute("sampleRate", "44100"); 
+                    audioEl.setAttribute("sampleRate", "44100");
                     audioEl.setAttribute("channels", "2");
 
                     const fileEl = this._xmlDoc.createElement("File");
                     fileEl.setAttribute("path", filename);
                     fileEl.setAttribute("external", "false");
                     audioEl.appendChild(fileEl);
-                    
+
                     warpsEl.appendChild(audioEl);
 
                     // Add Warp points to map beats to seconds
@@ -247,6 +275,20 @@ export default class DawProjectExporter {
                     audioFolder.file(filename, blob);
                 }
             }
+        }
+    }
+
+    private addPluginStates() {
+        const pluginsFolder = this._zip.folder("plugins");
+        if (!pluginsFolder) {
+            console.error("Failed to create plugins folder in zip");
+            return;
+        }
+
+        for (const state of this._pluginStates) {
+            // state.filename already includes 'plugins/' prefix, but we can just use the base name inside the folder
+            const baseName = state.filename.replace("plugins/", "");
+            pluginsFolder.file(baseName, state.data);
         }
     }
 
