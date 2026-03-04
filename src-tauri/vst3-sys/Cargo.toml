@@ -1,0 +1,25 @@
+[package]
+name = "vst3-sys"
+version = "0.1.0"
+authors = ["Mike Hilgendorf <mike@hilgendorf.audio>", "Mirko Covizzi <mrkcvzz@gmail.com>"]
+license = "GPL-3.0"
+description = """
+Pure Rust bindings to the VST3 APIs, based on COM. 
+"""
+edition = "2018"
+
+[dependencies]
+vst3-com = { path = "./com" }
+
+[dev-dependencies]
+log = "0.4"
+simple_logger = "2.1.0"
+lazy_static = "1.4.0"
+widestring = "0.4.0"
+
+[workspace]
+members = ["examples/again", "com", "com/macros", "com/macros/support"]
+
+[[example]]
+name = "passthru"
+crate-type = ["cdylib"]

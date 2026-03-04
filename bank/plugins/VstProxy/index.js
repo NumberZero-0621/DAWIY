@@ -142,17 +142,6 @@ class VstProxyNode extends CompositeAudioNode {
                     const channelR = output[1];
                     const outLen = channelL.length;
 
-                    // デバッグ用に定期的に入力レベルを計算して送信
-                    this.debugCounter = (this.debugCounter || 0) + 1;
-                    if (this.debugCounter % 200 === 0) {
-                        let maxL = 0;
-                        for(let i = 0; i < outLen; i++) {
-                            if (Math.abs(inChannelL[i]) > maxL) maxL = Math.abs(inChannelL[i]);
-                        }
-                        this.port.postMessage({ type: 'debug_level', level: maxL });
-                        this.debugCounter = 0;
-                    }
-
                     // 1. 入力を蓄積する
                     this.inChunksL.push(new Float32Array(inChannelL));
                     this.inChunksR.push(new Float32Array(inChannelR));
@@ -265,9 +254,7 @@ class VstProxyNode extends CompositeAudioNode {
             this.inputAudioBuffered = 0;
 
             this._audioOutputNode.port.onmessage = (e) => {
-                if (e.data.type === 'debug_level') {
-                    console.log("[VstProxy] WORKLET Input Level:", e.data.level);
-                } else if (e.data.type === 'buffer_status') {
+                if (e.data.type === 'buffer_status') {
                     this.currentBuffered = Math.max(0, this.currentBuffered - e.data.consumed);
                     // underrun警告は初期待機時等にも出るため削除
                 } else if (e.data.type === 'audio_input') {
@@ -301,8 +288,9 @@ class VstProxyNode extends CompositeAudioNode {
     async pushAudioProcess() {
         if (this.instanceId == null || !window.__TAURI__ || this.isFetching) return;
 
-        const reqSamples = 2048;
-        const TARGET_BUFFER = 8192; // 十分なバッファを持たせて途切れを完全防止
+        // レイテンシ削減のため、1回あたりの処理サンプル数と目標バッファ量を半減
+        const reqSamples = 1024;
+        const TARGET_BUFFER = 4096;
 
         if (this.currentBuffered > TARGET_BUFFER) return;
 
@@ -344,17 +332,6 @@ class VstProxyNode extends CompositeAudioNode {
             // Rust側はFloat32を期待しているので、ArrayBuffer (Uint8Array) に変換して送信
             const reqBufL = new Uint8Array(in_l.buffer);
             const reqBufR = new Uint8Array(in_r.buffer);
-
-            // デバッグログ
-            let maxAmp = 0;
-            for (let i = 0; i < reqSamples; i++) {
-                if (Math.abs(in_l[i]) > maxAmp) maxAmp = Math.abs(in_l[i]);
-            }
-            this.pushDebugCounter = (this.pushDebugCounter || 0) + 1;
-            if (this.pushDebugCounter % 20 === 0) {
-                console.log(`[VstProxy] Sending Audio to Rust. Max Amplitude: ${maxAmp.toFixed(6)}, samples: ${reqSamples}`);
-                this.pushDebugCounter = 0;
-            }
 
             const response = await window.__TAURI__.core.invoke("process_vst_audio", {
                 instanceId: this.instanceId,

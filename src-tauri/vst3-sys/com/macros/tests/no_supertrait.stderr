@@ -1,0 +1,13 @@
+error[E0432]: unresolved import `com`
+ --> $DIR/no_supertrait.rs:1:5
+  |
+1 | use com::com_interface;
+  |     ^^^ help: a similar path exists: `vst3_com::com`
+
+error: cannot determine resolution for the attribute macro `com_interface`
+ --> $DIR/no_supertrait.rs:3:3
+  |
+3 | #[com_interface("cc2d05c7-7d20-4ccb-ad75-1e7fb7c77254")]
+  |   ^^^^^^^^^^^^^
+  |
+  = note: import resolution is stuck, try simplifying macro imports

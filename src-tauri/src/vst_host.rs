@@ -1188,16 +1188,6 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         in_l.resize(num_samples, 0.0);
                                         in_r.resize(num_samples, 0.0);
 
-                                        // デバッグ：入力が完全に無音かチェック（一部だけログ出力）
-                                        static LOG_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-                                        let count = LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                        
-                                        let has_signal = in_l.iter().any(|&v| v.abs() > 0.0001);
-                                        if has_signal && count % 40 == 0 {
-                                             let max_val = in_l.iter().fold(0.0f32, |m, &v| m.max(v.abs()));
-                                             println!("[Native] ProcessAudio: SIGNAL DETECTED! Max amplitude: {:.4}, samples: {}", max_val, in_l.len());
-                                        }
-
                                         let mut out_l = vec![0.0f32; num_samples];
                                         let mut out_r = vec![0.0f32; num_samples];
                                         
@@ -1284,6 +1274,14 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         if let Some(elp) = event_list_ptr {
                                             let elvtbl = (*elp).vptr;
                                             ((*elvtbl).release)(elp as *mut c_void);
+                                        }
+
+                                        // VSTiなどが出力を全く生成しなかった（全て0.0）場合、入力信号をそのまま出力へパススルーする
+                                        let out_is_silent = out_l.iter().all(|&v| v == 0.0);
+                                        if out_is_silent {
+                                            // 入力バッファの内容を出力バッファへコピーする
+                                            out_l.copy_from_slice(&in_l);
+                                            out_r.copy_from_slice(&in_r);
                                         }
                                         
                                         let _ = tx_audio.send(Ok((out_l, out_r)));

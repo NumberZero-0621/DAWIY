@@ -252,8 +252,9 @@ export default abstract class SoundProvider {
     (inputNode as any).scheduleEvents = (...events: any[]) => {
       const midiEvents = events.filter((e: any) => e.type === 'wam-midi');
       if (midiEvents.length > 0) {
-
-        firstPluginNode.scheduleEvents(...midiEvents);
+        for (const plugin of activePlugins) {
+          plugin.audioNode.scheduleEvents(...midiEvents);
+        }
       }
       return origScheduleEvents(...events);
     };
@@ -264,8 +265,9 @@ export default abstract class SoundProvider {
     const midiEventListener = (e: Event) => {
       const event = (e as CustomEvent).detail;
       if (event) {
-
-        firstPluginNode.scheduleEvents(event);
+        for (const plugin of activePlugins) {
+          plugin.audioNode.scheduleEvents(event);
+        }
       }
     };
     (inputNode as any)._midiEventListener = midiEventListener;
