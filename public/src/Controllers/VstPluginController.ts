@@ -3,6 +3,7 @@ import App from "../App";
 import { invoke } from "@tauri-apps/api/core";
 import { isDesktop } from "../Utils/Environment";
 import SettingsPersistenceController from "./SettingsPersistenceController";
+import { audioCtx } from "../index";
 
 export const DEFAULT_VST3_PATHS = [
     "C:\\Program Files\\Common Files\\VST3",
@@ -77,7 +78,10 @@ export default class VstPluginController {
         try {
             this.app.showToast("Opening Native Editor (Experimental)...");
             // Switch to Native Implementation
-            const result = await invoke<string>("open_vst_editor", { path: pluginPath });
+            const result = await invoke<string>("open_vst_editor", {
+                path: pluginPath,
+                sampleRate: audioCtx.sampleRate
+            });
             console.log("[VST] Native launch result:", result);
             this.app.showToast("VST plugin launched (Native Mode)!");
         } catch (e) {

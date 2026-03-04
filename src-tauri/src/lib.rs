@@ -101,8 +101,8 @@ mod vst_host;
 mod midi;  // スタンドアロンVST起動モジュール
 
 #[command]
-fn open_vst_editor(path: String) -> Result<(), String> {
-    vst_host::load_and_open(path)
+fn open_vst_editor(path: String, sample_rate: f32) -> Result<(), String> {
+    vst_host::load_and_open(path, sample_rate)
 }
 
 #[command]

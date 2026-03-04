@@ -17,7 +17,6 @@ class VstProxyNode extends CompositeAudioNode {
     setup(paramMgr) {
         this._wamNode = paramMgr;
 
-
         // MIDIをTauriに送信する共通関数
         const forwardMidiToTauri = (bytes) => {
             if (!bytes || bytes.length < 3 || !window.__TAURI__ || !this.vstPath) return;
@@ -35,23 +34,8 @@ class VstProxyNode extends CompositeAudioNode {
             }
         };
 
-        // 方法1: connectEvents経由でWorkletから戻ってきたMIDIイベントをCustomEventでキャッチ
-        paramMgr.addEventListener('wam-midi', (e) => {
-            const midiData = e.detail?.data;
-            if (midiData) forwardMidiToTauri(midiData.bytes);
-        });
-
-        // 方法2: ParamMgrNode.scheduleEventsをモンキーパッチしてMIDIを直接キャッチ
-        // connectEvents経由でもメインスレッドのscheduleEventsが呼ばれる場合があるため
-        const origScheduleEvents = paramMgr.scheduleEvents.bind(paramMgr);
-        paramMgr.scheduleEvents = (...events) => {
-            for (const event of events) {
-                if (event.type === 'wam-midi') {
-                    forwardMidiToTauri(event.data?.bytes);
-                }
-            }
-            return origScheduleEvents(...events);
-        };
+        // Note: WAMからのMIDIイベントは paramMgr.addEventListener と paramMgr.scheduleEvents モンキーパッチで重複して送信されるバグがあったため削除しました。
+        // 今後は VstProxyNode 自身の scheduleEvents のみで処理します。
     }
 
     scheduleEvents(...events) {
@@ -65,13 +49,32 @@ class VstProxyNode extends CompositeAudioNode {
                     const data1 = bytes[1];
                     const data2 = bytes[2];
                     if ((status & 0xF0) === 0x90 || (status & 0xF0) === 0x80) {
-                        console.log('[VstProxy] Forwarding MIDI to Tauri:', status, data1, data2);
-                        window.__TAURI__.core.invoke("send_vst_midi", {
-                            path: this.vstPath,
-                            status,
-                            data1,
-                            data2
-                        }).catch(e => console.error("VST MIDI failed:", e));
+                        const now = this.context.currentTime;
+                        const eventTime = e.time !== undefined ? e.time : now;
+                        let delayMs = (eventTime - now) * 1000;
+
+                        // Minimum scheduling bounds
+                        if (delayMs < 0) delayMs = 0;
+
+                        // Note Off might be scheduled far in advance by DAWIY MIDIPlayerProcessor
+                        if (delayMs > 0) {
+                            setTimeout(() => {
+                                if (!window.__TAURI__ || !this.vstPath) return;
+                                window.__TAURI__.core.invoke("send_vst_midi", {
+                                    path: this.vstPath,
+                                    status,
+                                    data1,
+                                    data2
+                                }).catch(err => console.error("VST MIDI failed:", err));
+                            }, delayMs);
+                        } else {
+                            window.__TAURI__.core.invoke("send_vst_midi", {
+                                path: this.vstPath,
+                                status,
+                                data1,
+                                data2
+                            }).catch(err => console.error("VST MIDI failed:", err));
+                        }
                     }
                 }
             }
@@ -102,22 +105,15 @@ class VstProxyNode extends CompositeAudioNode {
                     this.chunksR = [];
                     this.readOffset = 0;
                     this.totalBuffered = 0;
+                    this.framesSinceLastReport = 0;
+                    this.consumedSinceLastReport = 0;
+                    this.hadUnderrun = false;
                     
                     this.port.onmessage = (e) => {
                         if (e.data.type === 'audio') {
                             this.chunksL.push(e.data.left);
                             this.chunksR.push(e.data.right);
                             this.totalBuffered += e.data.left.length;
-                            
-                            // リアルタイム性を保つため、バッファ上限を4096サンプル（約92ms）に制限
-                            // これを超えたぶんの古いオーディオチャンクは即座に破棄して最新に追いつく
-                            const MAX_BUFFER = 4096;
-                            while (this.totalBuffered > MAX_BUFFER && this.chunksL.length > 1) {
-                                let dropped = this.chunksL.shift().length;
-                                this.chunksR.shift();
-                                this.totalBuffered -= dropped;
-                                this.readOffset = 0;
-                            }
                         }
                     };
                 }
@@ -136,6 +132,21 @@ class VstProxyNode extends CompositeAudioNode {
                         for (let i = 0; i < outLen; i++) {
                             channelL[i] = 0;
                             channelR[i] = 0;
+                        }
+                        
+                        this.hadUnderrun = true;
+                        this.framesSinceLastReport += outLen;
+                        this.consumedSinceLastReport += outLen; // Treat zeroes as consumed time too
+                        
+                        if (this.framesSinceLastReport >= 2048) {
+                            this.port.postMessage({ 
+                                type: 'buffer_status', 
+                                consumed: this.consumedSinceLastReport,
+                                underrun: this.hadUnderrun 
+                            });
+                            this.framesSinceLastReport = 0;
+                            this.consumedSinceLastReport = 0;
+                            this.hadUnderrun = false;
                         }
                         return true;
                     }
@@ -156,6 +167,20 @@ class VstProxyNode extends CompositeAudioNode {
                             this.readOffset = 0;
                         }
                     }
+                    
+                    this.framesSinceLastReport += outLen;
+                    this.consumedSinceLastReport += outLen;
+                    if (this.framesSinceLastReport >= 2048) {
+                        this.port.postMessage({ 
+                            type: 'buffer_status', 
+                            consumed: this.consumedSinceLastReport,
+                            underrun: this.hadUnderrun
+                        });
+                        this.framesSinceLastReport = 0;
+                        this.consumedSinceLastReport = 0;
+                        this.hadUnderrun = false;
+                    }
+                    
                     return true;
                 }
             }
@@ -175,6 +200,23 @@ class VstProxyNode extends CompositeAudioNode {
             // CompositeAudioNodeの出力として設定
             this._output = this._audioOutputNode;
 
+            this.currentBuffered = 0;
+            this.isFetching = false;
+            this._audioOutputNode.port.onmessage = (e) => {
+                if (e.data.type === 'buffer_status') {
+                    this.currentBuffered = Math.max(0, this.currentBuffered - e.data.consumed);
+
+                    if (e.data.underrun) {
+                        console.warn("[VstProxy] VST Audio Buffer Underrun! (Stutter detected)");
+                    }
+
+                    // バッファが減ってきたら即座に補充
+                    if (this.currentBuffered < 8192) {
+                        this.fetchAudio();
+                    }
+                }
+            };
+
             // 重要: CompositeAudioNode(GainNode)の_outputをオーバーライドすると、
             // GainNode自体の出力がどこにも接続されなくなる。
             // すると上流のaudioInputNode→junctionNode→MIDIPlayerNodeの全チェーンが
@@ -187,8 +229,8 @@ class VstProxyNode extends CompositeAudioNode {
             GainNode.prototype.connect.call(this, silentGain);
             silentGain.connect(this.context.destination);
 
-            // ポーリング開始
-            this.startAudioPolling();
+            // 音声取得ループ開始
+            this.fetchAudio();
         } catch (e) {
             console.error("Failed to setup AudioWorklet for VST:", e);
         } finally {
@@ -196,62 +238,59 @@ class VstProxyNode extends CompositeAudioNode {
         }
     }
 
-    startAudioPolling() {
-        if (this._audioPollingInterval) return;
+    async fetchAudio() {
+        if (!this.vstPath || !window.__TAURI__ || this.isFetching) return;
 
-        // 10ms間隔でオーディオを取得するようにポーリングを高速化
-        const sampleRate = this.context.sampleRate || 44100;
-        // 1回のポーリングで多めに取得要求し、Rust側のバッファから根こそぎ取得する
-        const reqSamples = Math.floor(sampleRate * 0.05);
+        const reqSamples = 2048;
+        const TARGET_BUFFER = 8192; // 十分なバッファを持たせて途切れを完全防止
 
-        let isFetching = false;
+        if (this.currentBuffered > TARGET_BUFFER) return;
 
-        this._audioPollingInterval = setInterval(async () => {
-            if (!this.vstPath || !window.__TAURI__ || isFetching) return;
+        this.isFetching = true;
+        try {
+            const response = await window.__TAURI__.core.invoke("get_vst_audio", {
+                path: this.vstPath,
+                reqSamples: reqSamples
+            });
 
-            isFetching = true;
-            try {
-                const response = await window.__TAURI__.core.invoke("get_vst_audio", {
-                    path: this.vstPath,
-                    reqSamples: reqSamples
-                });
+            const responseLength = response?.byteLength ?? response?.length;
+            if (response && responseLength > 4) {
+                const bytes = response instanceof ArrayBuffer ? new Uint8Array(response)
+                    : response instanceof Uint8Array ? response
+                        : new Uint8Array(response);
+                const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+                const samplesCount = view.getUint32(0, true);
 
-                const responseLength = response?.byteLength ?? response?.length;
-                if (response && responseLength > 4) {
-                    const bytes = response instanceof ArrayBuffer ? new Uint8Array(response)
-                        : response instanceof Uint8Array ? response
-                            : new Uint8Array(response);
-                    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-                    const samplesCount = view.getUint32(0, true);
+                if (samplesCount > 0 && this._audioOutputNode) {
+                    const leftBytes = new Uint8Array(bytes.buffer, bytes.byteOffset + 4, samplesCount * 4);
+                    const rightBytes = new Uint8Array(bytes.buffer, bytes.byteOffset + 4 + samplesCount * 4, samplesCount * 4);
 
-                    if (samplesCount > 0 && this._audioOutputNode) {
-                        // メモリアラインメント(`% 4 !== 0`)のエラーを防ぐため、スライスして独立したバッファを作成
-                        const leftBytes = new Uint8Array(bytes.buffer, bytes.byteOffset + 4, samplesCount * 4);
-                        const rightBytes = new Uint8Array(bytes.buffer, bytes.byteOffset + 4 + samplesCount * 4, samplesCount * 4);
+                    const left = new Float32Array(leftBytes.slice().buffer);
+                    const right = new Float32Array(rightBytes.slice().buffer);
 
-                        const left = new Float32Array(leftBytes.slice().buffer);
-                        const right = new Float32Array(rightBytes.slice().buffer);
+                    this._audioOutputNode.port.postMessage({
+                        type: 'audio',
+                        left: left,
+                        right: right
+                    });
 
-                        this._audioOutputNode.port.postMessage({
-                            type: 'audio',
-                            left: left,
-                            right: right
-                        });
-                    }
+                    // Workletからの通知を待たずにローカルの推測値を更新
+                    this.currentBuffered += samplesCount;
                 }
-            } catch (e) {
-                // Ignore empty or error during load
-            } finally {
-                isFetching = false;
             }
-        }, 10); // 10ms (100FPS) down from 20ms
+        } catch (e) {
+            console.error("VST audio fetch failed:", e);
+        } finally {
+            this.isFetching = false;
+            // まだ目標に達していなければ連続で取得
+            if (this.currentBuffered < TARGET_BUFFER) {
+                this.fetchAudio();
+            }
+        }
     }
 
     destroy() {
-        if (this._audioPollingInterval) {
-            clearInterval(this._audioPollingInterval);
-            this._audioPollingInterval = null;
-        }
+        this.isFetching = true; // prevent further fetches
         if (this._audioOutputNode) {
             this._audioOutputNode.disconnect();
             this._audioOutputNode = null;
@@ -268,7 +307,11 @@ class VstProxyNode extends CompositeAudioNode {
     async showVstUi() {
         if (window.__TAURI__ && this.vstPath) {
             try {
-                await window.__TAURI__.core.invoke("open_vst_editor", { path: this.vstPath });
+                const sampleRate = this.context.sampleRate || 48000;
+                await window.__TAURI__.core.invoke("open_vst_editor", {
+                    path: this.vstPath,
+                    sampleRate: sampleRate
+                });
             } catch (e) {
                 console.error("Failed to open VST editor", e);
             }

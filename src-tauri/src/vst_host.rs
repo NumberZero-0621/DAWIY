@@ -39,7 +39,7 @@ use windows::core::{PCWSTR, s, w};
 // --- Unified Host Implementation ---
 
 enum VstCommand {
-    Load(String, Sender<Result<(), String>>),
+    Load(String, f32, Sender<Result<(), String>>),
     Midi(String, u8, u8, u8), // path, status, data1, data2
     GetAudio(String, usize, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // path, req_samples, response
 }
@@ -53,6 +53,8 @@ struct VstInstance {
     pub view: Option<VstPtr<dyn IPlugView>>,
     pub path: String,
     pub midi_events: std::collections::VecDeque<(u8, u8, u8)>,
+    sample_rate: f64,
+    continuous_time_samples: i64,
 }
 
 struct VstCoordinator {
@@ -777,9 +779,9 @@ struct PlugFrame {
 }
 #[repr(C)]
 struct IPlugFrameVTableLayout {
-    pub query_interface: unsafe extern "system" fn(*mut c_void, *const IID, *mut *mut c_void) -> tresult,
-    pub add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
-    pub release: unsafe extern "system" fn(*mut c_void) -> u32,
+    pub query_interface: unsafe extern "system" fn(*mut c_void, iid: *const IID, obj: *mut *mut c_void) -> tresult,
+    pub add_ref: unsafe extern "system" fn(this: *mut c_void) -> u32,
+    pub release: unsafe extern "system" fn(this: *mut c_void) -> u32,
     pub resize_view: unsafe extern "system" fn(*mut c_void, *mut c_void, *mut ViewRect) -> tresult, 
 }
 static PLUG_FRAME_VTBL: IPlugFrameVTableLayout = IPlugFrameVTableLayout {
@@ -942,32 +944,28 @@ fn create_host_connection_point() -> *mut c_void {
 
 // --- Main Exported Function ---
 
-// --- Main Exported Function ---
+pub fn load_and_open(path: String, sample_rate: f32) -> Result<(), String> {
+    
+    // Setup coordinator if not running
+    let mut coord_lock = COORDINATOR.lock().unwrap();
+    if coord_lock.is_none() {
+        let (tx, rx) = channel();
+        *coord_lock = Some(VstCoordinator { tx });
+        thread::spawn(move || {
+            unsafe { coordinator_main_loop(rx); }
+        });
+    }
+    
+    // Clone Sender from Optional
+    let tx_main = coord_lock.as_ref().unwrap().tx.clone();
+    
+    // Release lock early so main thread doesn't block while we wait for GUI creation
+    // Although our load command process window sequentially now.
+    drop(coord_lock);
 
-pub fn load_and_open(path: String) -> Result<(), String> {
-    println!("[Native] VST Host requested for: {}", path);
-    
-    // Ensure Coordinator is running
-    {
-        let mut coord = COORDINATOR.lock().unwrap();
-        if coord.is_none() {
-            let (tx, rx) = channel::<VstCommand>();
-            thread::spawn(move || {
-                unsafe { coordinator_main_loop(rx); }
-            });
-            *coord = Some(VstCoordinator { tx });
-        }
-    }
-    
+    // Send Load Command
     let (tx_res, rx_res) = channel();
-    
-    // Send Command
-    {
-        let coord = COORDINATOR.lock().unwrap();
-        if let Some(c) = &*coord {
-            c.tx.send(VstCommand::Load(path, tx_res)).map_err(|e| format!("Send error: {}", e))?;
-        }
-    }
+    tx_main.send(VstCommand::Load(path, sample_rate, tx_res)).map_err(|e| e.to_string())?;
     
     // Block until creation result (Success or Init Failure)
     rx_res.recv().map_err(|e| format!("Receive error: {}", e))??;
@@ -1028,11 +1026,11 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
         }
 
         // 2. Check Commands
-        match rx_cmd.try_recv() {
+        match rx_cmd.recv_timeout(std::time::Duration::from_millis(1)) {
             Ok(cmd) => match cmd {
-                VstCommand::Load(path, tx_res) => {
+                VstCommand::Load(path, sample_rate, tx_res) => {
                      // We need to refactor run_vst_session to create_vst_instance
-                     match create_vst_instance(&path) {
+                     match create_vst_instance(&path, sample_rate) {
                          Ok(inst) => {
                              instances.push(inst);
                              let _ = tx_res.send(Ok(()));
@@ -1047,83 +1045,8 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                      for inst in instances.iter_mut() {
                          if inst.path == midi_path {
                              inst.midi_events.push_back((status, data1, data2));
-                             println!("[Native] MIDI queued for {}: s={:#X} d1={} d2={}", midi_path, status, data1, data2);
-                             
-                             // 旧実装と同じく、MIDIを受けた瞬間にダミーバッファ付きで即座にprocess()を呼ぶ
-                             unsafe {
-                                 use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, AudioBusBuffers, Event, EventTypes, NoteOnEvent, NoteOffEvent};
-                                 let processor_iid = <dyn IAudioProcessor as ComInterface>::IID;
-                                 let mut processor_ptr: *mut c_void = std::ptr::null_mut();
-                                 if let Some(comp) = &inst.component {
-                                     if comp.query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
-                                         let processor = VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
-                                         
-                                         // EventList作成
-                                         let event_list_ptr = create_host_event_list();
-                                         let event_list_vtbl = (*event_list_ptr).vptr;
-                                         
-                                         // キューから全イベントを取り出してEventListに追加
-                                         while let Some((s, d1, d2)) = inst.midi_events.pop_front() {
-                                             let mut event = std::mem::zeroed::<Event>();
-                                             event.bus_index = 0;
-                                             event.sample_offset = 0;
-                                             event.ppq_position = 0.0;
-                                             event.flags = 0;
-                                             
-                                             let is_note_on = (s & 0xF0) == 0x90 && d2 > 0;
-                                             let is_note_off = (s & 0xF0) == 0x80 || ((s & 0xF0) == 0x90 && d2 == 0);
-                                             
-                                             if is_note_on {
-                                                 event.type_ = EventTypes::kNoteOnEvent as u16;
-                                                 event.event.note_on = NoteOnEvent {
-                                                     channel: (s & 0x0F) as i16,
-                                                     pitch: d1 as i16,
-                                                     tuning: 0.0,
-                                                     velocity: (d2 as f32) / 127.0,
-                                                     length: 0,
-                                                     note_id: -1,
-                                                 };
-                                                 ((*event_list_vtbl).add_event)(event_list_ptr as *mut c_void, &mut event);
-                                             } else if is_note_off {
-                                                 event.type_ = EventTypes::kNoteOffEvent as u16;
-                                                 event.event.note_off = NoteOffEvent {
-                                                     channel: (s & 0x0F) as i16,
-                                                     pitch: d1 as i16,
-                                                     velocity: (d2 as f32) / 127.0,
-                                                     note_id: -1,
-                                                     tuning: 0.0,
-                                                 };
-                                                 ((*event_list_vtbl).add_event)(event_list_ptr as *mut c_void, &mut event);
-                                             }
-                                         }
-                                         
-                                         // ダミーバッファでprocess()を即実行
-                                         let mut outputs = vec![AudioBusBuffers {
-                                             num_channels: 2,
-                                             silence_flags: 3,
-                                             buffers: std::ptr::null_mut(),
-                                         }];
-                                         let mut dummy_l = vec![0.0f32; 256];
-                                         let mut dummy_r = vec![0.0f32; 256];
-                                         let mut dummy_channels = vec![dummy_l.as_mut_ptr() as *mut std::ffi::c_void, dummy_r.as_mut_ptr() as *mut std::ffi::c_void];
-                                         outputs[0].buffers = dummy_channels.as_mut_ptr();
-                                         
-                                         let mut data = std::mem::zeroed::<ProcessData>();
-                                         data.process_mode = ProcessModes::kRealtime as i32;
-                                         data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
-                                         data.num_samples = 256;
-                                         data.num_inputs = 0;
-                                         data.num_outputs = 1;
-                                         data.outputs = outputs.as_mut_ptr();
-                                         data.input_events = std::mem::transmute(event_list_ptr);
-                                         
-                                         let _res = processor.process(&mut data);
-                                         println!("[Native] Immediate MIDI process done. Result: {:?}", _res);
-                                         
-                                         ((*event_list_vtbl).release)(event_list_ptr as *mut c_void);
-                                     }
-                                 }
-                             }
+                             //  println!("[Native] MIDI queued for {}: s={:#X} d1={} d2={}", midi_path, status, data1, data2);
+                             // イベントはキューに積まれ、次のget_audioのprocess内で処理されるためここでは何もしない
                              break;
                          }
                      }
@@ -1142,7 +1065,7 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                     if comp.query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
                                         let processor = vst3_com::VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
                                         
-                                        let num_samples = req_samples.min(4096);
+                                        let num_samples = req_samples.min(8192); // Increase upper bound logic
                                         let mut out_l = vec![0.0f32; num_samples];
                                         let mut out_r = vec![0.0f32; num_samples];
                                         let mut channels = vec![out_l.as_mut_ptr() as *mut std::ffi::c_void, out_r.as_mut_ptr() as *mut std::ffi::c_void];
@@ -1153,6 +1076,14 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                             buffers: channels.as_mut_ptr(),
                                         }];
                                         
+                                        
+                                        let mut ctx: vst3_sys::vst::ProcessContext = std::mem::zeroed();
+                                        // kPlaying = 1<<1, kContinousTimeValid = 1<<9, kProjectTimeMusicValid = 1<<10
+                                        ctx.state = 2 | 512 | 1024;
+                                        ctx.sample_rate = inst.sample_rate;
+                                        ctx.continuous_time_samples = inst.continuous_time_samples;
+                                        ctx.project_time_music = 0.0;
+                                        
                                         let mut data = std::mem::zeroed::<ProcessData>();
                                         data.process_mode = ProcessModes::kRealtime as i32;
                                         data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
@@ -1160,6 +1091,8 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         data.num_inputs = 0;
                                         data.num_outputs = 1;
                                         data.outputs = outputs.as_mut_ptr();
+                                        data.context = &mut ctx as *mut _;
+
                                         
                                         // MIDIキューにイベントがあれば一緒に処理
                                         let has_midi = !inst.midi_events.is_empty();
@@ -1206,6 +1139,8 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         
                                         let _res = processor.process(&mut data);
                                         
+                                        inst.continuous_time_samples += num_samples as i64;
+                                        
                                         if let Some(elp) = event_list_ptr {
                                             let elvtbl = (*elp).vptr;
                                             ((*elvtbl).release)(elp as *mut c_void);
@@ -1227,43 +1162,11 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                     }
                 }
             },
-            Err(std::sync::mpsc::TryRecvError::Empty) => {
-                // Yield
-                thread::sleep(std::time::Duration::from_millis(10));
-                
-                // --- Dummy Audio Engine Loop ---
-                for inst in &instances {
-                    unsafe {
-                        use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, AudioBusBuffers};
-                        let processor_iid = <dyn IAudioProcessor as vst3_com::ComInterface>::IID;
-                        let mut processor_ptr: *mut c_void = std::ptr::null_mut();
-                        if inst.component.as_ref().unwrap().query_interface(&processor_iid, &mut processor_ptr) == vst3_sys::base::kResultOk {
-                            let processor = vst3_com::VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
-                            
-                            let mut outputs = vec![AudioBusBuffers {
-                                num_channels: 2,
-                                silence_flags: 3,
-                                buffers: std::ptr::null_mut(),
-                            }];
-                            let mut dummy_l = vec![0.0f32; 441];
-                            let mut dummy_r = vec![0.0f32; 441];
-                            let mut dummy_channels = vec![dummy_l.as_mut_ptr() as *mut std::ffi::c_void, dummy_r.as_mut_ptr() as *mut std::ffi::c_void];
-                            outputs[0].buffers = dummy_channels.as_mut_ptr();
-
-                            let mut data = std::mem::zeroed::<ProcessData>();
-                            data.process_mode = ProcessModes::kRealtime as i32;
-                            data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
-                            data.num_samples = 441;
-                            data.num_inputs = 0;
-                            data.num_outputs = 1;
-                            data.outputs = outputs.as_mut_ptr();
-                            
-                            let _res = processor.process(&mut data);
-                        }
-                    }
-                }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // Wait is naturally handled by recv_timeout.
+                // No dummy audio processing here to avoid stealing samples and breaking continuity.
             },
-            Err(_) => {
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 println!("[Native] Coordinator Channel Disconnected. Exiting...");
                 break;
             }
@@ -1277,7 +1180,7 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
 }
 
 // Inner session function (formerly run_vst_thread)
-unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
+unsafe fn create_vst_instance(path: &str, sample_rate: f32) -> Result<VstInstance, String> {
     // No OleInit here.
     
     println!("[Native] Session started.");
@@ -1964,8 +1867,8 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
         let setup = ProcessSetup {
             process_mode: ProcessModes::kRealtime as i32,
             symbolic_sample_size,
-            max_samples_per_block: 512,
-            sample_rate: 44100.0,
+            max_samples_per_block: 4096,
+            sample_rate: sample_rate as f64,
         };
         println!("[Native] ProcessSetup Size: {} bytes, Align: {}", std::mem::size_of::<ProcessSetup>(), std::mem::align_of::<ProcessSetup>());
         println!("[Native] Setting up processing (SR=44100, Block=512, Sample={}-bit)...", if symbolic_sample_size == SymbolicSampleSizes::kSample64 as i32 { 64 } else { 32 });
@@ -2086,11 +1989,13 @@ unsafe fn create_vst_instance(path: &str) -> Result<VstInstance, String> {
         hwnd,
         lib_handle,
         factory: Some(factory),
+        path: path.to_string(),
         component: Some(component),
         edit_controller: Some(edit_controller),
         view,
-        path: path.to_string(),
         midi_events: std::collections::VecDeque::new(),
+        sample_rate: sample_rate as f64,
+        continuous_time_samples: 0,
     })
 }
 
@@ -2186,7 +2091,6 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                     right: rect.right,
                     bottom: rect.bottom,
                 };
-                
                 // println!("[Native] Valid View found. Resizing to {}x{}", rect.right, rect.bottom);
                 match (vptr.OnSize)(view_interface_ptr as *mut _, &mut view_rect) {
                     kResultOk => {}, // println!("[Native] onSize success."),
