@@ -42,6 +42,7 @@ enum VstCommand {
     Load(String, f32, Sender<Result<u32, String>>), // returns Instance ID
     Midi(u32, u8, u8, u8), // instance_id, status, data1, data2
     GetAudio(u32, usize, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, response
+    ProcessAudio(u32, usize, Vec<f32>, Vec<f32>, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, in_l, in_r, response
     Close(u32), // instance_id
     Show(u32), // instance_id
 }
@@ -1167,6 +1168,139 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                         let _ = tx_audio.send(Err(format!("Instance not found: {}", vst_id)));
                     }
                 }
+                VstCommand::ProcessAudio(vst_id, req_samples, mut in_l, mut in_r, tx_audio) => {
+                    // 対象インスタンスのプロセスを呼び出してオーディオ生成（入力あり）
+                    let mut found = false;
+                    for inst in instances.iter_mut() {
+                        if inst.id == vst_id {
+                            found = true;
+                            unsafe {
+                                use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, AudioBusBuffers};
+                                let processor_iid = <dyn IAudioProcessor as vst3_com::ComInterface>::IID;
+                                let mut processor_ptr: *mut c_void = std::ptr::null_mut();
+                                if let Some(comp) = &inst.component {
+                                    if comp.query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
+                                        let processor = vst3_com::VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
+                                        
+                                        let num_samples = req_samples.min(8192);
+                                        
+                                        // 入力波形の不足分をゼロ埋め
+                                        in_l.resize(num_samples, 0.0);
+                                        in_r.resize(num_samples, 0.0);
+
+                                        // デバッグ：入力が完全に無音かチェック（一部だけログ出力）
+                                        static LOG_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+                                        let count = LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                        
+                                        let has_signal = in_l.iter().any(|&v| v.abs() > 0.0001);
+                                        if has_signal && count % 40 == 0 {
+                                             let max_val = in_l.iter().fold(0.0f32, |m, &v| m.max(v.abs()));
+                                             println!("[Native] ProcessAudio: SIGNAL DETECTED! Max amplitude: {:.4}, samples: {}", max_val, in_l.len());
+                                        }
+
+                                        let mut out_l = vec![0.0f32; num_samples];
+                                        let mut out_r = vec![0.0f32; num_samples];
+                                        
+                                        let mut in_channels = vec![in_l.as_mut_ptr() as *mut std::ffi::c_void, in_r.as_mut_ptr() as *mut std::ffi::c_void];
+                                        let mut out_channels = vec![out_l.as_mut_ptr() as *mut std::ffi::c_void, out_r.as_mut_ptr() as *mut std::ffi::c_void];
+                                        
+                                        // 入力バス
+                                        let mut inputs = vec![AudioBusBuffers {
+                                            num_channels: 2,
+                                            silence_flags: 0,
+                                            buffers: in_channels.as_mut_ptr(),
+                                        }];
+                                        // 出力バス
+                                        let mut outputs = vec![AudioBusBuffers {
+                                            num_channels: 2,
+                                            silence_flags: 0,
+                                            buffers: out_channels.as_mut_ptr(),
+                                        }];
+                                        
+                                        let mut ctx: vst3_sys::vst::ProcessContext = std::mem::zeroed();
+                                        // kPlaying = 1<<1, kContinousTimeValid = 1<<9, kProjectTimeMusicValid = 1<<10
+                                        ctx.state = 2 | 512 | 1024;
+                                        ctx.sample_rate = inst.sample_rate;
+                                        ctx.continuous_time_samples = inst.continuous_time_samples;
+                                        ctx.project_time_music = 0.0;
+                                        
+                                        let mut data = std::mem::zeroed::<ProcessData>();
+                                        data.process_mode = ProcessModes::kRealtime as i32;
+                                        data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
+                                        data.num_samples = num_samples as i32;
+                                        data.num_inputs = 1; // 1ステレオ入力バス
+                                        data.inputs = inputs.as_mut_ptr();
+                                        data.num_outputs = 1;
+                                        data.outputs = outputs.as_mut_ptr();
+                                        data.context = &mut ctx as *mut _;
+                                        
+                                        // MIDIキューにイベントがあれば一緒に処理
+                                        let has_midi = !inst.midi_events.is_empty();
+                                        let event_list_ptr = if has_midi {
+                                            use vst3_sys::vst::{Event, EventTypes, NoteOnEvent, NoteOffEvent};
+                                            let elp = create_host_event_list();
+                                            let elvtbl = (*elp).vptr;
+                                            while let Some((s, d1, d2)) = inst.midi_events.pop_front() {
+                                                let mut event = std::mem::zeroed::<Event>();
+                                                event.bus_index = 0;
+                                                event.sample_offset = 0;
+                                                event.ppq_position = 0.0;
+                                                event.flags = 0;
+                                                let is_note_on = (s & 0xF0) == 0x90 && d2 > 0;
+                                                let is_note_off = (s & 0xF0) == 0x80 || ((s & 0xF0) == 0x90 && d2 == 0);
+                                                if is_note_on {
+                                                    event.type_ = EventTypes::kNoteOnEvent as u16;
+                                                    event.event.note_on = NoteOnEvent {
+                                                        channel: (s & 0x0F) as i16,
+                                                        pitch: d1 as i16,
+                                                        tuning: 0.0,
+                                                        velocity: (d2 as f32) / 127.0,
+                                                        length: 0,
+                                                        note_id: -1,
+                                                    };
+                                                    ((*elvtbl).add_event)(elp as *mut c_void, &mut event);
+                                                } else if is_note_off {
+                                                    event.type_ = EventTypes::kNoteOffEvent as u16;
+                                                    event.event.note_off = NoteOffEvent {
+                                                        channel: (s & 0x0F) as i16,
+                                                        pitch: d1 as i16,
+                                                        velocity: (d2 as f32) / 127.0,
+                                                        note_id: -1,
+                                                        tuning: 0.0,
+                                                    };
+                                                    ((*elvtbl).add_event)(elp as *mut c_void, &mut event);
+                                                }
+                                            }
+                                            data.input_events = std::mem::transmute(elp);
+                                            Some(elp)
+                                        } else {
+                                            None
+                                        };
+                                        
+                                        let _res = processor.process(&mut data);
+                                        
+                                        inst.continuous_time_samples += num_samples as i64;
+                                        
+                                        if let Some(elp) = event_list_ptr {
+                                            let elvtbl = (*elp).vptr;
+                                            ((*elvtbl).release)(elp as *mut c_void);
+                                        }
+                                        
+                                        let _ = tx_audio.send(Ok((out_l, out_r)));
+                                    } else {
+                                        let _ = tx_audio.send(Err("Failed to get IAudioProcessor".into()));
+                                    }
+                                } else {
+                                    let _ = tx_audio.send(Err("No component".into()));
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    if !found {
+                        let _ = tx_audio.send(Err(format!("Instance not found: {}", vst_id)));
+                    }
+                }
                 VstCommand::Close(vst_id) => {
                     println!("[Native] Closing VST instance ID: {}", vst_id);
                     instances.retain(|inst| inst.id != vst_id);
@@ -1412,6 +1546,15 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32) -> Result<VstInstanc
     println!("[Native] Component initialized.");
 
     // Activate Bus AFTER State Sync? (Try restoring here)
+    println!("[Native] Activating Output Bus 0 (Delayed)...");
+    // Activate Bus AFTER State Sync? (Try restoring here)
+    println!("[Native] Activating Input Bus 0...");
+    if component.activate_bus(MediaTypes::kAudio as i32, BusDirections::kInput as i32, 0, 1) != kResultOk {
+         println!("[Native] Failed to activate input bus.");
+    } else {
+        // println!("[Native] Input Bus 0 activated.");
+    }
+
     println!("[Native] Activating Output Bus 0 (Delayed)...");
      if component.activate_bus(MediaTypes::kAudio as i32, BusDirections::kOutput as i32, 0, 1) != kResultOk {
           println!("[Native] Failed to activate output bus.");
@@ -2107,7 +2250,8 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         }
         WM_SIZE => {
             let ptr_val = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-            if ptr_val != 0 {
+            // SIZE_MINIMIZED は 1。最小化時はOnSizeをスキップしてクラッシュを防ぐ。
+            if ptr_val != 0 && wparam.0 != 1 {
                 let view_interface_ptr = ptr_val as *mut *mut <dyn IPlugView as ComInterface>::VTable;
                  let vptr = &**view_interface_ptr;
 
@@ -2190,14 +2334,13 @@ impl Drop for VstInstance {
                 if !try_exit_dll(self.lib_handle) { println!("[Native] Warning: ExitDll returned false."); }
                 
                  // Unload Library
-                println!("[Native] Freeing Library...");
-                
-                #[link(name = "kernel32")]
-                extern "system" {
-                    fn FreeLibrary(hLibModule: isize) -> i32;
-                }
-                FreeLibrary(self.lib_handle.0);
-                println!("[Native] Library Unloaded.");
+                println!("[Native] Skipping FreeLibrary to prevent STATUS_ACCESS_VIOLATION.");
+                // #[link(name = "kernel32")]
+                // extern "system" {
+                //     fn FreeLibrary(hLibModule: isize) -> i32;
+                // }
+                // FreeLibrary(self.lib_handle.0);
+                // println!("[Native] Library Unloaded.");
             }
         }
         println!("[Native] VstInstance Drop Complete.");
@@ -2225,6 +2368,23 @@ pub fn get_audio(vst_id: u32, req_samples: usize) -> Result<(Vec<f32>, Vec<f32>)
                 Ok(result) => return result,
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { continue; },
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err("GetAudio channel disconnected".to_string()),
+            }
+        }
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
+    }
+}
+
+pub fn process_audio(vst_id: u32, req_samples: usize, in_l: Vec<f32>, in_r: Vec<f32>) -> Result<(Vec<f32>, Vec<f32>), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        coordinator.tx.send(VstCommand::ProcessAudio(vst_id, req_samples, in_l, in_r, tx)).map_err(|e| e.to_string())?;
+        loop {
+            match rx.recv_timeout(std::time::Duration::from_millis(50)) {
+                Ok(result) => return result,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { continue; },
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err("ProcessAudio channel disconnected".to_string()),
             }
         }
     } else {

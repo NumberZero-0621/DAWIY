@@ -105,10 +105,18 @@ class VstProxyNode extends CompositeAudioNode {
             class VstAudioOutputProcessor extends AudioWorkletProcessor {
                 constructor() {
                     super();
+                    // 出力用キュー
                     this.chunksL = [];
                     this.chunksR = [];
                     this.readOffset = 0;
                     this.totalBuffered = 0;
+                    
+                    // 入力用キュー
+                    this.inChunksL = [];
+                    this.inChunksR = [];
+                    this.inOffsets = 0;
+                    this.inTotalBuffered = 0;
+
                     this.framesSinceLastReport = 0;
                     this.consumedSinceLastReport = 0;
                     this.hadUnderrun = false;
@@ -126,10 +134,51 @@ class VstProxyNode extends CompositeAudioNode {
                     const output = outputs[0];
                     if (!output || output.length < 2) return true;
 
+                    const input = inputs[0] || [[], []]; // 1つ目のインプットバス
+                    const inChannelL = input[0] || new Float32Array(output[0].length);
+                    const inChannelR = input[1] || new Float32Array(output[0].length);
+
                     const channelL = output[0];
                     const channelR = output[1];
                     const outLen = channelL.length;
 
+                    // デバッグ用に定期的に入力レベルを計算して送信
+                    this.debugCounter = (this.debugCounter || 0) + 1;
+                    if (this.debugCounter % 200 === 0) {
+                        let maxL = 0;
+                        for(let i = 0; i < outLen; i++) {
+                            if (Math.abs(inChannelL[i]) > maxL) maxL = Math.abs(inChannelL[i]);
+                        }
+                        this.port.postMessage({ type: 'debug_level', level: maxL });
+                        this.debugCounter = 0;
+                    }
+
+                    // 1. 入力を蓄積する
+                    this.inChunksL.push(new Float32Array(inChannelL));
+                    this.inChunksR.push(new Float32Array(inChannelR));
+                    this.inTotalBuffered += outLen;
+
+                    // 一定量（1024サンプル等）溜まったらメインスレッドへ送信
+                    if (this.inTotalBuffered >= 1024) {
+                        const mergedL = new Float32Array(this.inTotalBuffered);
+                        const mergedR = new Float32Array(this.inTotalBuffered);
+                        let offset = 0;
+                        while(this.inChunksL.length > 0) {
+                            const chunkL = this.inChunksL.shift();
+                            const chunkR = this.inChunksR.shift();
+                            mergedL.set(chunkL, offset);
+                            mergedR.set(chunkR, offset);
+                            offset += chunkL.length;
+                        }
+                        this.inTotalBuffered = 0;
+                        this.port.postMessage({
+                            type: 'audio_input',
+                            left: mergedL,
+                            right: mergedR
+                        });
+                    }
+
+                    // 2. 出力を処理する
                     // アンダーラン防止のための最小バッファサイズ
                     // もしバッファが足りない場合はゼロ埋め（ミュート）してバッファが溜まるのを待つ
                     if (this.totalBuffered < outLen) {
@@ -196,45 +245,52 @@ class VstProxyNode extends CompositeAudioNode {
         try {
             await this.context.audioWorklet.addModule(url);
             this._audioOutputNode = new window.AudioWorkletNode(this.context, processorName, {
-                numberOfInputs: 0,
+                numberOfInputs: 1, // ステレオオーディオ入力を受け取る
                 numberOfOutputs: 1,
-                outputChannelCount: [2]
+                outputChannelCount: [2] // 出力はステレオ
             });
 
-            // CompositeAudioNodeの出力として設定
+            // CompositeAudioNodeの入出力として設定
+            // トラックからの入力は_audioOutputNode（VstAudioOutputProcessor）で受け取る
+            // 出力も_audioOutputNodeから取る（サイレントゲイン用には別途繋ぐ）
+            this._input = this._audioOutputNode;
             this._output = this._audioOutputNode;
 
             this.currentBuffered = 0;
             this.isFetching = false;
+
+            // 入力オーディオ用バッファ（Workletからメインスレッドへの転送用）
+            this.inputAudioQueueL = [];
+            this.inputAudioQueueR = [];
+            this.inputAudioBuffered = 0;
+
             this._audioOutputNode.port.onmessage = (e) => {
-                if (e.data.type === 'buffer_status') {
+                if (e.data.type === 'debug_level') {
+                    console.log("[VstProxy] WORKLET Input Level:", e.data.level);
+                } else if (e.data.type === 'buffer_status') {
                     this.currentBuffered = Math.max(0, this.currentBuffered - e.data.consumed);
+                    // underrun警告は初期待機時等にも出るため削除
+                } else if (e.data.type === 'audio_input') {
+                    // Workletからの入力を受け取る
+                    this.inputAudioQueueL.push(e.data.left);
+                    this.inputAudioQueueR.push(e.data.right);
+                    this.inputAudioBuffered += e.data.left.length;
 
-                    if (e.data.underrun && this.instanceId != null) {
-                        console.warn("[VstProxy] VST Audio Buffer Underrun! (Stutter detected)");
-                    }
-
-                    // バッファが減ってきたら即座に補充
-                    if (this.currentBuffered < 8192) {
-                        this.fetchAudio();
-                    }
+                    // サーバーへプッシュ
+                    this.pushAudioProcess();
                 }
             };
 
-            // 重要: CompositeAudioNode(GainNode)の_outputをオーバーライドすると、
-            // GainNode自体の出力がどこにも接続されなくなる。
-            // すると上流のaudioInputNode→junctionNode→MIDIPlayerNodeの全チェーンが
-            // destinationに到達しない「孤立サブグラフ」になり、
-            // Chromiumの最適化でMIDIPlayerProcessor.process()がスキップされてしまう。
-            // これを防ぐためGainNode自体をミュートしてdestinationに接続し、
-            // 上流のprocessチェーンを維持する。
-            const silentGain = this.context.createGain();
-            silentGain.gain.value = 0;
-            GainNode.prototype.connect.call(this, silentGain);
-            silentGain.connect(this.context.destination);
+            // _input, _output の設定
+            // CompositeAudioNode は自身が GainNode であり、Trackからの connect(VST) は this に繋がる。
+            // よって this の入力を _audioOutputNode (Worklet) に流し込む。
+            GainNode.prototype.connect.call(this, this._audioOutputNode);
 
-            // 音声取得ループ開始
-            this.fetchAudio();
+            // 出力は _audioOutputNode が担う
+            this._output = this._audioOutputNode;
+
+            // 音声取得ループ開始（初期バッファリング用）
+            this.pushAudioProcess();
         } catch (e) {
             console.error("Failed to setup AudioWorklet for VST:", e);
         } finally {
@@ -242,7 +298,7 @@ class VstProxyNode extends CompositeAudioNode {
         }
     }
 
-    async fetchAudio() {
+    async pushAudioProcess() {
         if (this.instanceId == null || !window.__TAURI__ || this.isFetching) return;
 
         const reqSamples = 2048;
@@ -252,9 +308,59 @@ class VstProxyNode extends CompositeAudioNode {
 
         this.isFetching = true;
         try {
-            const response = await window.__TAURI__.core.invoke("get_vst_audio", {
+            let in_l = new Float32Array(reqSamples);
+            let in_r = new Float32Array(reqSamples);
+
+            // バッファに入力波形があれば取り出す
+            if (this.inputAudioBuffered >= reqSamples) {
+                let offset = 0;
+                while (offset < reqSamples && this.inputAudioQueueL.length > 0) {
+                    let chunkL = this.inputAudioQueueL[0];
+                    let chunkR = this.inputAudioQueueR[0];
+
+                    let take = Math.min(chunkL.length, reqSamples - offset);
+                    in_l.set(chunkL.subarray(0, take), offset);
+                    in_r.set(chunkR.subarray(0, take), offset);
+
+                    offset += take;
+                    this.inputAudioBuffered -= take;
+
+                    if (take < chunkL.length) {
+                        this.inputAudioQueueL[0] = chunkL.subarray(take);
+                        this.inputAudioQueueR[0] = chunkR.subarray(take);
+                    } else {
+                        this.inputAudioQueueL.shift();
+                        this.inputAudioQueueR.shift();
+                    }
+                }
+            } else {
+                // 入力が足りない場合（またはインストゥルメントの場合）はゼロ埋め（初期化済みなのでそのまま）
+                // ただしキューを空にしておく（遅延蓄積防止）
+                this.inputAudioQueueL = [];
+                this.inputAudioQueueR = [];
+                this.inputAudioBuffered = 0;
+            }
+
+            // Rust側はFloat32を期待しているので、ArrayBuffer (Uint8Array) に変換して送信
+            const reqBufL = new Uint8Array(in_l.buffer);
+            const reqBufR = new Uint8Array(in_r.buffer);
+
+            // デバッグログ
+            let maxAmp = 0;
+            for (let i = 0; i < reqSamples; i++) {
+                if (Math.abs(in_l[i]) > maxAmp) maxAmp = Math.abs(in_l[i]);
+            }
+            this.pushDebugCounter = (this.pushDebugCounter || 0) + 1;
+            if (this.pushDebugCounter % 20 === 0) {
+                console.log(`[VstProxy] Sending Audio to Rust. Max Amplitude: ${maxAmp.toFixed(6)}, samples: ${reqSamples}`);
+                this.pushDebugCounter = 0;
+            }
+
+            const response = await window.__TAURI__.core.invoke("process_vst_audio", {
                 instanceId: this.instanceId,
-                reqSamples: reqSamples
+                reqSamples: reqSamples,
+                inputLBytes: Array.from(reqBufL),
+                inputRBytes: Array.from(reqBufR)
             });
 
             const responseLength = response?.byteLength ?? response?.length;
@@ -283,14 +389,14 @@ class VstProxyNode extends CompositeAudioNode {
                 }
             }
         } catch (e) {
-            console.error("VST audio fetch failed:", e);
+            console.error("VST process_audio failed:", e);
             // サーバーエラーなどで無限ループが走りブラウザがフリーズするのを防ぐ
             await new Promise(r => setTimeout(r, 1000));
         } finally {
             this.isFetching = false;
-            // まだ目標に達していなければ連続で取得
-            if (this.currentBuffered < TARGET_BUFFER) {
-                this.fetchAudio();
+            // 未処理の入力がまだあれば連続で処理
+            if (this.inputAudioBuffered >= 1024) {
+                this.pushAudioProcess();
             }
         }
     }
@@ -331,7 +437,7 @@ class VstProxyNode extends CompositeAudioNode {
                 });
                 console.log(`[VstProxy] VST Loaded with instanceId: ${this.instanceId}`);
                 if (this._audioOutputNode) {
-                    this.fetchAudio();
+                    this.pushAudioProcess();
                 }
             } catch (e) {
                 console.error("Failed to load VST", e);

@@ -140,6 +140,37 @@ fn get_vst_audio(instance_id: u32, req_samples: usize) -> Result<tauri::ipc::Res
     Ok(tauri::ipc::Response::new(bytes))
 }
 
+#[command]
+fn process_vst_audio(instance_id: u32, req_samples: usize, input_l_bytes: Vec<u8>, input_r_bytes: Vec<u8>) -> Result<tauri::ipc::Response, String> {
+    // Convert Vec<u8> to Vec<f32>
+    let in_l_f32: Vec<f32> = {
+        let ptr = input_l_bytes.as_ptr() as *const f32;
+        let len = input_l_bytes.len() / 4;
+        unsafe { std::slice::from_raw_parts(ptr, len).to_vec() }
+    };
+    
+    let in_r_f32: Vec<f32> = {
+        let ptr = input_r_bytes.as_ptr() as *const f32;
+        let len = input_r_bytes.len() / 4;
+        unsafe { std::slice::from_raw_parts(ptr, len).to_vec() }
+    };
+
+    let (out_l, out_r) = vst_host::process_audio(instance_id, req_samples, in_l_f32, in_r_f32)?;
+    
+    let samples = out_l.len() as u32;
+    let mut bytes = Vec::with_capacity(4 + (out_l.len() + out_r.len()) * 4);
+    
+    bytes.extend_from_slice(&samples.to_le_bytes());
+    
+    let l_bytes: &[u8] = unsafe { std::slice::from_raw_parts(out_l.as_ptr() as *const u8, out_l.len() * 4) };
+    bytes.extend_from_slice(l_bytes);
+    
+    let r_bytes: &[u8] = unsafe { std::slice::from_raw_parts(out_r.as_ptr() as *const u8, out_r.len() * 4) };
+    bytes.extend_from_slice(r_bytes);
+    
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -151,6 +182,7 @@ pub fn run() {
             show_vst_editor,
             send_vst_midi,
         get_vst_audio,
+        process_vst_audio,
         midi::list_midi_outputs,
         midi::open_midi_output,
         midi::close_midi_output,
