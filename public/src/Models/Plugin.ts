@@ -21,6 +21,8 @@ export default class Plugin {
  */
 export class PluginInstance {
 
+    public isBypassed: boolean = false;
+
     /** ~ FACTORIES ~ **/
     private constructor(
         readonly name: string,
@@ -136,4 +138,27 @@ export class PluginInstance {
      * The audio node of the plugin.
      */
     get audioNode() { return this.instance.audioNode }
+
+    /**
+     * バイパス時に呼び出す全ノートオフ処理。
+     * チャンネル0のノート0-127に対してNoteOffを送信する（128個で軽量）。
+     * VstProxyNode.scheduleEvents が内部でTauri invoke経由の
+     * Rust側VSTホストへの転送も行うため、JS側のsendのみで両方に届く。
+     */
+    public sendAllNotesOff() {
+        if (!this.instance || !this.instance.audioNode) return;
+
+        const time = this.instance.audioNode.context.currentTime;
+        const events: any[] = [];
+
+        // チャンネル0のみ、ノート0-127のNoteOffを送信（128個で軽量）
+        for (let note = 0; note <= 127; note++) {
+            events.push({
+                type: 'wam-midi',
+                time,
+                data: { bytes: [0x80, note, 0] }
+            });
+        }
+        this.instance.audioNode.scheduleEvents(...events);
+    }
 }

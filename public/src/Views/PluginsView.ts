@@ -12,6 +12,7 @@ export default class PluginsView extends DraggableWindow {
     onBypassRackClick: () => void = () => { }
     onRemovePluginClick: (index: number) => void = () => { }
     onToggleShowPluginClick: (pluginId: string, index: number) => void = () => { }
+    onToggleBypassPluginClick: (index: number) => void = () => { }
 
 
     rackBypassBtn = document.getElementById("rack-bypass-btn") as HTMLButtonElement;
@@ -82,8 +83,14 @@ export default class PluginsView extends DraggableWindow {
     /**
      * Render the plugin list in the rack
      */
-    renderPluginList(plugins: { name: string; isBypassed?: boolean, isVisible?: boolean }[], isTrackSelected: boolean = true) {
+    renderPluginList(plugins: { name: string; isBypassed?: boolean, isVisible?: boolean }[], isTrackSelected: boolean = true, isGlobalBypass: boolean = false) {
         this.rackList.innerHTML = "";
+
+        if (isGlobalBypass) {
+            this.rackBypassBtn.style.color = "#777"; // Bypassed state
+        } else {
+            this.rackBypassBtn.style.color = "#4db8ff"; // Active state
+        }
 
         if (!isTrackSelected) {
             const msg = document.createElement("div");
@@ -122,16 +129,18 @@ export default class PluginsView extends DraggableWindow {
             controlsEl.style.display = "flex";
             controlsEl.style.gap = "5px";
 
-            // Visual toggle (eye icon)
-            const toggleUiBtn = document.createElement("button");
-            toggleUiBtn.className = "btn btn-sm";
-            toggleUiBtn.style.background = "transparent";
-            toggleUiBtn.style.color = plugin.isVisible ? "#4db8ff" : "#777";
-            toggleUiBtn.style.border = "none";
-            toggleUiBtn.style.padding = "0 5px";
-            toggleUiBtn.innerHTML = `<i class="bi ${plugin.isVisible ? 'bi-eye-fill' : 'bi-eye-slash'}"></i>`;
-            toggleUiBtn.title = plugin.isVisible ? "Hide UI" : "Show UI";
-            toggleUiBtn.onclick = () => this.onToggleShowPluginClick(plugin.name, index);
+            const isEffectivelyBypassed = plugin.isBypassed || isGlobalBypass;
+
+            // Visual toggle (power icon)
+            const bypassBtn = document.createElement("button");
+            bypassBtn.className = "btn btn-sm";
+            bypassBtn.style.background = "transparent";
+            bypassBtn.style.color = isEffectivelyBypassed ? "#777" : "#4db8ff";
+            bypassBtn.style.border = "none";
+            bypassBtn.style.padding = "0 5px";
+            bypassBtn.innerHTML = `<i class="bi bi-power"></i>`;
+            bypassBtn.title = isEffectivelyBypassed ? "Enable Plugin" : "Bypass Plugin";
+            bypassBtn.onclick = () => this.onToggleBypassPluginClick(index);
 
             // Remove button
             const removeBtn = document.createElement("button");
@@ -144,7 +153,7 @@ export default class PluginsView extends DraggableWindow {
             removeBtn.title = "Remove Plugin";
             removeBtn.onclick = () => this.onRemovePluginClick(index);
 
-            controlsEl.appendChild(toggleUiBtn);
+            controlsEl.appendChild(bypassBtn);
             controlsEl.appendChild(removeBtn);
 
             item.appendChild(nameEl);

@@ -59,6 +59,8 @@ export default class PluginsController {
 
     public get selected() { return this._app.tracksController.selected }
 
+    public isGlobalBypass: boolean = false;
+
     /* -~- ROOT PLUGIN LOADING, CREATION, AND ASSOCIATION -~- */
     private wam_list_fetcheds: { [name: string]: { factory: typeof WebAudioModule } } = {}
 
@@ -222,6 +224,26 @@ export default class PluginsController {
      * @private
      */
     private bindEvents(): void {
+        this._view.onBypassRackClick = () => {
+            this.isGlobalBypass = !this.isGlobalBypass;
+
+            // 先にルーティングを切断して、新しいNoteOnが届かないようにする
+            for (const track of this._app.tracksController.tracks) {
+                track.setGlobalPluginBypass(this.isGlobalBypass);
+            }
+            this._app.host.setGlobalPluginBypass(this.isGlobalBypass);
+
+            // ルーティング切断後にNoteOffを送信（ノード自体は生きているので受信可能）
+            if (this.isGlobalBypass) {
+                for (const track of this._app.tracksController.tracks) {
+                    track.plugins.forEach(p => p.sendAllNotesOff());
+                }
+                this._app.host.plugins.forEach(p => p.sendAllNotesOff());
+            }
+
+            this.updatePluginList();
+        };
+
         this._view.onAddClick = async (plugin_name) => {
             if (!this.selected) {
                 this._app.showToast("プラグインを追加するトラックを選択してください", true);
@@ -294,6 +316,23 @@ export default class PluginsController {
             this.updatePluginList();
         };
 
+        this._view.onToggleBypassPluginClick = (index) => {
+            if (!this.selected) return;
+            const targetPlugin = this.selected.plugins[index];
+            if (!targetPlugin) return;
+
+            targetPlugin.isBypassed = !targetPlugin.isBypassed;
+
+            // 先にルーティングを切断して、新しいNoteOnが届かないようにする
+            this.selected.updatePluginRouting();
+
+            // ルーティング切断後にNoteOffを送信（ノード自体は生きているので受信可能）
+            if (targetPlugin.isBypassed) {
+                targetPlugin.sendAllNotesOff();
+            }
+            this.updatePluginList();
+        };
+
         this._view.onToggleShowPluginClick = (pluginId, index) => {
             if (!this.selected) return;
             const targetPlugin = this.selected.plugins[index];
@@ -338,17 +377,17 @@ export default class PluginsController {
         const allNames = [...filteredWamNames, ...vstNames];
 
         if (!this.selected) {
-            this._view.renderPluginList([], false);
+            this._view.renderPluginList([], false, this.isGlobalBypass);
             this._view.renderAddDropdown(allNames);
             this.hidePlugin();
         } else {
             const pluginDocs = this.selected.plugins.map((p, i) => ({
                 name: p.name,
-                isBypassed: false, // implementation needed later
+                isBypassed: p.isBypassed,
                 isVisible: this.isPluginShown && this.visiblePluginIndex === i
             }));
 
-            this._view.renderPluginList(pluginDocs);
+            this._view.renderPluginList(pluginDocs, true, this.isGlobalBypass);
             this._view.renderAddDropdown(allNames);
 
             // Ensure GUI reflects current plugin state

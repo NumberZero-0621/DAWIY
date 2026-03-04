@@ -182,10 +182,19 @@ export default abstract class SoundProvider {
    */
   get plugin(): PluginInstance | null { return this._plugins.length > 0 ? this._plugins[0] : null }
 
+  public isGlobalPluginBypass: boolean = false;
+
+  public setGlobalPluginBypass(bypassed: boolean) {
+    if (this.isGlobalPluginBypass !== bypassed) {
+      this.isGlobalPluginBypass = bypassed;
+      this.updatePluginRouting();
+    }
+  }
+
   /**
    * Update the audio routing based on the current plugins array.
    */
-  private updatePluginRouting() {
+  public updatePluginRouting() {
     // First, disconnect everything from the input and between plugins
     this.audioInputNode.disconnect()
     this.audioInputNode.disconnectEvents()
@@ -206,32 +215,34 @@ export default abstract class SoundProvider {
       delete (this.audioInputNode as any)._midiEventListener;
     }
 
-    // If no plugins
-    if (this._plugins.length === 0) {
+    const activePlugins = this.isGlobalPluginBypass ? [] : this._plugins.filter(p => !p.isBypassed);
+
+    // If no active plugins
+    if (activePlugins.length === 0) {
       this.audioInputNode.connect(this.pannerNode)
-      this.element.hasPlugin = false
+      this.element.hasPlugin = this._plugins.length > 0;
       return
     }
 
-    // Connect input to the first plugin
-    this.audioInputNode.connect(this._plugins[0].audioNode)
-    this.audioInputNode.connectEvents(this._plugins[0].audioNode.instanceId)
+    // Connect input to the first active plugin
+    this.audioInputNode.connect(activePlugins[0].audioNode)
+    this.audioInputNode.connectEvents(activePlugins[0].audioNode.instanceId)
 
-    // Connect plugins in series
-    for (let i = 0; i < this._plugins.length - 1; i++) {
-      this._plugins[i].audioNode.connect(this._plugins[i + 1].audioNode)
-      this._plugins[i].audioNode.connectEvents(this._plugins[i + 1].audioNode.instanceId)
+    // Connect active plugins in series
+    for (let i = 0; i < activePlugins.length - 1; i++) {
+      activePlugins[i].audioNode.connect(activePlugins[i + 1].audioNode)
+      activePlugins[i].audioNode.connectEvents(activePlugins[i + 1].audioNode.instanceId)
     }
 
-    // Connect the last plugin to the panner
-    const lastPlugin = this._plugins[this._plugins.length - 1]
+    // Connect the last active plugin to the panner
+    const lastPlugin = activePlugins[activePlugins.length - 1]
     lastPlugin.audioNode.connect(this.pannerNode)
 
     // --- MIDI転送フック ---
     // WAMの connectEvents はAudioWorklet間のイベント転送に依存しているが、
     // ParamMgrProcessor等では正しくMIDIが転送されない場合があるため、
     // メインスレッド側で直接MIDIを転送する。
-    const firstPluginNode = this._plugins[0].audioNode;
+    const firstPluginNode = activePlugins[0].audioNode;
     const inputNode = this.audioInputNode;
 
     // フック1: メインスレッドからの直接scheduleEvents呼び出し用（ピアノロールのプレビュー等）
@@ -364,7 +375,7 @@ export default abstract class SoundProvider {
           if (inst) plugin_instances.push(inst)
         }
 
-        return new SoundProviderGraphInstance(gainNode, pannerNode, plugin_instances, groupId)
+        return new SoundProviderGraphInstance(gainNode, pannerNode, plugin_instances, groupId, that.isGlobalPluginBypass)
       }
     }
   }
@@ -405,20 +416,22 @@ export class SoundProviderGraphInstance {
     public pannerNode: StereoPannerNode,
     public plugins: PluginInstance[],
     public groupId: string,
+    public isGlobalPluginBypass: boolean = false
   ) {
     this.updateRouting()
   }
 
   updateRouting() {
-    if (this.plugins.length === 0) {
+    const activePlugins = this.isGlobalPluginBypass ? [] : this.plugins.filter(p => !p.isBypassed);
+    if (activePlugins.length === 0) {
       // Input goes straight to panner? SoundProviderGraphInstance's inputNode is where clients connect.
       // Wait, let's look at `get inputNode()`.
     } else {
-      for (let i = 0; i < this.plugins.length - 1; i++) {
-        this.plugins[i].audioNode.connect(this.plugins[i + 1].audioNode)
-        this.plugins[i].audioNode.connectEvents(this.plugins[i + 1].audioNode.instanceId)
+      for (let i = 0; i < activePlugins.length - 1; i++) {
+        activePlugins[i].audioNode.connect(activePlugins[i + 1].audioNode)
+        activePlugins[i].audioNode.connectEvents(activePlugins[i + 1].audioNode.instanceId)
       }
-      this.plugins[this.plugins.length - 1].audioNode.connect(this.pannerNode)
+      activePlugins[activePlugins.length - 1].audioNode.connect(this.pannerNode)
     }
   }
 
@@ -443,5 +456,9 @@ export class SoundProviderGraphInstance {
     for (const p of this.plugins) { p.dispose() }
   }
 
-  get inputNode() { return this.plugins.length > 0 ? this.plugins[0].audioNode : this.pannerNode }
+  get inputNode() {
+    const activePlugins = this.isGlobalPluginBypass ? [] : this.plugins.filter(p => !p.isBypassed);
+    return activePlugins.length > 0 ? activePlugins[0].audioNode : this.pannerNode;
+  }
 }
+
