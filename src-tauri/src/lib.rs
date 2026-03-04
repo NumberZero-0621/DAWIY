@@ -101,18 +101,28 @@ mod vst_host;
 mod midi;  // スタンドアロンVST起動モジュール
 
 #[command]
-fn open_vst_editor(path: String, sample_rate: f32) -> Result<(), String> {
+fn open_vst_editor(path: String, sample_rate: f32) -> Result<u32, String> {
     vst_host::load_and_open(path, sample_rate)
 }
 
 #[command]
-fn send_vst_midi(path: String, status: u8, data1: u8, data2: u8) -> Result<(), String> {
-    vst_host::send_midi(path, status, data1, data2)
+fn close_vst_editor(instance_id: u32) -> Result<(), String> {
+    vst_host::close_editor(instance_id)
 }
 
 #[command]
-fn get_vst_audio(path: String, req_samples: usize) -> Result<tauri::ipc::Response, String> {
-    let (out_l, out_r) = vst_host::get_audio(path, req_samples)?;
+fn show_vst_editor(instance_id: u32) -> Result<(), String> {
+    vst_host::show_window(instance_id)
+}
+
+#[command]
+fn send_vst_midi(instance_id: u32, status: u8, data1: u8, data2: u8) -> Result<(), String> {
+    vst_host::send_midi(instance_id, status, data1, data2)
+}
+
+#[command]
+fn get_vst_audio(instance_id: u32, req_samples: usize) -> Result<tauri::ipc::Response, String> {
+    let (out_l, out_r) = vst_host::get_audio(instance_id, req_samples)?;
     
     // Float32のバイナリ表現としてシリアライズする
     // フォーマット: [サンプル数(u32)], [Lチャンネル...], [Rチャンネル...]
@@ -136,9 +146,10 @@ pub fn run() {
     .plugin(tauri_plugin_log::Builder::default().build())
     .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
-        scan_plugins, 
-        open_vst_editor,
-        send_vst_midi,
+        scan_plugins,            open_vst_editor,
+            close_vst_editor,
+            show_vst_editor,
+            send_vst_midi,
         get_vst_audio,
         midi::list_midi_outputs,
         midi::open_midi_output,

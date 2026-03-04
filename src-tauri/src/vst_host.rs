@@ -39,12 +39,15 @@ use windows::core::{PCWSTR, s, w};
 // --- Unified Host Implementation ---
 
 enum VstCommand {
-    Load(String, f32, Sender<Result<(), String>>),
-    Midi(String, u8, u8, u8), // path, status, data1, data2
-    GetAudio(String, usize, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // path, req_samples, response
+    Load(String, f32, Sender<Result<u32, String>>), // returns Instance ID
+    Midi(u32, u8, u8, u8), // instance_id, status, data1, data2
+    GetAudio(u32, usize, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, response
+    Close(u32), // instance_id
+    Show(u32), // instance_id
 }
 
 struct VstInstance {
+    id: u32,
     hwnd: HWND,
     lib_handle: windows::Win32::Foundation::HMODULE,
     factory: Option<VstPtr<dyn IPluginFactory>>,
@@ -62,6 +65,7 @@ struct VstCoordinator {
 }
 
 static COORDINATOR: Mutex<Option<VstCoordinator>> = Mutex::new(None);
+static NEXT_INSTANCE_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
 
 // --- Definitions Missing from Cleanup ---
 #[repr(C)]
@@ -944,7 +948,7 @@ fn create_host_connection_point() -> *mut c_void {
 
 // --- Main Exported Function ---
 
-pub fn load_and_open(path: String, sample_rate: f32) -> Result<(), String> {
+pub fn load_and_open(path: String, sample_rate: f32) -> Result<u32, String> {
     
     // Setup coordinator if not running
     let mut coord_lock = COORDINATOR.lock().unwrap();
@@ -968,9 +972,9 @@ pub fn load_and_open(path: String, sample_rate: f32) -> Result<(), String> {
     tx_main.send(VstCommand::Load(path, sample_rate, tx_res)).map_err(|e| e.to_string())?;
     
     // Block until creation result (Success or Init Failure)
-    rx_res.recv().map_err(|e| format!("Receive error: {}", e))??;
+    let instance_id = rx_res.recv().map_err(|e| format!("Receive error: {}", e))??;
     
-    Ok(())
+    Ok(instance_id)
 }
 
 const WM_VST_DROP_INSTANCE: u32 = windows::Win32::UI::WindowsAndMessaging::WM_USER + 4242;
@@ -1031,31 +1035,33 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                 VstCommand::Load(path, sample_rate, tx_res) => {
                      // We need to refactor run_vst_session to create_vst_instance
                      match create_vst_instance(&path, sample_rate) {
-                         Ok(inst) => {
+                         Ok(mut inst) => {
+                             inst.id = NEXT_INSTANCE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                             let instance_id = inst.id;
                              instances.push(inst);
-                             let _ = tx_res.send(Ok(()));
+                             let _ = tx_res.send(Ok(instance_id));
                          }
                          Err(e) => {
                              let _ = tx_res.send(Err(e));
                          }
                      }
                 }
-                 VstCommand::Midi(midi_path, status, data1, data2) => {
+                 VstCommand::Midi(vst_id, status, data1, data2) => {
                      // MIDIイベントをキューに蓄積（get_audio時にまとめてprocessに渡す）
                      for inst in instances.iter_mut() {
-                         if inst.path == midi_path {
+                         if inst.id == vst_id {
                              inst.midi_events.push_back((status, data1, data2));
-                             //  println!("[Native] MIDI queued for {}: s={:#X} d1={} d2={}", midi_path, status, data1, data2);
+                             //  println!("[Native] MIDI queued for ID {}: s={:#X} d1={} d2={}", vst_id, status, data1, data2);
                              // イベントはキューに積まれ、次のget_audioのprocess内で処理されるためここでは何もしない
                              break;
                          }
                      }
                 }
-                VstCommand::GetAudio(audio_path, req_samples, tx_audio) => {
+                VstCommand::GetAudio(vst_id, req_samples, tx_audio) => {
                     // 対象インスタンスのプロセスを呼び出してオーディオ生成
                     let mut found = false;
                     for inst in instances.iter_mut() {
-                        if inst.path == audio_path {
+                        if inst.id == vst_id {
                             found = true;
                             unsafe {
                                 use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, AudioBusBuffers};
@@ -1158,7 +1164,29 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                         }
                     }
                     if !found {
-                        let _ = tx_audio.send(Err(format!("Instance not found: {}", audio_path)));
+                        let _ = tx_audio.send(Err(format!("Instance not found: {}", vst_id)));
+                    }
+                }
+                VstCommand::Close(vst_id) => {
+                    println!("[Native] Closing VST instance ID: {}", vst_id);
+                    instances.retain(|inst| inst.id != vst_id);
+                }
+                VstCommand::Show(vst_id) => {
+                    let mut found = false;
+                    for inst in instances.iter_mut() {
+                        if inst.id == vst_id {
+                            found = true;
+                            if inst.hwnd.0 != 0 {
+                                unsafe {
+                                    windows::Win32::UI::WindowsAndMessaging::ShowWindow(inst.hwnd, windows::Win32::UI::WindowsAndMessaging::SW_SHOW);
+                                    let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(inst.hwnd);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    if !found {
+                        println!("[Native] Show called for unknown instance: {}", vst_id);
                     }
                 }
             },
@@ -1986,6 +2014,7 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32) -> Result<VstInstanc
     
     // Return Instance
     Ok(VstInstance {
+        id: 0, // Assigned by coordinator later
         hwnd,
         lib_handle,
         factory: Some(factory),
@@ -2065,8 +2094,8 @@ unsafe fn try_exit_dll(lib_handle: windows::Win32::Foundation::HMODULE) -> bool 
 unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_CLOSE => {
-             println!("[Native] wnd_proc: WM_CLOSE received. Destroying Window...");
-             DestroyWindow(hwnd);
+             println!("[Native] wnd_proc: WM_CLOSE received. Hiding Window instead of Destroying...");
+             windows::Win32::UI::WindowsAndMessaging::ShowWindow(hwnd, windows::Win32::UI::WindowsAndMessaging::SW_HIDE);
              LRESULT(0)
         }
         WM_DESTROY => {
@@ -2150,7 +2179,12 @@ impl Drop for VstInstance {
                      }
                 }
             }
-        
+            
+            if self.hwnd.0 != 0 {
+                println!("[Native] Destroying VST Window...");
+                windows::Win32::UI::WindowsAndMessaging::DestroyWindow(self.hwnd);
+            }
+            
             if should_exit {
                 println!("[Native] Exiting DLL (Last Instance)...");
                 if !try_exit_dll(self.lib_handle) { println!("[Native] Warning: ExitDll returned false."); }
@@ -2171,23 +2205,48 @@ impl Drop for VstInstance {
 }
 
 
-pub fn send_midi(path: String, status: u8, data1: u8, data2: u8) -> Result<(), String> {
+pub fn send_midi(vst_id: u32, status: u8, data1: u8, data2: u8) -> Result<(), String> {
     let coord_lock = COORDINATOR.lock().unwrap();
     if let Some(coordinator) = coord_lock.as_ref() {
-        coordinator.tx.send(VstCommand::Midi(path, status, data1, data2)).map_err(|e| e.to_string())?;
+        coordinator.tx.send(VstCommand::Midi(vst_id, status, data1, data2)).map_err(|e| e.to_string())?;
         Ok(())
     } else {
         Err("Coordinator not running. VST must be loaded first.".to_string())
     }
 }
 
-pub fn get_audio(path: String, req_samples: usize) -> Result<(Vec<f32>, Vec<f32>), String> {
+pub fn get_audio(vst_id: u32, req_samples: usize) -> Result<(Vec<f32>, Vec<f32>), String> {
     let coord_lock = COORDINATOR.lock().unwrap();
     if let Some(coordinator) = coord_lock.as_ref() {
-        let (tx_res, rx_res) = channel();
-        coordinator.tx.send(VstCommand::GetAudio(path, req_samples, tx_res)).map_err(|e| e.to_string())?;
-        drop(coord_lock); // ロックを解放してからレスポンスを待つ
-        rx_res.recv().map_err(|e| e.to_string())?
+        let (tx, rx) = std::sync::mpsc::channel();
+        coordinator.tx.send(VstCommand::GetAudio(vst_id, req_samples, tx)).map_err(|e| e.to_string())?;
+        loop {
+            match rx.recv_timeout(std::time::Duration::from_millis(50)) {
+                Ok(result) => return result,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { continue; },
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err("GetAudio channel disconnected".to_string()),
+            }
+        }
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
+    }
+}
+
+pub fn close_editor(vst_id: u32) -> Result<(), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        coordinator.tx.send(VstCommand::Close(vst_id)).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
+    }
+}
+
+pub fn show_window(vst_id: u32) -> Result<(), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        coordinator.tx.send(VstCommand::Show(vst_id)).map_err(|e| e.to_string())?;
+        Ok(())
     } else {
         Err("Coordinator not running. VST must be loaded first.".to_string())
     }

@@ -193,7 +193,16 @@ export default class PluginsController {
     private visiblePluginIndex = -1;
 
     private showPlugin(plugin: PluginInstance, index: number) {
-        if (!plugin || !plugin.gui) return;
+        if (!plugin) return;
+
+        const audioNode = plugin.instance?.audioNode as any;
+        if (audioNode && typeof audioNode.showVstUi === "function") {
+            audioNode.showVstUi();
+            // GUI does not bind to DAWIY's floating DOM frame, so we don't treat it as "shown" in DAWIY.
+            return;
+        }
+
+        if (!plugin.gui) return;
         this._view.showFloatingWindow(true);
         this.isPluginShown = true;
         this.visiblePluginIndex = index;
@@ -228,8 +237,7 @@ export default class PluginsController {
                     // Automatically add the VST to WAM_LIST so it can be fetched
                     this.addWam(vstUrl, actualName);
 
-                    this._app.vstPluginController.launchVstStandalone(vstPlugin.path);
-
+                    // DAWIY's VstProxy node will initialize the VST now
                     // Add the VST wrapper to the rack
                     try {
                         const plugin = await this.fetchPlugin(actualName);
@@ -254,7 +262,6 @@ export default class PluginsController {
 
             if (pluginInfo && pluginInfo.url && pluginInfo.url.startsWith("vst://")) {
                 const vstPath = pluginInfo.url.replace("vst://", "");
-                this._app.vstPluginController.launchVstStandalone(vstPath);
 
                 // Add the VST wrapper to the rack
                 const plugin = await this.fetchPlugin(actualName);

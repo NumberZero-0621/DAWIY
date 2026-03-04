@@ -91,12 +91,6 @@ export default class DawProjectLoader {
                                     this._app.pluginsController.addWam(pUrl, pName);
                                 }
 
-                                // Launch VST if it is a VST
-                                if (pUrl.startsWith("vst://")) {
-                                    const vstPath = pUrl.replace("vst://", "");
-                                    await this._app.vstPluginController.launchVstStandalone(vstPath);
-                                }
-
                                 // Fetch and add plugin
                                 const plugin = await this._app.pluginsController.fetchPlugin(pName);
                                 if (plugin) {
