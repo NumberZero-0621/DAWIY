@@ -139,15 +139,26 @@ export default class DawProjectExporter {
             channelEl.appendChild(panEl);
 
             // Add Plugins
-            const pluginsEl = this._xmlDoc.createElement("Plugins");
+            const devicesEl = this._xmlDoc.createElement("Devices");
             for (const pluginInstance of track.plugins) {
-                const pluginEl = this._xmlDoc.createElement("Plugin");
-                pluginEl.setAttribute("name", pluginInstance.name);
-
-                // Get URL from PluginsController
+                // Determine plugin type
                 const pluginInfo = this._app.pluginsController.WAM_LIST[pluginInstance.name];
+                const isVst3 = pluginInfo && pluginInfo.url && pluginInfo.url.startsWith("vst://");
+
+                const deviceTagName = isVst3 ? "Vst3Plugin" : "WamPlugin";
+                const pluginEl = this._xmlDoc.createElement(deviceTagName);
+
+                // Set Attributes
+                pluginEl.setAttribute("name", pluginInstance.name);
+                pluginEl.setAttribute("deviceName", pluginInstance.name);
+                pluginEl.setAttribute("deviceRole", "audioFX");
+                pluginEl.setAttribute("loaded", "true");
+
+                // Add unique or dummy ID
+                pluginEl.setAttribute("deviceID", isVst3 ? "DAWIY_VST3_" + pluginInstance.name.replace(/[^a-zA-Z0-9]/g, '') : "DAWIY_WAM_" + pluginInstance.name);
+
                 if (pluginInfo && pluginInfo.url) {
-                    pluginEl.setAttribute("url", pluginInfo.url);
+                    pluginEl.setAttribute("url", pluginInfo.url); // Keep internal url for backward-compat
                 }
 
                 // Get state
@@ -155,14 +166,17 @@ export default class DawProjectExporter {
                 if (state) {
                     const stateStr = JSON.stringify(state);
                     const stateFilename = `plugins/track-${track.id}-plugin-${pluginInstance.instance.instanceId}-state.json`;
-                    pluginEl.setAttribute("stateFile", stateFilename);
+
+                    const stateEl = this._xmlDoc.createElement("State");
+                    stateEl.setAttribute("path", stateFilename);
+                    pluginEl.appendChild(stateEl);
 
                     this._pluginStates.push({ filename: stateFilename, data: stateStr });
                 }
 
-                pluginsEl.appendChild(pluginEl);
+                devicesEl.appendChild(pluginEl);
             }
-            channelEl.appendChild(pluginsEl);
+            channelEl.appendChild(devicesEl);
 
             trackEl.appendChild(channelEl);
             structure.appendChild(trackEl);

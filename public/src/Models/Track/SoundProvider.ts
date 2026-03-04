@@ -80,6 +80,7 @@ export default abstract class SoundProvider {
 
   /** Should be called at the sound provider destruction to clean up */
   dispose() {
+    this.removeAllPlugins()
     this.audioInputNode.destroy()
   }
 

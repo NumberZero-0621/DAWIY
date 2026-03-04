@@ -111,6 +111,11 @@ fn close_vst_editor(instance_id: u32) -> Result<(), String> {
 }
 
 #[command]
+fn close_all_vst_editors() -> Result<(), String> {
+    vst_host::close_all_editors()
+}
+
+#[command]
 fn show_vst_editor(instance_id: u32) -> Result<(), String> {
     vst_host::show_window(instance_id)
 }
@@ -179,6 +184,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
         scan_plugins,            open_vst_editor,
             close_vst_editor,
+            close_all_vst_editors,
             show_vst_editor,
             send_vst_midi,
         get_vst_audio,

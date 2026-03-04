@@ -75,37 +75,68 @@ export default class DawProjectLoader {
 
                 if (id) this._tracksMap.set(id, track);
 
-                // Load Plugins
+                // Load Plugins (Backward compatible <Plugins> and new Bitwig-compatible <Devices>)
                 const channelEl = trackEl.querySelector("Channel");
                 if (channelEl) {
-                    const pluginsEl = channelEl.querySelector("Plugins");
-                    if (pluginsEl) {
-                        for (const pluginEl of Array.from(pluginsEl.children)) {
-                            const pName = pluginEl.getAttribute("name");
-                            const pUrl = pluginEl.getAttribute("url");
-                            const stateFile = pluginEl.getAttribute("stateFile");
+                    // Try to find <Devices> first (Bitwig compatible), fallback to <Plugins>
+                    const devicesEl = channelEl.querySelector("Devices") || channelEl.querySelector("Plugins");
 
-                            if (pName && pUrl) {
-                                // Register WAM if it's not registered
-                                if (!this._app.pluginsController.WAM_LIST[pName]) {
-                                    this._app.pluginsController.addWam(pUrl, pName);
+                    if (devicesEl) {
+                        for (const pluginEl of Array.from(devicesEl.children)) {
+                            // Extract name: deviceName for Bitwig format, name for DAWIY old format
+                            const pName = pluginEl.getAttribute("deviceName") || pluginEl.getAttribute("name");
+                            // Extract url: DAWIY specific stored URL
+                            const pUrl = pluginEl.getAttribute("url");
+
+                            // Extract State: from <State path="..."> (new format) or stateFile attribute (old format)
+                            let stateFile = pluginEl.getAttribute("stateFile");
+                            const stateEl = pluginEl.querySelector("State");
+                            if (stateEl) {
+                                stateFile = stateEl.getAttribute("path");
+                            }
+
+                            if (pName) {
+                                // Reconstruct or resolve URL
+                                let resolvedUrl = pUrl;
+
+                                // Bitwig compatibility: If no URL is provided but it's a Vst3Plugin, try to find it from scanned plugins
+                                if (!resolvedUrl && (pluginEl.tagName === "Vst3Plugin" || pluginEl.tagName === "ClapPlugin")) {
+                                    const scannedPlugins = this._app.vstPluginController.scannedPlugins;
+                                    const vstMatch = scannedPlugins.find(p => p.name === pName);
+                                    if (vstMatch) {
+                                        resolvedUrl = `vst://${vstMatch.path}`;
+                                    } else {
+                                        // Create a dummy URL if matched by name isn't found, it might fail to load but keeps the flow
+                                        resolvedUrl = `vst://${pName}.vst3`;
+                                        console.warn(`Could not find path for VST3 plugin: ${pName}. Using dummy URL.`);
+                                    }
                                 }
 
-                                // Fetch and add plugin
-                                const plugin = await this._app.pluginsController.fetchPlugin(pName);
-                                if (plugin) {
-                                    const instance = await track.addPlugin(plugin);
+                                if (resolvedUrl) {
+                                    // Register WAM if it's not registered
+                                    if (!this._app.pluginsController.WAM_LIST[pName]) {
+                                        this._app.pluginsController.addWam(resolvedUrl, pName);
+                                    }
 
-                                    // Restore state
-                                    if (stateFile && instance) {
-                                        const zipFile = this._zip.file(stateFile);
-                                        if (zipFile) {
-                                            const stateStr = await zipFile.async("string");
-                                            try {
-                                                const state = JSON.parse(stateStr);
-                                                await instance.setState(state);
-                                            } catch (e) {
-                                                console.error("Failed to parse or set plugin state", e);
+                                    // VSTの場合: VstProxy の setVstPath が内部で自動的に open_vst_editor を呼ぶため、
+                                    // ここで launchVstStandalone を呼ぶと2重起動になるので呼ばない。
+
+                                    // Fetch and add plugin
+                                    const plugin = await this._app.pluginsController.fetchPlugin(pName);
+                                    if (plugin) {
+                                        const instance = await track.addPlugin(plugin);
+
+                                        // Restore state
+                                        if (stateFile && instance) {
+                                            const zipFile = this._zip.file(stateFile);
+                                            if (zipFile) {
+                                                const stateStr = await zipFile.async("string");
+                                                try {
+                                                    const state = JSON.parse(stateStr);
+                                                    await instance.setState(state);
+                                                } catch (e) {
+                                                    console.error("Failed to parse or set plugin state", e);
+                                                }
                                             }
                                         }
                                     }

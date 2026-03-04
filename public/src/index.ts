@@ -64,8 +64,15 @@ import SettingsPersistenceController from './Controllers/SettingsPersistenceCont
 
 // ... imports
 
+import { invoke } from '@tauri-apps/api/core';
+
 window.addEventListener('beforeunload', (e) => {
     e.returnValue = 'test';
+});
+
+window.addEventListener('unload', () => {
+    // ページ遷移・リロードが確定した段階ですべてのVSTウインドウを強制クローズする
+    invoke('close_all_vst_editors').catch(console.error);
 });
 
 const audioCtx = new AudioContext({ latencyHint: 0.00001 });

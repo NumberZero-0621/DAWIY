@@ -45,6 +45,7 @@ enum VstCommand {
     ProcessAudio(u32, usize, Vec<f32>, Vec<f32>, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, in_l, in_r, response
     Close(u32), // instance_id
     Show(u32), // instance_id
+    CloseAll, // close all instances
 }
 
 struct VstInstance {
@@ -1321,6 +1322,10 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                         println!("[Native] Show called for unknown instance: {}", vst_id);
                     }
                 }
+                VstCommand::CloseAll => {
+                    println!("[Native] Coordinator received CloseAll command. Dropping all {} instances...", instances.len());
+                    instances.clear(); // This drops all instances containing VstInstance, triggering their drop()
+                }
             },
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 // Wait is naturally handled by recv_timeout.
@@ -2394,6 +2399,16 @@ pub fn close_editor(vst_id: u32) -> Result<(), String> {
     let coord_lock = COORDINATOR.lock().unwrap();
     if let Some(coordinator) = coord_lock.as_ref() {
         coordinator.tx.send(VstCommand::Close(vst_id)).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
+    }
+}
+
+pub fn close_all_editors() -> Result<(), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        coordinator.tx.send(VstCommand::CloseAll).map_err(|e| e.to_string())?;
         Ok(())
     } else {
         Err("Coordinator not running. VST must be loaded first.".to_string())

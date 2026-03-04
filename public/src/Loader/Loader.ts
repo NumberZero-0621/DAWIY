@@ -53,10 +53,12 @@ export interface ProjectData {
         plugin?: {
             name: string;
             state: any;
+            url?: string;
         };
         pluginArray?: {
             name: string;
             state: any;
+            url?: string;
         }[];
         // Plugins project data (ID -> Data)
         plugins?: { [id: string]: any };
@@ -71,10 +73,12 @@ export interface ProjectData {
         plugin?: {
             name: string;
             state: any;
+            url?: string;
         };
         pluginArray?: {
             name: string;
             state: any;
+            url?: string;
         }[];
         automationOpened?: boolean;
         currentAutomationParam?: string;
@@ -115,10 +119,12 @@ export default class Loader {
     async saveProject(): Promise<[ProjectData, RegionContent[]]> {
 
         // Get host plugins state
-        let hostPluginArray: { name: string, state: any }[] = [];
+        let hostPluginArray: { name: string, state: any, url?: string }[] = [];
         for (const p of this._app.host.plugins) {
             const state = await p.getState();
-            hostPluginArray.push({ name: p.name, state });
+            // WAM_LISTからURL情報を取得（VSTプラグインの復元に必要）
+            const wamInfo = this._app.pluginsController.WAM_LIST[p.name];
+            hostPluginArray.push({ name: p.name, state, url: wamInfo?.url });
         }
         let pluginHostState = hostPluginArray.length > 0 ? hostPluginArray[0] : undefined;
         const pluginsData = this._app.dawiyPluginController.getPluginsProjectData();
@@ -130,10 +136,12 @@ export default class Loader {
         for (let track of this._app.tracksController.tracks) {
             // Add automations to the track
             let automations: ProjectData['tracks'][0]['automations'] = [];
-            let pluginArray: { name: string, state: any }[] = [];
+            let pluginArray: { name: string, state: any, url?: string }[] = [];
             for (const p of track.plugins) {
                 const state = await p.getState();
-                pluginArray.push({ name: p.name, state });
+                // WAM_LISTからURL情報を取得（VSTプラグインの復元に必要）
+                const wamInfo = this._app.pluginsController.WAM_LIST[p.name];
+                pluginArray.push({ name: p.name, state, url: wamInfo?.url });
             }
             let pluginData = pluginArray.length > 0 ? pluginArray[0] : undefined;
 
@@ -249,13 +257,21 @@ export default class Loader {
         // NOTE: project.host.plugins is used for DAWIY extensions data. The rack is in pluginArray.
         const hDataArray = (project.host as any).pluginArray || (project.host.plugin ? [project.host.plugin] : []);
         for (const pData of hDataArray) {
+            // VSTプラグインの場合、まずWAM_LISTに再登録する
+            if (pData.url && pData.url.startsWith("vst://")) {
+                this._app.pluginsController.addWam(pData.url, pData.name);
+            }
             const plugin = await this._app.pluginsController.fetchPlugin(pData.name)
             if (plugin) {
                 const inst = await this._app.host.addPlugin(plugin);
                 if (inst) {
                     try {
+                        // VSTの場合、vstPathは既にdefault_stateで設定済みなので除外
+                        const stateToRestore = pData.url?.startsWith("vst://") && pData.state?.vstPath
+                            ? { ...pData.state, vstPath: undefined }
+                            : pData.state;
                         await Promise.race([
-                            inst.setState(pData.state),
+                            inst.setState(stateToRestore),
                             new Promise((_, reject) => setTimeout(() => reject(new Error("State load timeout")), 5000))
                         ]);
                     } catch (e) {
@@ -284,13 +300,21 @@ export default class Loader {
 
             const pDataArray = trackJson.pluginArray || (trackJson.plugin ? [trackJson.plugin] : []);
             for (const pData of pDataArray) {
+                // VSTプラグインの場合、まずWAM_LISTに再登録する
+                if (pData.url && pData.url.startsWith("vst://")) {
+                    this._app.pluginsController.addWam(pData.url, pData.name);
+                }
                 const plugin = await this._app.pluginsController.fetchPlugin(pData.name)
                 if (plugin) {
                     const inst = await track.addPlugin(plugin);
                     if (inst) {
                         try {
+                            // VSTの場合、vstPathは既にdefault_stateで設定済みなので除外
+                            const stateToRestore = pData.url?.startsWith("vst://") && pData.state?.vstPath
+                                ? { ...pData.state, vstPath: undefined }
+                                : pData.state;
                             await Promise.race([
-                                inst.setState(pData.state),
+                                inst.setState(stateToRestore),
                                 new Promise((_, reject) => setTimeout(() => reject(new Error("State load timeout")), 5000))
                             ]);
                         } catch (e) {

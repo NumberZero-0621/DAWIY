@@ -400,9 +400,13 @@ class VstProxyNode extends CompositeAudioNode {
         super.destroy();
     }
 
+    _isLoadingVst = false;
+
     /** VSTへのパスを設定する */
     async setVstPath(path) {
+        if (this._isLoadingVst) return;
         if (this.vstPath === path && this.instanceId != null) return;
+        this._isLoadingVst = true;
         this.vstPath = path;
 
         if (window.__TAURI__) {
@@ -420,6 +424,7 @@ class VstProxyNode extends CompositeAudioNode {
                 console.error("Failed to load VST", e);
             }
         }
+        this._isLoadingVst = false;
     }
 
     /** VSTのGUIを開く（現在フォーカスを当てるだけの動作は未実装のため何もしません） */
@@ -438,7 +443,7 @@ class VstProxyNode extends CompositeAudioNode {
 
     async setState(state) {
         if (state?.vstPath) {
-            this.setVstPath(state.vstPath);
+            await this.setVstPath(state.vstPath);
         }
         return super.setState(state);
     }
