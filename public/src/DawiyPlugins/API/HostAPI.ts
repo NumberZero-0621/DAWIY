@@ -1,5 +1,7 @@
 import App from "../../App";
 import { audioCtx } from "../../index";
+import { MIDI, MIDINote } from "../../Audio/MIDI/MIDI";
+import MIDIRegion from "../../Models/Region/MIDIRegion";
 
 /**
  * Bridge between Plugins and the Core System.
@@ -139,11 +141,239 @@ export default class HostAPI {
     public get project() {
         return {
             /**
-             * Add notes to a specific track/region.
-             * (Placeholder for future implementation)
+             * Add notes to a specific track. Automatically creates a region covering the notes.
+             * @param trackId Index of the track in the tracksController.
+             * @param notes Array of notes with pitch, start(ms), duration(ms), and optional velocity(0-127).
              */
-            addNotes: (trackId: number, notes: any[]) => {
-                console.log(`[HostAPI] addNotes to track ${trackId}`, notes);
+            addNotes: (trackId: number, notes: { pitch: number, start: number, duration: number, velocity?: number }[]) => {
+                const track = this.app.tracksController.getTrackById(trackId);
+                if (!track) {
+                    this.app.showToast(`Track with ID ${trackId} not found.`, true);
+                    return;
+                }
+
+                if (notes.length === 0) return;
+
+                // Calculate range and create MIDI
+                let minStart = Infinity;
+                let maxEnd = 0;
+                notes.forEach(n => {
+                    if (n.start < minStart) minStart = n.start;
+                    if (n.start + n.duration > maxEnd) maxEnd = n.start + n.duration;
+                });
+
+                const regionDuration = maxEnd - minStart;
+                const midi = new MIDI(500, regionDuration);
+
+                notes.forEach(n => {
+                    const localStart = (n.start ?? 0) - minStart;
+                    midi.putNote(new MIDINote(n.pitch, n.velocity ?? 100, 0, n.duration), localStart);
+                });
+
+                const newRegion = new MIDIRegion(midi, minStart);
+
+                const redo = () => {
+                    this.app.regionsController.addRegion(track, newRegion);
+                    if (this.app.pianoRollController.isVisible) {
+                        this.app.pianoRollController.redraw();
+                    }
+                };
+                const undo = () => {
+                    this.app.regionsController.removeRegion(newRegion);
+                    if (this.app.pianoRollController.isVisible) {
+                        this.app.pianoRollController.redraw();
+                    }
+                };
+
+                this.app.doIt(true, redo, undo);
+                this.app.showToast(`Added ${notes.length} notes to ${track.element.name}.`);
+            },
+
+            /**
+             * Get all regions on a specific track.
+             */
+            getRegions: (trackId: number): MIDIRegion[] => {
+                const track = this.app.tracksController.getTrackById(trackId);
+                if (!track) return [];
+                return track.regions.filter((r): r is MIDIRegion => r instanceof MIDIRegion);
+            },
+
+            /**
+             * Get the currently selected region in the editor.
+             */
+            getSelectedRegion: (): MIDIRegion | null => {
+                const selected = this.app.regionsController.selection.primary;
+                return selected instanceof MIDIRegion ? selected : null;
+            },
+
+            /**
+             * Add notes to an existing MIDIRegion. Automatically expands the region if notes exceed its duration.
+             */
+            addNotesToRegion: (region: MIDIRegion, notes: { pitch: number, start: number, duration: number, velocity?: number }[]) => {
+                if (!(region instanceof MIDIRegion)) {
+                    this.app.showToast("Target region must be a MIDIRegion.", true);
+                    return;
+                }
+
+                if (notes.length === 0) return;
+
+                const track = this.app.tracksController.getTrackById(region.trackId);
+                if (!track) return;
+
+                const oldMidi = region.midi;
+                const newMidi = oldMidi.clone();
+
+                notes.forEach(n => {
+                    // Convert absolute start time to local time relative to region start
+                    const localStart = n.start - region.start;
+                    newMidi.putNote(new MIDINote(n.pitch, n.velocity ?? 100, 0, n.duration), localStart);
+                });
+
+                // Expand duration if necessary
+                let maxLocalEnd = newMidi.duration;
+                notes.forEach(n => {
+                    const localEnd = n.start - region.start + n.duration;
+                    if (localEnd > maxLocalEnd) maxLocalEnd = localEnd;
+                });
+                if (maxLocalEnd > newMidi.duration) {
+                    newMidi.duration = maxLocalEnd;
+                }
+
+                const redo = () => {
+                    region.midi = newMidi;
+                    this.app.regionsController.updateRegionView(region);
+                };
+                const undo = () => {
+                    region.midi = oldMidi;
+                    this.app.regionsController.updateRegionView(region);
+                };
+
+                this.app.doIt(true, redo, undo);
+                this.app.showToast(`Added ${notes.length} notes to region.`);
+            },
+
+            /**
+             * Get currently selected notes in the Piano Roll.
+             */
+            getSelectedNotes: (): { note: MIDINote, region: MIDIRegion, globalStart: number }[] => {
+                const controller = this.app.pianoRollController;
+                const selected = controller.selectedNotes;
+                const result: { note: MIDINote, region: MIDIRegion, globalStart: number }[] = [];
+
+                if (!controller.isVisible) return [];
+
+                // We need to find which region each note belongs to.
+                // This is a bit expensive but necessary as MIDINote doesn't store its owner.
+                this.app.tracksController.tracks.forEach(track => {
+                    track.regions.forEach(region => {
+                        if (region instanceof MIDIRegion) {
+                            region.midi.forEachNote((note, start) => {
+                                if (selected.has(note)) {
+                                    result.push({
+                                        note,
+                                        region,
+                                        globalStart: region.start + start
+                                    });
+                                }
+                            });
+                        }
+                    });
+                });
+
+                return result;
+            },
+
+            /**
+             * Update properties of existing notes.
+             */
+            updateNotes: (updates: { region: MIDIRegion, note: MIDINote, pitch?: number, start?: number, duration?: number, velocity?: number }[]) => {
+                if (updates.length === 0) return;
+
+                const redo = () => {
+                    updates.forEach(u => {
+                        const midi = u.region.midi;
+                        // Find local start of the original note
+                        let originalLocalStart = -1;
+                        midi.forEachNote((n, s) => { if (n === u.note) originalLocalStart = s; });
+
+                        if (originalLocalStart !== -1) {
+                            midi.removeNote(u.note, originalLocalStart);
+                            const newNote = new MIDINote(
+                                u.pitch ?? u.note.note,
+                                u.velocity ?? u.note.velocity,
+                                u.note.channel,
+                                u.duration ?? u.note.duration
+                            );
+                            const newGlobalStart = u.start ?? (u.region.start + originalLocalStart);
+                            const newLocalStart = newGlobalStart - u.region.start;
+                            midi.putNote(newNote, newLocalStart);
+                            // Update the reference in updates so undo knows what to remove
+                            (u as any)._generatedNote = newNote;
+                        }
+                    });
+                    if (this.app.pianoRollController.isVisible) this.app.pianoRollController.redraw();
+                };
+
+                const undo = () => {
+                    updates.forEach(u => {
+                        const midi = u.region.midi;
+                        const generatedNote = (u as any)._generatedNote;
+                        if (generatedNote) {
+                            let genLocalStart = -1;
+                            midi.forEachNote((n, s) => { if (n === generatedNote) genLocalStart = s; });
+                            if (genLocalStart !== -1) {
+                                midi.removeNote(generatedNote, genLocalStart);
+                                // Find original local start
+                                let originalLocalStart = -1;
+                                // This is tricky because the original note is gone. 
+                                // We should have stored it.
+                                // Let's assume the position didn't change for finding purpose? No.
+                                // Improvement: Store original local start in closure.
+                            }
+                        }
+                    });
+                };
+                // Redo/Undo logic needs to be more robust for note objects.
+                // Simplified version for now using re-draw:
+                this.app.showToast(`Updating ${updates.length} notes...`);
+
+                // Re-implementing more robustly:
+                const changeEntries = updates.map(u => {
+                    let locStart = -1;
+                    u.region.midi.forEachNote((n, s) => { if (n === u.note) locStart = s; });
+                    return { ...u, originalLocalStart: locStart };
+                }).filter(e => e.originalLocalStart !== -1);
+
+                const finalRedo = () => {
+                    changeEntries.forEach(e => {
+                        e.region.midi.removeNote(e.note, e.originalLocalStart);
+                        const newNote = new MIDINote(
+                            e.pitch ?? e.note.note,
+                            e.velocity ?? e.note.velocity,
+                            e.note.channel,
+                            e.duration ?? e.note.duration
+                        );
+                        const newGlobalStart = e.start ?? (e.region.start + e.originalLocalStart);
+                        e.region.midi.putNote(newNote, newGlobalStart - e.region.start);
+                        (e as any)._newNote = newNote;
+                    });
+                    this.app.pianoRollController.redraw();
+                };
+
+                const finalUndo = () => {
+                    changeEntries.forEach(e => {
+                        const newNote = (e as any)._newNote;
+                        let newLocStart = -1;
+                        e.region.midi.forEachNote((n, s) => { if (n === newNote) newLocStart = s; });
+                        if (newLocStart !== -1) {
+                            e.region.midi.removeNote(newNote, newLocStart);
+                            e.region.midi.putNote(e.note, e.originalLocalStart);
+                        }
+                    });
+                    this.app.pianoRollController.redraw();
+                };
+
+                this.app.doIt(true, finalRedo, finalUndo);
             },
 
             /**
@@ -153,6 +383,71 @@ export default class HostAPI {
                 // Assuming we can get it from ProjectView or similar
                 // For now return a generic name if not available
                 return "project";
+            },
+
+            /**
+             * Get all tracks in the project.
+             */
+            getTracks: async () => {
+                const tracksMap = this.app.tracksController.tracks;
+                const result = [];
+                for (let i = 0; i < tracksMap.length; i++) {
+                    const track = tracksMap.get(i);
+                    if (track) {
+                        result.push({
+                            id: track.id,
+                            name: track.element.name,
+                            color: track.color,
+                            // Add more properties if needed
+                        });
+                    }
+                }
+                return result;
+            },
+
+            /**
+             * Update a track's properties.
+             * @param trackId The ID of the track to update.
+             * @param updates Object containing properties to update (e.g., name).
+             */
+            updateTrack: async (trackId: number, updates: { name?: string, color?: string }) => {
+                const track = this.app.tracksController.getTrackById(trackId);
+                if (!track) {
+                    this.app.showToast(`Track ${trackId} not found.`, true);
+                    return;
+                }
+
+                const oldName = track.element.name;
+                const oldColor = track.color;
+
+                const redo = () => {
+                    if (updates.name !== undefined) track.element.name = updates.name;
+                    if (updates.color !== undefined) this.app.tracksController.setColor(track, updates.color);
+                };
+
+                const undo = () => {
+                    if (updates.name !== undefined) track.element.name = oldName;
+                    if (updates.color !== undefined) this.app.tracksController.setColor(track, oldColor);
+                };
+
+                this.app.doIt(true, redo, undo);
+            },
+
+            /**
+             * Create a new track.
+             * @param name Optional name for the new track.
+             * @returns The newly created track object (simplified).
+             */
+            createTrack: async (name?: string) => {
+                const track = await this.app.tracksController.createTrack();
+                if (name) {
+                    track.element.name = name;
+                }
+                return {
+                    id: track.id,
+                    name: track.element.name,
+                    color: track.color
+                };
             }
         };
     }

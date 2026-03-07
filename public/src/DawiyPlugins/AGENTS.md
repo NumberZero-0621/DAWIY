@@ -170,7 +170,55 @@ Tauri環境とWeb環境の両方で動作する抽象化レイヤーです。
 - **`hostAPI.io.registerExporter(name, callback)`**:
   エクスポートメニューに項目を追加します。
   - `callback`: `async () => void`
-- **`hostAPI.io.renderMasterAudio()`**: マスター出力をレンダリングして `AudioBuffer` を返します。
+- **`hostAPI.io.renderMasterAudio()`**:
+  マスター出力をレンダリングして `AudioBuffer` を返します。
+  - カスタムエクスポート形式のプラグイン（MP3エンコーダなど）を実装する際に使用します。
+  - `const buffer = await this.app.hostAPI.io.renderMasterAudio();`
+
+### プロジェクト情報 (`hostAPI.project`)
+
+- **`hostAPI.project.getProjectName()`**: 現在のプロジェクト名を取得します。
+- `hostAPI.project.getProjectName()`: プロジェクト名を取得します。
+- `hostAPI.project.getTracks()`: すべてのトラックの情報を取得します（非同期）。
+- `hostAPI.project.createTrack(name?)`: 新しいトラックを作成します（非同期）。
+  - 使用例: `const newTrack = await hostAPI.project.createTrack("My New Track");`
+- `hostAPI.project.updateTrack(trackId, updates)`: トラックの情報（名前、色など）を更新します（非同期）。
+- `hostAPI.project.getSelectedRegion()`: 現在エディタで選択されているリージョンオブジェクトを返します。
+- `hostAPI.project.getRegions(trackId)`: 指定したトラックに含まれる全ての MIDI リージョンの配列を返します。
+- `hostAPI.project.addNotes(trackId, notes)`: 指定したトラックにノートを一括追加します。
+  - **重要**: ノートの範囲をカバーする `MIDIRegion` を**自動的に新規作成**して追加します。
+  - **重要 (引数)**: 各ノートオブジェクトには **`start` (ms単位の開始位置)**、`pitch`、`duration` が必須です。`start` を忘れると配置に失敗します。
+- `hostAPI.project.addNotesToRegion(region, notes)`: **既存のリージョン内**にノートを追記します。
+  - ノートがリージョンの末尾を超える場合、リージョンの長さは自動的に拡張されます。
+  - 使用例: `const reg = this.app.hostAPI.project.getSelectedRegion(); if (reg) { this.app.hostAPI.project.addNotesToRegion(reg, [...]); }`
+- `hostAPI.project.getSelectedNotes()`: ピアノロールで選択されているノートを `{ note: MIDINote, region: MIDIRegion, globalStart: number }[]` の形式で取得します。
+- `hostAPI.project.updateNotes(updates)`: ノートの情報を更新します。`{ region, note, pitch?, start?, duration?, velocity? }[]` を受け取ります。
+  - **重要**: ノートはイミュータブルなため、内部的に削除と再生成が行われ、UI も即座に更新されます。
+  - 使用例: `const notes = this.app.hostAPI.project.getSelectedNotes(); this.app.hostAPI.project.updateNotes(notes.map(n => ({ ...n, velocity: 127 })));`
+
+---
+
+### MIDI & リージョンの生成・操作 (`MIDI` & `MIDINote`)
+
+ノートやリージョンの操作時に以下の仕様を厳守してください。
+
+1. **MIDINote クラス**:
+    - プロパティ: `note` (pitch), `velocity` (0-1), `channel`, `duration` (ms)
+    - **注意**: `clone()` メソッドはありません。新しいノートを作るには `new MIDINote(note, velocity, channel, duration)` を使用してください。
+    - **イミュータブル**: `MIDINote` のプロパティの多くは `readonly` です。値を変更する場合は、常に新しいインスタンスを生成してください。
+
+2. **MIDI クラス**:
+    - プロパティ: `duration` (全体の長さms), `instant_duration` (解像度), `notes` (全ノートの配列)
+    - 生成: `MIDI.fromNotes(notesArray, instantDuration, totalDuration)` を使用。
+    - **注意**: 長さを示すプロパティ名は **`duration`** です。
+
+3. **リージョンへの反映**:
+    - `MIDIRegion` インスタンスの `midi` プロパティに作成した `MIDI` オブジェクトを代入することで反映されます。
+
+### コーディング規約 (厳守)
+
+- **NULL 安全**: TypeScript の厳格なモードが有効です。`getElementById` や `querySelector`、`element.closest` で取得した DOM 要素をプロパティや引数として使用する際は、必ず `if (element)` によるチェックを行うか、非 null アサーション (`!`) を適切に使用してください。
+- **型アサーション**: `e.target` などから要素を扱う際は `(e.target as HTMLInputElement)` のように明示的にキャストしてください。
 
 ---
 
@@ -182,6 +230,56 @@ Tauri環境とWeb環境の両方で動作する抽象化レイヤーです。
 - **`app.regionsController`**: リージョン管理
 - **`app.host`**: 再生・トランスポート管理 (`play()`, `pause()`, `transportPosition`)
 
+---
+
+## 直接操作 (直接実行モード) のガイドライン
+
+AI アシスタントがプロンプトに応じて `typescript-exec` コードブロックを生成し、楽曲を直接操作する場合、以下のルールを遵守してください。
+
+1. **非同期処理の await 徹底**:
+    - `hostAPI.project.getTracks()`
+    - `hostAPI.project.createTrack()`
+    - `hostAPI.project.updateTrack()`
+    - `hostAPI.project.updateNotes()`
+    - これらを含む、Promise を返す全てのメソッド呼び出しには必ず **`await`** を付けてください。`await` を忘れると、データが空（空配列など）として扱われ、操作に失敗します。
+
+2. **安全な配列アクセス**:
+    - 「3番目のトラック」のようにインデックスで指定された場合、アクセス前に必ず `length` が足りているか確認してください。
+    - 例: `if (tracks.length >= 3) { ... } else { hostAPI.ui.showToast("トラックが見つかりません", true); }`
+
+3. **ユーザーへのフィードバック**:
+    - 操作の成功や失敗をユーザーに知らせるため、必ず `hostAPI.ui.showToast(message, isError?)` を使用してください。
+    - 成功時だけでなく、条件（トラックが見つからない等）に合致しなかった場合も通知を出してください。
+
+4. **変数名の明快さ**:
+    - 実行内容がデベロッパーコンソールに出力されるため、可読性の高いコードを記述してください。
+
+### 直接操作の成功例 (Snippet)
+
+```typescript
+// 3番目のトラックの名前を変更する場合
+const tracks = await hostAPI.project.getTracks(); // await が必須
+if (tracks.length >= 3) {
+    const target = tracks[2];
+    await hostAPI.project.updateTrack(target.id, { name: "New Name" });
+    hostAPI.ui.showToast(`トラック「${target.name}」の名前を変更しました。`);
+} else {
+    hostAPI.ui.showToast("3番目のトラックが見つかりませんでした。", true);
+}
+
+// 新規トラックを作成してメロディ（ド・レ・ミ）を追加する場合
+const newTrack = await hostAPI.project.createTrack("Melody Track"); // 新規作成
+const notes = [
+    { pitch: 60, start: 0, duration: 500 },   // ド (startが必須)
+    { pitch: 62, start: 500, duration: 500 }, // レ
+    { pitch: 64, start: 1000, duration: 500 } // ミ
+];
+await hostAPI.project.addNotes(newTrack.id, notes);
+hostAPI.ui.showToast("新規トラックにメロディを作成しました。");
+```
+
+---
+
 ### 注意事項
 
 - UI は必ず引数で渡された `container` 内に構築してください。グローバルな `document.body` などに直接 append しないでください。
@@ -191,9 +289,10 @@ Tauri環境とWeb環境の両方で動作する抽象化レイヤーです。
 プラグインは2種類のデータを管理できます。それぞれの用途に合わせてメソッドを実装してください。
 
 ### 1. ユーザーデータ (User Data) - グローバル設定
-*   **用途**: プラグイン全体の設定、APIキー、UIの好みなど。
-*   **寿命**: プロジェクトが変わっても保持されます (`localStorage` に保存)。ユーザーがプラグインを**アンインストールすると削除**されます。
-*   **実装**: `getUserData` / `setUserData`
+
+- **用途**: プラグイン全体の設定、APIキー、UIの好みなど。
+- **寿命**: プロジェクトが変わっても保持されます (`localStorage` に保存)。ユーザーがプラグインを**アンインストールすると削除**されます。
+- **実装**: `getUserData` / `setUserData`
 
 ```typescript
 // ユーザーデータの取得（保存時に呼ばれる）

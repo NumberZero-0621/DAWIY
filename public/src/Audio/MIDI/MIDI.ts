@@ -494,6 +494,23 @@ export class MIDI extends MIDIView {
         list.push({ offset, note })
     }
 
+    /**
+     * Remove a note from the MIDI track.
+     * @param note The note to remove.
+     * @param start The start time of the note in milliseconds.
+     */
+    removeNote(note: MIDINote, start: number): boolean {
+        const instant_index = Math.floor(start / this.instant_duration);
+        if (instant_index >= this.instant_count) return false;
+        const list = this.instantAt(instant_index);
+        const index = list.findIndex(n => n.note === note && Math.abs(n.offset + instant_index * this.instant_duration - start) < 1);
+        if (index !== -1) {
+            list.splice(index, 1);
+            return true;
+        }
+        return false;
+    }
+
 
     /**
      * Change the duration and the allocated instants so it can contains all notes and not more.

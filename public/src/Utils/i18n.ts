@@ -224,7 +224,11 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "ai.send_mode.enter": "Enter",
         "ai.send_mode.ctrl_enter": "Ctrl + Enter",
         "ai.voice_input": "Voice Input",
-        "ai.stop_recording": "Stop Recording"
+        "ai.stop_recording": "Stop Recording",
+        "ai.direct_exec_mode_label": "Direct Execution Mode",
+        "ai.mode_developer": "Developer (Show code & Confirm)",
+        "ai.mode_auto": "Auto (Execute immediately)",
+        "ai.send_mode_label": "Send Key"
     },
     "ja": {
         "loading": "読み込み中",
@@ -445,7 +449,11 @@ export const DICTIONARY: { [lang in Language]: { [key: string]: string } } = {
         "ai.send_mode.enter": "Enter",
         "ai.send_mode.ctrl_enter": "Ctrl + Enter",
         "ai.voice_input": "音声入力",
-        "ai.stop_recording": "音声入力を停止"
+        "ai.stop_recording": "音声入力を停止",
+        "ai.direct_exec_mode_label": "実行モード (直接操作)",
+        "ai.mode_developer": "開発者モード (確認あり)",
+        "ai.mode_auto": "自動実行モード (確認なし)",
+        "ai.send_mode_label": "送信キー"
     }
 };
 

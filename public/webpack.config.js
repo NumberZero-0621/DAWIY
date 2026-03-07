@@ -27,10 +27,17 @@ module.exports = (env, argv) => {
                 "Cross-Origin-Opener-Policy": "same-origin"
             },
             compress: true,
-            static: {
-                directory: path.join(__dirname, 'static'),
-                watch: true,
-            },
+            static: [
+                {
+                    directory: path.join(__dirname, 'static'),
+                    watch: true,
+                },
+                {
+                    directory: path.join(__dirname, 'src', 'DawiyPlugins'),
+                    publicPath: '/src/DawiyPlugins',
+                    watch: true,
+                }
+            ],
             client: {
                 logging: "warn",
                 overlay: false,
@@ -162,7 +169,10 @@ module.exports = (env, argv) => {
         plugins: [
             // Copy our static assets to the final build
             new CopyPlugin({
-                patterns: [{ from: 'static/' }],
+                patterns: [
+                    { from: 'static/' },
+                    { from: 'src/DawiyPlugins/AGENTS.md', to: 'src/DawiyPlugins/AGENTS.md' }
+                ],
             }),
 
             // Make an index.html from the template

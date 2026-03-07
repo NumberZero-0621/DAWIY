@@ -2,78 +2,48 @@ import { BACKEND_URL } from "../Env";
 import { t } from "../Utils/i18n";
 
 const SYSTEM_PROMPT = `
-You are an expert DAWIY Plugin Developer and an intelligent engineering partner.
-Your goal is to help the user build TypeScript plugins for DAWIY, a Digital Audio Workstation.
+あなたはDAWIYプラグインの開発者であり、ユーザーのAIアシスタントです。
+あなたの目標は、ユーザーがTypeScriptプラグインを構築したり、
+DAWIY(このDAWの名前)でプロジェクトを直接操作したりできるように支援することです。
 
-# Interaction Guidelines (CRITICAL):
-1.  **Be Conversational**: Do NOT just output code immediately unless the user's request is simple and unambiguous.
-    -   If the request is vague (e.g., "I want a synth"), ASK clarifying questions (e.g., "What kind of synth? Subtractive? FM? Any specific controls?").
-    -   Discuss requirements, suggest features, and explain technical tradeoffs if necessary.
-    -   You can engage in casual conversation if the user initiates it, but always steer back to productivity eventually.
-    -   If the user asks for something impossible or harmful, politely decline or suggest a safe alternative.
+# 応答のスタイル:
+- 親しみやすく、協力的なトーンで話してください。
+- 直接操作（即時操作）を行う場合でも、
+  「はい、承知しました！」「〇〇を更新しますね」といった、
+  短い確認や説明のメッセージを必ず添えてください。
+- 無機質なコードブロックだけの応答は避けてください。
 
-2.  **Strategic Code Generation**:
-    -   Output the full TypeScript plugin code ONLY when:
-        a) You have enough information to build a working prototype.
-        b) The user explicitly asks for the code (e.g., "Show me the code").
-    -   When you DO output code, wrap it in a \`typescript\` code block. This triggers the "Create/Update Plugin" button in the UI.
+# 応答モード:
+ユーザーのリクエストは主に以下の2種類に分類出来ます。文章によってどちらの内容か判別してください。
+1. ** プラグイン開発 **:
+    - 目的: 新しいツール、GUI付きの機能、継続的に使いたい機能を開発する場合。
+    - 出力形式: \`\`\`typescript\`\`\` ブロックを使用（完全なファイル内容）。
+        - クラス定義などの定型文を含めてください。
+    - 判別のヒント: 「...というプラグインを作成してください」のように、プラグインを作成するというワードが入っていれば大抵はこちらのモードを選択してください。
 
-3.  **Iterative Updates**:
-    -   When the user asks for changes to an EXISTING plugin you just wrote (or is in context), you MUST:
-        -   Keep the same \`class Name\` and \`filename\`.
-        -   Output the **COMPLETE** updated file content, not just a diff. This allows the user to overwrite the old file easily.
-        -   Explain briefly what you changed before showing the code.
+2. ** 即時操作 **:
+    - 目的: 「トラック名を変更して」「選択中のノートを半音上げて」「何か良いメロディーを作成して」といった、その場限りの操作・編集。
+    - 出力形式: \`\`\`typescript-exec\`\`\` ブロックを使用。
+    - **重要**: クラス定義などの定型文は不要です。 \`app\` または \`hostAPI\` オブジェクトを直接使って、実行したいロジックだけを書いてください。
+        - 例: \`hostAPI.project.updateNotes(...)\`
+    - 判別のヒント: 「...してください」のように、プラグインという単語を出さず、即座に実行出来るような内容を言っていた場合はこちらのモードを選択してください。
 
-# Plugin Technical Rules (STRICTLY FOLLOW THIS):
-1.  **Class Definition**:
-    -   MUST extend \`DawiyPluginBase\`.
-    -   MUST use \`@DAWIYPlugin\` decorator (WITHOUT arguments).
-    -   MUST be the \`default export\`.
-    -   Define metadata (\`id\`, \`name\`, \`description\`, \`author\`, \`version\`) as **class properties**.
+# ガイドライン:
+1. リクエストが曖昧な場合は質問してください。
+2. あなたには最新の API 参照ドキュメント (\`AGENTS.md\`) が提供されます。それを主な情報源としてください。
 
-2.  **Constructor**:
-    -   MUST match: \`constructor(app: App) { super(app); }\`.
+# プラグインの技術的ルール:
+- \`DawiyPluginBase\` を継承する必要があります。
+- \`@DAWIYPlugin\` デコレータを使用する必要があります。
+- 内部コントローラーへのアクセスには \`this.app\` を使用し、高レベル API アクセスには \`this.app.hostAPI\` を使用します。
+- **特定のメソッドシグネチャ (MIDINote、HostAPI など) については \`AGENTS.md\` を参照してください。**
 
-3.  **Lifecycle**:
-    -   Implement \`onInit(host: HostAPI)\` to register UI/IO hooks.
-    -   Implement \`render(container: HTMLElement)\` to build Main UI (if needed).
-    -   Implement \`onActivate()\` and \`onDeactivate()\` for lifecycle management.
+# 注意事項
+- 変数名には日本語やスペースを使用せず、常に英数字（CamelCaseなど）を使用すること。
+- テンプレートリテラル \${} 内での構文ミスに細心の注意を払うこと。
+- 定義した変数名と、使用する変数名が一致しているか二重チェックすること。
 
-4.  **API Access (\`this.app.hostAPI\`) (NEW & PREFERRED)**:
-    -   **UI**: \`this.app.hostAPI.ui\`
-        -   \`registerSidebarItem(id, icon, label, element)\`: Add sidebar tab.
-        -   \`showToast(msg, isError?)\`: Show notification.
-        -   \`openWindow(title, content)\`: Open floating window.
-    -   **File System**: \`this.app.hostAPI.fs\`
-        -   \`readFile()\`: Open file picker & read text.
-        -   \`writeFile(path, content)\`: Save/Download file.
-    -   **I/O**: \`this.app.hostAPI.io\`
-        -   \`registerImporter(ext, callback)\`: Handle custom file drops (e.g., .txt, .json).
-        -   \`registerExporter(name, callback)\`: Add export menu item.
-
-5.  **Core Access (\`this.app\`)**:
-    -   **Tracks**: \`this.app.tracksController\` (Use \`await this.app.tracksController.createTrack("Name")\` to create a track. Do NOT use string arguments on \`addTrack\`).
-    -   **Regions / Clips**: \`this.app.regionsController\` (Use \`this.app.regionsController.addRegion(track, region)\` to place clips on a track. There is NO \`addMidiClip\` method).
-    -   **Transport**: \`this.app.host\` (play, pause)
-
-6.  **MIDI & Regions Generation**:
-    - To generate MIDI, instantiate \`const midi = new MIDI(500, durationMs)\`, then add notes with \`midi.putNote(new MIDINote(pitch, vel, 0, noteDurMs), startMs)\`.
-    - Create a region via \`const region = new MIDIRegion(midi, regionStartMs)\` and add it using \`regionsController.addRegion(track, region)\`.
-
-7.  **Imports**:
-    \`import App from "../../App";\`
-    \`import { DAWIYPlugin } from "../IDawiyPlugin";\`
-    \`import DawiyPluginBase from "../DawiyPluginBase";\`
-    \`import HostAPI from "../API/HostAPI";\`
-    \`import Track from "../../Models/Track/Track";\`
-    \`import MIDIRegion from "../../Models/Region/MIDIRegion";\`
-    \`import { MIDI, MIDINote } from "../../Audio/MIDI/MIDI";\`
-
-8.  **UI Construction**:
-    -   Use standard DOM APIs (\`document.createElement\`).
-    -   Style with inline styles or Bootstrap utility classes (if available).
-
-# Example Plugin Structure:
+# プラグイン構造の例:
 
 \`\`\`typescript
 import App from "../../App";
@@ -96,7 +66,7 @@ export default class MyPlugin extends DawiyPluginBase {
     /**
      * Called when plugin is loaded. Use this to register sidebar items or importers.
      */
-    onInit(host: HostAPI) {
+    public override onInit(host: HostAPI) {
         // Register a sidebar item
         const sidebarDiv = document.createElement("div");
         sidebarDiv.innerHTML = "<button>Click Me</button>";
@@ -109,12 +79,12 @@ export default class MyPlugin extends DawiyPluginBase {
         });
     }
 
-    render(container: HTMLElement) {
+    public override render(container: HTMLElement) {
         // Main plugin view (if opened from Plugin Manager)
         container.innerHTML = "<h3>Main View</h3>";
     }
 
-    onDeactivate() {
+    public override onDeactivate() {
         // Cleanup listeners here
     }
 }
@@ -149,6 +119,7 @@ export default class AiAssistantSidebar extends HTMLElement {
     private sessions: ChatSession[] = [];
     private createdPluginsInSession: Set<string> = new Set();
     private sendMode: string = "enter";
+    private directExecMode: "developer" | "auto" = "developer";
 
     // Prompt history for up/down arrow navigation
     private promptHistory: string[] = [];
@@ -203,6 +174,7 @@ export default class AiAssistantSidebar extends HTMLElement {
         } catch { this.sessions = []; }
 
         this.sendMode = localStorage.getItem("ai_send_mode") || "enter";
+        this.directExecMode = (localStorage.getItem("ai_direct_exec_mode") as any) || "developer";
 
         // Load prompt history
         try {
@@ -1025,15 +997,25 @@ export default class AiAssistantSidebar extends HTMLElement {
                 </div>
 
                 <div class="setting-group">
-                    <label>${t("ai.send_mode")}</label>
+                    <label>${t("ai.send_mode_label")}</label>
                     <select id="send-mode-select">
                         <option value="enter">${t("ai.send_mode.enter")}</option>
                         <option value="ctrl_enter">${t("ai.send_mode.ctrl_enter")}</option>
                     </select>
                 </div>
 
-                <button id="save-key-btn">${t("ai.save_settings")}</button>
-                <button id="close-settings-btn">${t("ai.close")}</button>
+                <div class="setting-group">
+                    <label>${t("ai.direct_exec_mode_label")}</label>
+                    <select id="direct-exec-mode-select">
+                        <option value="developer">${t("ai.mode_developer")}</option>
+                        <option value="auto">${t("ai.mode_auto")}</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button id="save-key-btn">${t("ai.save_settings")}</button>
+                    <button id="close-settings-btn">${t("ai.close")}</button>
+                </div>
             </div>
         </div>
 
@@ -1071,6 +1053,7 @@ export default class AiAssistantSidebar extends HTMLElement {
         const apiKeyInput = this.shadow.getElementById("api-key-input") as HTMLInputElement;
         const apiKeyLabel = this.shadow.getElementById("api-key-label") as HTMLLabelElement;
         const sendModeSelect = this.shadow.getElementById("send-mode-select") as HTMLSelectElement;
+        const directExecModeSelect = this.shadow.getElementById("direct-exec-mode-select") as HTMLSelectElement;
 
         const newChatBtn = this.shadow.getElementById("new-chat-btn") as HTMLButtonElement;
         const historyBtn = this.shadow.getElementById("history-btn") as HTMLButtonElement;
@@ -1122,6 +1105,7 @@ export default class AiAssistantSidebar extends HTMLElement {
             // Sync UI state
             providerSelect.value = this.currentProvider;
             sendModeSelect.value = this.sendMode;
+            directExecModeSelect.value = this.directExecMode;
             updateUIForProvider();
             settingsOverlay.style.display = "flex";
 
@@ -1143,6 +1127,7 @@ export default class AiAssistantSidebar extends HTMLElement {
             const key = apiKeyInput.value.trim();
             const model = modelSelect.value;
             const mode = sendModeSelect.value;
+            this.directExecMode = directExecModeSelect.value as any;
 
             this.apiKeys[provider] = key;
             this.currentProvider = provider;
@@ -1153,6 +1138,7 @@ export default class AiAssistantSidebar extends HTMLElement {
             localStorage.setItem("selected_provider", provider);
             localStorage.setItem(`selected_model_${provider}`, model);
             localStorage.setItem("ai_send_mode", mode);
+            localStorage.setItem("ai_direct_exec_mode", this.directExecMode);
 
             this.addMessage("system", t("ai.settings_saved").replace("{provider}", this.capitalize(provider)));
 
@@ -1396,12 +1382,14 @@ export default class AiAssistantSidebar extends HTMLElement {
             modelSelect.appendChild(opt);
         });
 
-        // Select current if exists, else first
+        // Select current if exists
         if (foundCurrent) {
             modelSelect.value = this.currentModel;
         } else if (models.length > 0) {
+            // If current not in list, we don't automatically overwrite this.currentModel here 
+            // to avoid side effects during loading/fetching. 
+            // The user will see the first one in the select, but it's not "saved" until Save button is clicked.
             modelSelect.value = models[0].id;
-            this.currentModel = models[0].id;
         }
     }
 
@@ -1478,13 +1466,6 @@ export default class AiAssistantSidebar extends HTMLElement {
             if (models.length > 0) {
                 this.availableModels[provider] = models;
                 this.populateModelSelect();
-                // Ensure selection persists
-                if (models.some(m => m.id === this.currentModel)) {
-                    // Fine
-                } else {
-                    this.currentModel = models[0].id;
-                    localStorage.setItem(`selected_model_${provider}`, this.currentModel);
-                }
             }
 
         } catch (e) {
@@ -1502,12 +1483,15 @@ export default class AiAssistantSidebar extends HTMLElement {
         msgDiv.className = `message ${role}`;
 
         if (role === "model") {
-            // Basic markdown parsing for code blocks
-            const codeBlockRegex = /```typescript([\s\S]*?)```/g;
+            // Fix: Try longer match first (typescript-exec) to avoid partial match with "typescript"
+            const codeBlockRegex = /```(typescript-exec|typescript)([\s\S]*?)```/g;
             let lastIndex = 0;
             let match;
 
             while ((match = codeBlockRegex.exec(text)) !== null) {
+                const lang = match[1];
+                const code = match[2].trim();
+
                 // Add text before code
                 const before = text.substring(lastIndex, match.index);
                 if (before.trim()) {
@@ -1517,43 +1501,58 @@ export default class AiAssistantSidebar extends HTMLElement {
                     msgDiv.appendChild(p);
                 }
 
-                // Add Code Block
-                const code = match[1].trim();
-                const pre = document.createElement("pre");
-                pre.innerText = code;
-                msgDiv.appendChild(pre);
+                if (lang === "typescript-exec") {
+                    if (this.directExecMode === "auto") {
+                        // Auto-execution: don't show code or button, just run it
+                        this.executeDirectly(code);
+                    } else {
+                        // Developer Mode: Show code and manual button
+                        const pre = document.createElement("pre");
+                        pre.innerText = code;
+                        msgDiv.appendChild(pre);
 
-                // Add "Create Plugin" button
-                const btn = document.createElement("button");
-                btn.className = "create-plugin-btn";
-                // Try to infer filename or ask user?
-                const classNameMatch = code.match(/class\s+(\w+)/);
-                const className = classNameMatch ? classNameMatch[1] : "GeneratedPlugin";
-
-                // Check if this plugin was already created in this session
-                const codeHash = className + "_" + this.hashCode(code);
-                if (this.createdPluginsInSession.has(codeHash)) {
-                    btn.disabled = true;
-                    btn.innerHTML = `<i class='bi bi-check-lg'></i> ${t("ai.plugin_created")}`;
-                    btn.style.backgroundColor = "#28a745";
-                    btn.style.cursor = "default";
+                        const execBtn = document.createElement("button");
+                        execBtn.className = "create-plugin-btn";
+                        execBtn.style.backgroundColor = "#ffc107";
+                        execBtn.style.color = "#000";
+                        execBtn.innerHTML = `<i class='bi bi-play-fill'></i> 今すぐ実行 (Execute Now)`;
+                        execBtn.onclick = () => this.executeDirectly(code);
+                        msgDiv.appendChild(execBtn);
+                    }
                 } else {
-                    btn.innerHTML = `<i class='bi bi-tools'></i> ${t("ai.create_plugin")}`;
-                    btn.onclick = async () => {
-                        const success = await this.createPlugin(className, code);
-                        if (success) {
-                            // Change button to "Created!" state
-                            btn.disabled = true;
-                            btn.innerHTML = `<i class='bi bi-check-lg'></i> ${t("ai.plugin_created")}`;
-                            btn.style.backgroundColor = "#28a745";
-                            btn.style.cursor = "default";
-                            // Track in session
-                            this.createdPluginsInSession.add(codeHash);
-                            this.saveCurrentSession();
-                        }
-                    };
+                    // Always show code for plugins
+                    const pre = document.createElement("pre");
+                    pre.innerText = code;
+                    msgDiv.appendChild(pre);
+
+                    // Create Plugin Button (Original logic)
+                    const btn = document.createElement("button");
+                    btn.className = "create-plugin-btn";
+                    const classNameMatch = code.match(/class\s+(\w+)/);
+                    const className = classNameMatch ? classNameMatch[1] : "GeneratedPlugin";
+
+                    const codeHash = className + "_" + this.hashCode(code);
+                    if (this.createdPluginsInSession.has(codeHash)) {
+                        btn.disabled = true;
+                        btn.innerHTML = `<i class='bi bi-check-lg'></i> ${t("ai.plugin_created")}`;
+                        btn.style.backgroundColor = "#28a745";
+                        btn.style.cursor = "default";
+                    } else {
+                        btn.innerHTML = `<i class='bi bi-tools'></i> ${t("ai.create_plugin")}`;
+                        btn.onclick = async () => {
+                            const success = await this.createPlugin(className, code);
+                            if (success) {
+                                btn.disabled = true;
+                                btn.innerHTML = `<i class='bi bi-check-lg'></i> ${t("ai.plugin_created")}`;
+                                btn.style.backgroundColor = "#28a745";
+                                btn.style.cursor = "default";
+                                this.createdPluginsInSession.add(codeHash);
+                                this.saveCurrentSession();
+                            }
+                        };
+                    }
+                    msgDiv.appendChild(btn);
                 }
-                msgDiv.appendChild(btn);
 
                 lastIndex = codeBlockRegex.lastIndex;
             }
@@ -1646,6 +1645,21 @@ export default class AiAssistantSidebar extends HTMLElement {
         const key = this.apiKeys[provider];
         const model = this.currentModel;
 
+        // 【追加】AGENTS.md を最新の参照資料として動的に取得する
+        let agentsDocs = "";
+        try {
+            const response = await fetch('/src/DawiyPlugins/AGENTS.md');
+            if (response.ok) {
+                agentsDocs = await response.text();
+            }
+        } catch (e) {
+            console.warn("Failed to fetch AGENTS.md for context:", e);
+        }
+
+        const effectiveSystemPrompt = agentsDocs
+            ? `${SYSTEM_PROMPT}\n\n# REFERENCE_MATERIAL (Current AGENTS.md):\n${agentsDocs}`
+            : SYSTEM_PROMPT;
+
         try {
             // Add user message to history immediately
             this.chatHistory.push({ role: "user", parts: [{ text: userText }] });
@@ -1666,7 +1680,7 @@ export default class AiAssistantSidebar extends HTMLElement {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             contents: [
-                                { role: "user", parts: [{ text: SYSTEM_PROMPT }] },
+                                { role: "user", parts: [{ text: effectiveSystemPrompt }] },
                                 ...contextHistory
                             ]
                         })
@@ -1689,7 +1703,7 @@ export default class AiAssistantSidebar extends HTMLElement {
                         body: JSON.stringify({
                             model: model,
                             messages: [
-                                { role: "system", content: SYSTEM_PROMPT },
+                                { role: "system", content: effectiveSystemPrompt },
                                 ...contextHistory.map(h => ({ role: h.role === "model" ? "assistant" : "user", content: h.parts[0].text }))
                             ]
                         })
@@ -1713,7 +1727,7 @@ export default class AiAssistantSidebar extends HTMLElement {
                         body: JSON.stringify({
                             model: model,
                             max_tokens: 4096,
-                            system: SYSTEM_PROMPT,
+                            system: effectiveSystemPrompt,
                             messages: [
                                 ...contextHistory.map(h => ({ role: h.role === "model" ? "assistant" : "user", content: h.parts[0].text }))
                             ]
@@ -1799,6 +1813,28 @@ export default class AiAssistantSidebar extends HTMLElement {
         } catch (e: any) {
             this.addMessage("system", t("ai.plugin_error") + e.message);
             return false;
+        }
+    }
+
+    private async executeDirectly(code: string) {
+        console.log("%c[DAWIY AI] Executing Direct Code:", "color: #0c85d0; font-weight: bold; background: #212529; padding: 2px 5px; border-radius: 3px;");
+        console.log(code);
+
+        try {
+            // @ts-ignore - access to internal app context
+            const app = (window as any).app || (this as any).app;
+            const hostAPI = app.hostAPI;
+
+            // Use AsyncFunction to support 'await' in the injected code
+            const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
+            const fn = new AsyncFunction('app', 'hostAPI', code);
+            await fn(app, hostAPI);
+
+            // Notify UI (the user can see the friendly AI message, and this system message confirms technically)
+            this.addMessage("system", "直接操作が正常に実行されました。");
+        } catch (e: any) {
+            this.addMessage("system", "直接操作の実行に失敗しました: " + e.message);
+            console.error("Direct Execution Error:", e);
         }
     }
 }

@@ -115,6 +115,7 @@ export default class PianoRollController {
     // Double Click State
     private _lastVelocityBarClickTime: number = 0;
     private _lastClickedVelocityNote: MIDINote | null = null;
+    private _lastPreviewedVelocity: number | null = null;
     private _velocityDragPending: boolean = false;
 
 
@@ -1155,12 +1156,6 @@ export default class PianoRollController {
                     }
                     this._selectedNotes.add(clickedNote);
                     this.redraw();
-                } else {
-                    // If already selected:
-                    if (isModifier) {
-                        // If Ctrl click on selected, maybe deselect?
-                        // For now keep simple: Do nothing, just prepare to drag group
-                    }
                 }
 
                 if (originalEvent.detail === 2 || (Date.now() - this._lastVelocityBarClickTime < 500 && this._lastClickedVelocityNote === clickedNote)) {
@@ -1177,6 +1172,9 @@ export default class PianoRollController {
 
                 this._lastVelocityBarClickTime = Date.now();
                 this._lastClickedVelocityNote = clickedNote;
+
+                // Play preview on click/drag-start. Will be stopped in handlePointerUp
+                this.previewNote(clickedNote.note, clickedNote.velocity);
 
                 this._velocityDragPending = true;
                 this._isChangingVelocity = false;
@@ -2517,7 +2515,7 @@ export default class PianoRollController {
         }
     }
 
-    private previewNote(noteVal: number) {
+    private previewNote(noteVal: number, velocity: number = 100) {
         if (!this._track) return;
 
         const currentTime = audioCtx.currentTime;
@@ -2536,12 +2534,11 @@ export default class PianoRollController {
             this._track.audioInputNode.scheduleEvents({
                 type: 'wam-midi',
                 time: currentTime,
-                data: { bytes: [0x90, noteVal, 100] }
+                data: { bytes: [0x90, noteVal, velocity] }
             });
             this._lastPreviewedNote = noteVal;
+            this._lastPreviewedVelocity = velocity;
         }
-
-
     }
 
     private stopPreview() {
