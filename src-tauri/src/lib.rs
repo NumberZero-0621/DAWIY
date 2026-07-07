@@ -1,4 +1,4 @@
-use tauri::command;
+use tauri::{command, Manager};
 use std::path::Path;
 use std::ffi::c_void;
 use libloading::{Library, Symbol};
@@ -99,6 +99,8 @@ fn try_load_vst(path: &Path) -> bool {
 
 mod vst_host;
 mod midi;  // スタンドアロンVST起動モジュール
+mod mixer;
+mod audio_engine; // Rustネイティブオーディオエンジン
 
 #[command]
 fn open_vst_editor(path: String, sample_rate: f32) -> Result<u32, String> {
@@ -176,6 +178,27 @@ fn process_vst_audio(instance_id: u32, req_samples: usize, input_l_bytes: Vec<u8
     Ok(tauri::ipc::Response::new(bytes))
 }
 
+#[command]
+fn add_track(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32) {
+    if let Ok(mut mixer) = state.lock() {
+        mixer.add_track(track_id);
+    }
+}
+
+#[command]
+fn set_track_vst(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, vst_id: u32) {
+    if let Ok(mut mixer) = state.lock() {
+        mixer.set_track_vst(track_id, vst_id);
+    }
+}
+
+#[command]
+fn play_midi_note(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, status: u8, data1: u8, data2: u8) {
+    if let Ok(mut mixer) = state.lock() {
+        mixer.send_midi(track_id, status, data1, data2);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -189,11 +212,30 @@ pub fn run() {
             send_vst_midi,
         get_vst_audio,
         process_vst_audio,
+        add_track,
+        set_track_vst,
+        play_midi_note,
         midi::list_midi_outputs,
         midi::open_midi_output,
         midi::close_midi_output,
         midi::send_midi_message
     ])
+    .setup(|app| {
+        let mixer = std::sync::Arc::new(std::sync::Mutex::new(mixer::Mixer::new()));
+        app.manage(mixer.clone());
+
+        // スタートアップ時にオーディオエンジンを起動（一旦テスト用）
+        match audio_engine::AudioEngineHandle::new(mixer) {
+            Ok(handle) => {
+                // アプリケーションの状態として保持（将来的に外部から操作するため）
+                app.manage(std::sync::Mutex::new(handle));
+            }
+            Err(e) => {
+                log::error!("Failed to start audio engine: {}", e);
+            }
+        }
+        Ok(())
+    })
     .on_window_event(|window, event| {
         match event {
             tauri::WindowEvent::CloseRequested { .. } => {
