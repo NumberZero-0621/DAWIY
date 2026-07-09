@@ -99,6 +99,7 @@ fn try_load_vst(path: &Path) -> bool {
 
 mod vst_host;
 mod midi;  // スタンドアロンVST起動モジュール
+mod audio_loader;
 mod mixer;
 mod audio_engine; // Rustネイティブオーディオエンジン
 
@@ -162,7 +163,7 @@ fn process_vst_audio(instance_id: u32, req_samples: usize, input_l_bytes: Vec<u8
         unsafe { std::slice::from_raw_parts(ptr, len).to_vec() }
     };
 
-    let (out_l, out_r) = vst_host::process_audio(instance_id, req_samples, in_l_f32, in_r_f32)?;
+    let (out_l, out_r) = vst_host::process_audio(instance_id, req_samples, in_l_f32, in_r_f32, false, 0)?;
     
     let samples = out_l.len() as u32;
     let mut bytes = Vec::with_capacity(4 + (out_l.len() + out_r.len()) * 4);
@@ -177,25 +178,146 @@ fn process_vst_audio(instance_id: u32, req_samples: usize, input_l_bytes: Vec<u8
     
     Ok(tauri::ipc::Response::new(bytes))
 }
+#[command]
+fn add_audio_buffer(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, buffer_id: u32, left_bytes: Vec<u8>, right_bytes: Vec<u8>) {
+    let left: Vec<f32> = {
+        let ptr = left_bytes.as_ptr() as *const f32;
+        let len = left_bytes.len() / 4;
+        unsafe { std::slice::from_raw_parts(ptr, len).to_vec() }
+    };
+    let right: Vec<f32> = {
+        let ptr = right_bytes.as_ptr() as *const f32;
+        let len = right_bytes.len() / 4;
+        unsafe { std::slice::from_raw_parts(ptr, len).to_vec() }
+    };
+    
+    if let Ok(mut mixer) = state.lock() {
+        mixer.add_audio_buffer(buffer_id, left, right);
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct JsRegion {
+    buffer_id: u32,
+    start_samples: f64,
+    length_samples: f64,
+    offset_samples: f64,
+}
 
 #[command]
-fn add_track(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32) {
+async fn load_audio_file(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, buffer_id: u32, path: String) -> Result<audio_loader::AudioFileInfo, String> {
+    // Resolve URL-like paths
+    let mut real_path = path;
+    if real_path.starts_with("http://localhost:6002/") {
+        let relative = real_path.replace("http://localhost:6002/", "");
+        // Resolve to bank directory
+        let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        // Depending on where DAWIY is launched (src-tauri vs root), we might need to find bank/
+        let mut bank_path = current_dir.clone();
+        if bank_path.ends_with("src-tauri") {
+            bank_path.pop();
+        }
+        bank_path.push("bank");
+        bank_path.push(relative);
+        real_path = bank_path.to_string_lossy().to_string();
+    }
+    
+    // Background execution via spawn_blocking prevents blocking Tauri's async executor thread
+    let (info, left, right) = tauri::async_runtime::spawn_blocking(move || {
+        audio_loader::decode_file(&real_path, buffer_id)
+    }).await.map_err(|e| format!("Task failed: {}", e))??;
+    
     if let Ok(mut mixer) = state.lock() {
-        mixer.add_track(track_id);
+        mixer.add_audio_buffer(buffer_id, left, right);
+    }
+    Ok(info)
+}
+
+#[command]
+async fn load_audio_from_memory(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, buffer_id: u32, data: Vec<u8>) -> Result<audio_loader::AudioFileInfo, String> {
+    let (info, left, right) = audio_loader::decode_memory(data, buffer_id)?;
+    if let Ok(mut mixer) = state.lock() {
+        mixer.add_audio_buffer(buffer_id, left, right);
+    }
+    Ok(info)
+}
+
+#[command]
+fn read_file_bytes(path: String) -> Result<tauri::ipc::Response, String> {
+    match std::fs::read(&path) {
+        Ok(bytes) => Ok(tauri::ipc::Response::new(bytes)),
+        Err(e) => Err(e.to_string())
     }
 }
 
 #[command]
-fn set_track_vst(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, vst_id: u32) {
+fn update_track_regions(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, regions: Vec<JsRegion>) {
     if let Ok(mut mixer) = state.lock() {
-        mixer.set_track_vst(track_id, vst_id);
+        let rust_regions = regions.into_iter().map(|r| mixer::Region {
+            buffer_id: r.buffer_id,
+            start_samples: r.start_samples as u64,
+            length_samples: r.length_samples as u64,
+            offset_samples: r.offset_samples as u64,
+        }).collect();
+        mixer.update_track_regions(track_id, rust_regions);
+    }
+}
+
+#[command]
+fn add_track(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32) {
+    if let Ok(mut mixer) = state.lock() {
+        // Just initializes the track with default values
+        mixer.set_track_volume(track_id, 1.0);
+    }
+}
+
+#[command]
+fn set_track_volume(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, volume: f32) {
+    if let Ok(mut mixer) = state.lock() {
+        mixer.set_track_volume(track_id, volume);
+    }
+}
+
+#[command]
+fn set_track_pan(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, pan: f32) {
+    if let Ok(mut mixer) = state.lock() {
+        mixer.set_track_pan(track_id, pan);
+    }
+}
+
+#[command]
+fn set_track_vsts(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, vst_ids: Vec<u32>) {
+    if let Ok(mut mixer) = state.lock() {
+        mixer.set_track_vsts(track_id, vst_ids);
     }
 }
 
 #[command]
 fn play_midi_note(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, status: u8, data1: u8, data2: u8) {
     if let Ok(mut mixer) = state.lock() {
-        mixer.send_midi(track_id, status, data1, data2);
+        mixer.add_midi_event(track_id, status, data1, data2);
+    }
+}
+
+#[command]
+fn host_play(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>) {
+    if let Ok(mut mixer) = state.lock() {
+        mixer.is_playing = true;
+    }
+}
+
+#[command]
+fn host_pause(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>) {
+    if let Ok(mut mixer) = state.lock() {
+        mixer.is_playing = false;
+    }
+}
+
+#[command]
+fn host_set_playhead(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, playhead_ms: f64) {
+    if let Ok(mut mixer) = state.lock() {
+        let sample_rate = mixer.sample_rate as f64;
+        mixer.playhead_samples = ((playhead_ms / 1000.0) * sample_rate) as u64;
     }
 }
 
@@ -205,16 +327,27 @@ pub fn run() {
     .plugin(tauri_plugin_log::Builder::default().build())
     .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
-        scan_plugins,            open_vst_editor,
-            close_vst_editor,
-            close_all_vst_editors,
-            show_vst_editor,
-            send_vst_midi,
+        scan_plugins,
+        open_vst_editor,
+        close_vst_editor,
+        close_all_vst_editors,
+        show_vst_editor,
+        send_vst_midi,
         get_vst_audio,
         process_vst_audio,
+        add_audio_buffer,
+        update_track_regions,
         add_track,
-        set_track_vst,
+        set_track_volume,
+        set_track_pan,
+        set_track_vsts,
         play_midi_note,
+        host_play,
+        host_pause,
+        host_set_playhead,
+        load_audio_file,
+        load_audio_from_memory,
+        read_file_bytes,
         midi::list_midi_outputs,
         midi::open_midi_output,
         midi::close_midi_output,
@@ -224,10 +357,8 @@ pub fn run() {
         let mixer = std::sync::Arc::new(std::sync::Mutex::new(mixer::Mixer::new()));
         app.manage(mixer.clone());
 
-        // スタートアップ時にオーディオエンジンを起動（一旦テスト用）
-        match audio_engine::AudioEngineHandle::new(mixer) {
+        match audio_engine::AudioEngineHandle::new(mixer, app.handle().clone()) {
             Ok(handle) => {
-                // アプリケーションの状態として保持（将来的に外部から操作するため）
                 app.manage(std::sync::Mutex::new(handle));
             }
             Err(e) => {
@@ -250,4 +381,3 @@ pub fn run() {
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
-

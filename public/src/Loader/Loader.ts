@@ -8,6 +8,8 @@ import MIDIRegion from "../Models/Region/MIDIRegion";
 import { RegionOf, RegionType } from "../Models/Region/Region";
 import SampleRegion from "../Models/Region/SampleRegion";
 import Track from "../Models/Track/Track";
+import { invoke } from "@tauri-apps/api/core";
+import RustAudioBuffer from "../Audio/RustAudioBuffer";
 import { audioCtx } from "../index";
 
 
@@ -23,19 +25,48 @@ const CURRENT_PROJECT_VERSION: [number, number] = [1, 0]
 /** Loaders to load regions. */
 const regionLoaders: {
     [key: RegionType<any>]: {
-        loader: (buffer: ArrayBuffer) => Promise<RegionOf<any>>,
+        loader: (buffer: ArrayBuffer | string) => Promise<RegionOf<any>>,
         extension: string,
     }
 } = {
     [MIDIRegion.TYPE]: {
-        loader: async buffer => new MIDIRegion(await MIDI.load(buffer), 0),
+        loader: async buffer => new MIDIRegion(await MIDI.load(buffer as ArrayBuffer), 0),
         extension: "wamstudiomidi",
     },
     [SampleRegion.TYPE]: {
         loader: async buffer => {
-            const audioBuffer = await audioCtx.decodeAudioData(buffer);
-            const opAudioBuffer = OperableAudioBuffer.make(audioBuffer);
-            return new SampleRegion(opAudioBuffer, 0)
+            if ((window as any).__TAURI__) {
+                const { invoke } = await import('@tauri-apps/api/core');
+                let tempPath: string;
+                if (typeof buffer === "string") {
+                    tempPath = buffer;
+                } else {
+                    let formData = new FormData();
+                    formData.append("file", new Blob([buffer as any]));
+                    let uploadRes = await fetch("http://localhost:6002/upload_temp", { method: "POST", body: formData });
+                    if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+                    tempPath = (await uploadRes.json()).path;
+                }
+
+                const bufferId = OperableAudioBuffer.getNewId();
+                const info: any = await invoke('load_audio_file', {
+                    bufferId: bufferId,
+                    path: tempPath
+                });
+                let rustBuffer = new RustAudioBuffer(
+                    info.buffer_id,
+                    info.length,
+                    info.sample_rate,
+                    info.channels,
+                    info.peaks,
+                    tempPath
+                );
+                return new SampleRegion(rustBuffer, 0);
+            } else {
+                const audioBuffer = await audioCtx.decodeAudioData(buffer as ArrayBuffer);
+                const opAudioBuffer = OperableAudioBuffer.make(audioBuffer);
+                return new SampleRegion(opAudioBuffer, 0)
+            }
         },
         extension: "wav",
     },
@@ -92,6 +123,7 @@ export interface ProjectData {
             type: string;
             content_name: string;
             start: number;
+            native_path?: string;
         }[]
     }[];
 }
@@ -181,14 +213,38 @@ export default class Loader {
                 if (extension) content_name += `.${extension}`
                 else continue; // Skip unknown regions
 
-                contents.push({
-                    content_name,
-                    blob: region.save()
-                });
+                let native_path: string | undefined = undefined;
+                if ((window as any).__TAURI__ && region.regionType === "SAMPLE") {
+                    let sampleRegion = region as any; // Cast to access buffer
+                    if (sampleRegion.buffer && sampleRegion.buffer.nativePath) {
+                        native_path = sampleRegion.buffer.nativePath;
+                    }
+                }
+
+                if (native_path) {
+                    try {
+                        const { invoke } = await import('@tauri-apps/api/core');
+                        const bytes = await invoke('read_file_bytes', { path: native_path }) as Uint8Array;
+                        contents.push({
+                            content_name,
+                            blob: new Blob([bytes.buffer as ArrayBuffer])
+                        });
+                    } catch (e) {
+                        console.error("Failed to read native file", e);
+                        contents.push({ content_name, blob: new Blob([]) });
+                    }
+                } else {
+                    contents.push({
+                        content_name,
+                        blob: region.save()
+                    });
+                }
+
                 regions.push({
                     content_name,
                     type: region.regionType,
                     start: region.start,
+                    native_path: native_path
                 });
             }
 
@@ -381,6 +437,42 @@ export default class Loader {
                 continue;
             }
 
+            if ((window as any).__TAURI__ && region.native_path) {
+                // Native path loading bypasses XHR and blob loading
+                (async () => {
+                    try {
+                        const { invoke } = await import('@tauri-apps/api/core');
+                        const OperableAudioBuffer = (await import('../Audio/OperableAudioBuffer')).default;
+                        const RustAudioBuffer = (await import('../Audio/RustAudioBuffer')).default;
+                        const SampleRegion = (await import('../Models/Region/SampleRegion')).default;
+                        
+                        const bufferId = OperableAudioBuffer.getNewId();
+                        const info: any = await invoke('load_audio_file', {
+                            bufferId: bufferId,
+                            path: region.native_path
+                        });
+                        
+                        let rustBuffer = new RustAudioBuffer(
+                            info.buffer_id,
+                            info.length,
+                            info.sample_rate,
+                            info.channels,
+                            info.peaks,
+                            region.native_path
+                        );
+                        let newRegion = new SampleRegion(rustBuffer, region.start);
+                        
+                        if (!track.deleted) {
+                            this._app.regionsController.addRegion(track, newRegion);
+                        }
+                    } catch (e) {
+                        console.error('Failed to load native audio via Rust:', e);
+                    }
+                    checkCompletion();
+                })();
+                continue;
+            }
+
             let xhr = contents(region.content_name)
             xhr.responseType = "arraybuffer"
 
@@ -418,6 +510,7 @@ export default class Loader {
                         console.error("Failed to decode region", e);
                     }
                 } else {
+                    // For empty blobs from localstorage where status is not 200, or blob is missing
                     console.error('An error occurred fetching the track region:', xhr.statusText);
                 }
                 checkCompletion();
@@ -437,49 +530,31 @@ export default class Loader {
         }
     }
 
-    loadTrackUrl(track: Track, url: string) {
-        console.log("Load Track" + url)
-
-        let xhr = new XMLHttpRequest();
-        xhr.open('GET', url, true);
-        xhr.responseType = 'arraybuffer';
-
-        xhr.onprogress = (event) => {
-            if (event.lengthComputable) {
-                // update progress bar on track element
-                // Stop the request if the track has been removed
-                if (track.deleted) {
-                    xhr.abort();
-                    return;
-                }
-                track.element.progress(event.loaded, event.total);
-            }
-        };
-
-        xhr.onload = () => {
-            if (xhr.status == 200) {
-                let audioArrayBuffer = xhr.response;
-                audioCtx.decodeAudioData(audioArrayBuffer)
-                    .then((audioBuffer) => {
-                        if (track.deleted) {
-                            xhr.abort();
-                            return;
-                        }
-                        let operableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
-                        operableAudioBuffer = operableAudioBuffer.makeStereo();
-                        this._app.regionsController.addRegion(track, new SampleRegion(operableAudioBuffer, 0));
-                        track.element.progressDone();
-                    });
-            } else {
-                // Error occurred during the request
-                console.error('An error occurred fetching the track:', xhr.statusText);
-            }
-        };
-
-        xhr.onerror = () => {
-            console.error('An error occurred fetching the track');
-        };
-
-        xhr.send();
+    async loadTrackUrl(track: Track, url: string) {
+        console.log("Load Track via Rust: " + url);
+        try {
+            const bufferId = OperableAudioBuffer.getNewId();
+            const info: any = await invoke('load_audio_file', {
+                bufferId: bufferId,
+                path: url
+            });
+            
+            if (track.deleted) return;
+            
+            // Create RustAudioBuffer with returned info
+            let rustBuffer = new RustAudioBuffer(
+                info.buffer_id,
+                info.length,
+                info.sample_rate,
+                info.channels,
+                info.peaks
+            );
+            
+            this._app.regionsController.addRegion(track, new SampleRegion(rustBuffer, 0));
+            track.element.progressDone();
+        } catch (e) {
+            console.error('An error occurred loading track via Rust:', e);
+            track.element.progressDone();
+        }
     }
 }

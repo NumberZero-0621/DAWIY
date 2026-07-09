@@ -3,6 +3,7 @@ import { HEIGHT_TRACK } from "../../../Env";
 import SampleRegion from "../../../Models/Region/SampleRegion";
 import EditorView from "../EditorView";
 import RegionView from "./RegionView";
+import RustAudioBuffer from "../../../Audio/RustAudioBuffer";
 
 /**
  * Class that extends PIXI.Container.
@@ -36,32 +37,59 @@ export default class SampleRegionView extends RegionView<SampleRegion> {
         let fromX = Math.floor(from / region.duration * range);
         let toX = Math.floor(to / region.duration * range);
 
+        let isRustBuffer = region.buffer instanceof RustAudioBuffer;
+
         for (let channel = 0; channel < numChannels; channel++) {
-            let data = region.buffer.getChannelData(channel);
-            let step = Math.round(data.length / range);
             let channelOffset = isStereo ? channel * channelHeight : 0;
-
-            for (let i = fromX; i < toX; i++) {
-                let min = 1.0;
-                let max = -1.0;
-                for (let j = 0; j < step; j++) {
-                    let dataum = data[i * step + j];
-                    if (dataum < min) min = dataum;
-                    if (dataum > max) max = dataum;
+            
+            if (isRustBuffer) {
+                let rustBuffer = region.buffer as unknown as RustAudioBuffer;
+                let peaks = rustBuffer.peaks;
+                let numChunks = Math.floor(peaks.length / 2);
+                
+                for (let i = fromX; i < toX; i++) {
+                    let chunkIndex = Math.floor((i / range) * numChunks);
+                    if (chunkIndex >= numChunks) chunkIndex = numChunks - 1;
+                    
+                    let min = peaks[chunkIndex * 2];
+                    let max = peaks[chunkIndex * 2 + 1];
+                    
+                    const rectWidth = 1;
+                    let rectHeight = Math.max(1, (max - min) * amp);
+                    let y = channelOffset + (1 + min) * amp;
+                    
+                    if (rectHeight < channelHeight) {
+                        target.drawRect(i, y, rectWidth, rectHeight);
+                    } else {
+                        rectHeight = channelHeight;
+                        target.drawRect(i, channelOffset, rectWidth, rectHeight);
+                    }
                 }
-                const rectWidth = 1;
-                let rectHeight = Math.max(1, (max - min) * amp);
+            } else {
+                let data = region.buffer.getChannelData(channel);
+                let step = Math.round(data.length / range);
 
-                // MB: we need to clip the rectangle so that if does not go over track/channel dimensions
-                let y = channelOffset + (1 + min) * amp;
-                if (rectHeight < channelHeight) {
-                    target.drawRect(i, y, rectWidth, rectHeight);
-                } else {
-                    rectHeight = channelHeight;
-                    target.drawRect(i, channelOffset, rectWidth, rectHeight);
+                for (let i = fromX; i < toX; i++) {
+                    let min = 1.0;
+                    let max = -1.0;
+                    for (let j = 0; j < step; j++) {
+                        let dataum = data[i * step + j];
+                        if (dataum < min) min = dataum;
+                        if (dataum > max) max = dataum;
+                    }
+                    const rectWidth = 1;
+                    let rectHeight = Math.max(1, (max - min) * amp);
+
+                    // MB: we need to clip the rectangle so that if does not go over track/channel dimensions
+                    let y = channelOffset + (1 + min) * amp;
+                    if (rectHeight < channelHeight) {
+                        target.drawRect(i, y, rectWidth, rectHeight);
+                    } else {
+                        rectHeight = channelHeight;
+                        target.drawRect(i, channelOffset, rectWidth, rectHeight);
+                    }
                 }
             }
         }
     }
-
 }

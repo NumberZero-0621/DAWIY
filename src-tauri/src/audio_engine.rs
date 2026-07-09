@@ -2,6 +2,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use tauri::Emitter;
 use crate::mixer::Mixer;
 
 pub enum AudioCommand {
@@ -13,9 +14,38 @@ pub struct AudioEngineHandle {
 }
 
 impl AudioEngineHandle {
-    pub fn new(mixer: Arc<Mutex<Mixer>>) -> Result<Self, String> {
+    pub fn new(mixer: Arc<Mutex<Mixer>>, app_handle: tauri::AppHandle) -> Result<Self, String> {
         let (tx, rx) = channel::<AudioCommand>();
         
+        let mixer_for_emitter = mixer.clone();
+        thread::Builder::new()
+            .name("PlayheadEmitter".to_string())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(16)); // ~60fps
+                    let (is_playing, playhead_samples, sample_rate, peak_l, peak_r, track_peaks) = {
+                        if let Ok(m) = mixer_for_emitter.try_lock() { // オーディオスレッドをブロックしないようtry_lock
+                            let mut t_peaks = Vec::new();
+                            for (id, track) in &m.tracks {
+                                t_peaks.push((*id, track.peak_l, track.peak_r));
+                            }
+                            (m.is_playing, m.playhead_samples, m.sample_rate, m.peak_l, m.peak_r, t_peaks)
+                        } else {
+                            continue;
+                        }
+                    };
+
+                    if is_playing {
+                        let playhead_ms = (playhead_samples as f64 / sample_rate as f64) * 1000.0;
+                        let _ = app_handle.emit("playhead_update", playhead_ms);
+                    }
+                    // ピークメーターは常に更新する（残響の減衰なども表示するため）
+                    let _ = app_handle.emit("meter_update", (peak_l, peak_r));
+                    let _ = app_handle.emit("track_meter_update", track_peaks);
+                }
+            })
+            .map_err(|e| e.to_string())?;
+
         thread::Builder::new()
             .name("AudioEngineThread".to_string())
             .spawn(move || {

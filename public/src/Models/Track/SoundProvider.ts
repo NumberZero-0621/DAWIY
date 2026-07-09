@@ -1,4 +1,5 @@
 import { WamNode, WebAudioModule } from "@webaudiomodules/api";
+import { invoke } from "@tauri-apps/api/core";
 import { crashOnDebug } from "../../App";
 import AudioGraph from "../../Audio/Graph/AudioGraph";
 import PassthroughWAM from "../../Audio/Node/PassthroughWAM";
@@ -114,6 +115,10 @@ export default abstract class SoundProvider {
     if (this.element.volumeSlider) this.element.volumeSlider.value = "" + value * 100;
 
     this.updateVolume()
+
+    if ((window as any).__TAURI__ && typeof this.id === "number") {
+      invoke('set_track_volume', { trackId: this.id, volume: value }).catch(console.error);
+    }
   }
 
   public get volume() { return this._volume }
@@ -150,7 +155,11 @@ export default abstract class SoundProvider {
    */
   public set balance(value: number) {
     this.pannerNode.pan.value = value
-    this.element.balanceSlider.value = "" + value
+    if (this.element.balanceSlider) this.element.balanceSlider.value = "" + value
+
+    if ((window as any).__TAURI__ && typeof this.id === "number") {
+      invoke('set_track_pan', { trackId: this.id, pan: value }).catch(console.error);
+    }
   }
 
   public get balance() { return this.pannerNode.pan.value }
@@ -231,12 +240,22 @@ export default abstract class SoundProvider {
     if (activePlugins.length === 0) {
       this.audioInputNode.connect(this.pannerNode)
       this.element.hasPlugin = this._plugins.length > 0;
+      invoke('set_track_vsts', { trackId: this.id, vstIds: [] }).catch(console.error);
       return
     }
 
     // Connect input to the first active plugin
     this.audioInputNode.connect(activePlugins[0].audioNode)
     this.audioInputNode.connectEvents(activePlugins[0].audioNode.instanceId)
+
+    // Tauri側のRustバックエンドにVST割り当てを通知（チェーン全体）
+    const vstIds: number[] = [];
+    for (const p of activePlugins) {
+        if (p.audioNode && typeof (p.audioNode as any).instanceId === "number") {
+            vstIds.push((p.audioNode as any).instanceId);
+        }
+    }
+    invoke('set_track_vsts', { trackId: this.id, vstIds: vstIds }).catch(console.error);
 
     // Connect active plugins in series
     for (let i = 0; i < activePlugins.length - 1; i++) {
@@ -250,9 +269,7 @@ export default abstract class SoundProvider {
 
     // --- MIDI転送フック ---
     // WAMの connectEvents はAudioWorklet間のイベント転送に依存しているが、
-    // ParamMgrProcessor等では正しくMIDIが転送されない場合があるため、
     // メインスレッド側で直接MIDIを転送する。
-    const firstPluginNode = activePlugins[0].audioNode;
     const inputNode = this.audioInputNode;
 
     // フック1: メインスレッドからの直接scheduleEvents呼び出し用（ピアノロールのプレビュー等）
@@ -298,6 +315,11 @@ export default abstract class SoundProvider {
     // Listen for parameter changes
     pluginInstance.audioNode.addEventListener("wam-info", () => {
       if (this.onPluginParamChange) this.onPluginParamChange(this);
+    });
+
+    // Listen for VST backend load completion
+    pluginInstance.audioNode.addEventListener("vst-loaded", () => {
+      this.updatePluginRouting();
     });
 
     this.updatePluginRouting()

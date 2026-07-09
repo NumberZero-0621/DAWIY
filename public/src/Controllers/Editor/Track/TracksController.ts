@@ -4,6 +4,7 @@ import TrackElement from "../../../Components/Editor/TrackElement";
 import { ARE_RECORDER_EXCLUSIVE, RATIO_MILLS_BY_PX, ZOOM_LEVEL } from "../../../Env";
 import TracksView from "../../../Views/TracksView";
 import { audioCtx } from "../../../index";
+import { invoke } from "@tauri-apps/api/core";
 
 import WebAudioPeakMeter from "../../../Audio/Utils/PeakMeter";
 import MIDIRegion from "../../../Models/Region/MIDIRegion";
@@ -102,6 +103,10 @@ export default class TracksController {
     // Create its track element (GUI)
     track.id = this.trackIdCount++;
     track.element.trackId = track.id;
+    
+    // Tauri側のRustバックエンドにトラック追加を通知
+    invoke('add_track', { trackId: track.id }).catch(console.error);
+
     this._view.addTrack(track.element);
     // wait until the trackElement WebComponent is connected
     // to the DOM before initializing the peak meter
@@ -124,6 +129,7 @@ export default class TracksController {
             maskTransition: "0.1s",
           }
         );
+        (track as any).peakMeter = peakMeter;
         clearInterval(id);
       }
     }, 100);
@@ -241,12 +247,44 @@ export default class TracksController {
       track.element.name = file.name;
       track.element.progress(0, 1)
 
-      // Load the file
-      let audioArrayBuffer = await file.arrayBuffer();
-      let audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer);
-      let operableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
-      operableAudioBuffer = operableAudioBuffer.makeStereo();
-      this._app.regionsController.addRegion(track, new SampleRegion(operableAudioBuffer, 0))
+      const f = file as File & { path?: string };
+      if ((window as any).__TAURI__ && f.path) {
+          try {
+              const { invoke } = await import('@tauri-apps/api/core');
+              const RustAudioBuffer = (await import('../../../Audio/RustAudioBuffer')).default;
+              
+              const bufferId = OperableAudioBuffer.getNewId();
+              const info: any = await invoke('load_audio_file', {
+                  bufferId: bufferId,
+                  path: f.path
+              });
+
+              let rustBuffer = new RustAudioBuffer(
+                  info.buffer_id,
+                  info.length,
+                  info.sample_rate,
+                  info.channels,
+                  info.peaks,
+                  f.path // Pass the native file path for Tauri auto-save
+              );
+              this._app.regionsController.addRegion(track, new SampleRegion(rustBuffer, 0))
+          } catch (e) {
+              console.error('Failed to load file via Rust:', e);
+              track.element.progressDone();
+              return undefined;
+          }
+      } else {
+          // Load the file normally
+          let audioArrayBuffer = await file.arrayBuffer();
+          let audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer);
+          let operableAudioBuffer: OperableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
+          operableAudioBuffer = operableAudioBuffer.makeStereo();
+          
+          // Rustバックエンドにオーディオバッファを送信
+          operableAudioBuffer.sendToRust().catch(console.error);
+
+          this._app.regionsController.addRegion(track, new SampleRegion(operableAudioBuffer, 0))
+      }
 
       // Finish the progress
       track.element.progressDone();

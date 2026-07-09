@@ -845,6 +845,24 @@ export default class HostController {
         maskTransition: "0.1s",
       }
     );
+    // Tauriのイベントリスナーを使ってRustからのピークレベルを反映
+    if ((window as any).__TAURI__) {
+      import("@tauri-apps/api/event").then(({ listen }) => {
+        listen<[number, number]>("meter_update", (event) => {
+          if ((peakMeter as any).setManualPeaks) {
+            (peakMeter as any).setManualPeaks(event.payload);
+          }
+        });
+        listen<Array<[number, number, number]>>("track_meter_update", (event) => {
+          for (let [trackId, peakL, peakR] of event.payload) {
+            const track = this._app.tracksController.getTrackById(trackId);
+            if (track && (track as any).peakMeter && (track as any).peakMeter.setManualPeaks) {
+              (track as any).peakMeter.setManualPeaks([peakL, peakR]);
+            }
+          }
+        });
+      });
+    }
     // MB replaced by another vu-meter
     //this.vuMeter = new VuMeter(this._view.vuMeterCanvas, 30, 157);
 

@@ -17,3 +17,5 @@ storage/*
 public/.env
 bank/.env
 bank/settings.json
+
+/bank/temp

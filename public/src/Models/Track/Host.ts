@@ -1,4 +1,6 @@
 import { WamNode } from "@webaudiomodules/sdk";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { audioCtx } from "../..";
 import App from "../../App";
 import AudioGraph, { AudioGraphInstance } from "../../Audio/Graph/AudioGraph";
@@ -82,9 +84,15 @@ export default class Host extends SoundProvider {
         this.hostNode = (await ObservePlayerWAM.createInstance(hostGroupId, audioCtx)).audioNode as ObservePlayerNode
         console.log("after")
         this.hostNode.on_update.add(playhead => {
-            this.onPlayHeadMove.forEach(it => it(playhead, true))
-            this._playhead = playhead
+            // this.onPlayHeadMove.forEach(it => it(playhead, true))
+            // this._playhead = playhead
         })
+        
+        listen<number>('playhead_update', (event) => {
+            const playheadMs = event.payload;
+            this.onPlayHeadMove.forEach(it => it(playheadMs, true));
+            this._playhead = playheadMs;
+        });
         this.hostNode.connect(this.audioInputNode)
         this.outputNode.connect(audioCtx.destination)
 
@@ -113,6 +121,7 @@ export default class Host extends SoundProvider {
         this.hostNode.playhead = value
         this.onPlayHeadMove.forEach(it => it(value, false))
         for (const track of this.tracks) track.playhead = value
+        invoke('host_set_playhead', { playheadMs: value }).catch(console.error)
     }
 
 
@@ -135,6 +144,7 @@ export default class Host extends SoundProvider {
         for (const track of this.tracks) track.play()
         this.hostNode.isPlaying = true
         this._playing = true
+        invoke('host_play').catch(console.error)
 
         // Check for updates while playing
         const host = this
@@ -148,6 +158,7 @@ export default class Host extends SoundProvider {
         for (const track of this.tracks) track.pause()
         this.hostNode.isPlaying = false
         this._playing = false
+        invoke('host_pause').catch(console.error)
     }
 
 

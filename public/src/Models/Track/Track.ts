@@ -120,6 +120,30 @@ export default class Track extends SoundProvider {
     const new_merged_regions = new Map<RegionType<any>, [RegionOf<any>, RegionPlayer]>()
 
     for (const [type, regions] of regionMap) {
+      if (type === "SAMPLE") {
+        // Rustバックエンドにオーディオバッファとリージョン情報を同期
+        if ((window as any).__TAURI__) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          
+          const jsRegions = [];
+          for (const region of regions) {
+            const sampleRegion = region as any;
+            // バックグラウンドでアップロードさせる（awaitしない）
+            sampleRegion.buffer.sendToRust().catch(console.error);
+            
+            jsRegions.push({
+              buffer_id: sampleRegion.buffer.bufferId,
+              start_samples: (sampleRegion.start / 1000) * this.audioContext.sampleRate,
+              length_samples: (sampleRegion.duration / 1000) * this.audioContext.sampleRate,
+              offset_samples: (sampleRegion.buffer as any).offset || 0
+            });
+          }
+          await invoke('update_track_regions', { trackId: this.id, regions: jsRegions });
+        }
+        // SAMPLEはRustで再生するため、JS側のプレイヤー作成はスキップ
+        continue;
+      }
+
       const merged = Region.mergeAll(regions, true)
       const player = await merged.createPlayer(this.groupId, this.audioContext)
       player.connect(this.junctionNode)

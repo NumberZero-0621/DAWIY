@@ -23,8 +23,18 @@
  */
 export default abstract class OperableAudioBuffer implements AudioBuffer {
 
+    private static nextBufferId = 1;
+    public readonly bufferId: number;
+    public isSentToRust = false;
+
+    public static getNewId(): number {
+        return OperableAudioBuffer.nextBufferId++;
+    }
+
     /** FACTORIES */
-    protected constructor() { }
+    protected constructor(id?: number) { 
+        this.bufferId = id ?? OperableAudioBuffer.nextBufferId++;
+    }
 
     /**
      * Create a new OperableBuffer with its audio buffer.
@@ -42,6 +52,30 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      */
     static make(audio: AudioBuffer) {
         return new BufferOperableAudioBuffer(audio)
+    }
+
+    /**
+     * Send this buffer to the Rust backend for playback.
+     */
+    async sendToRust() {
+        if (this.isSentToRust) return;
+        this.isSentToRust = true;
+        
+        if ((window as any).__TAURI__) {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const leftData = this.getChannelData(0);
+            const rightData = this.numberOfChannels > 1 ? this.getChannelData(1) : leftData;
+            
+            // Convert Float32Array to Uint8Array for binary IPC
+            const leftBytes = new Uint8Array(leftData.buffer, leftData.byteOffset, leftData.byteLength);
+            const rightBytes = new Uint8Array(rightData.buffer, rightData.byteOffset, rightData.byteLength);
+            
+            await invoke('add_audio_buffer', { 
+                bufferId: this.bufferId, 
+                leftBytes: leftBytes, 
+                rightBytes: rightBytes 
+            });
+        }
     }
 
     /**
@@ -147,7 +181,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * Clone this buffer.
      * @returns 
      */
-    clone() {
+    clone(): OperableAudioBuffer {
         const newBuffer = OperableAudioBuffer.create(this);
         newBuffer.mix(this);
         return newBuffer;
@@ -159,7 +193,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * @param {AudioBuffer} that The buffer to merge with.
      * @param {number} start_offset The offset between the start of this buffer and the start of that buffer. It can be negative.
      */
-    merge(that: AudioBuffer, start_offset: number = 0) {
+    merge(that: AudioBuffer, start_offset: number = 0): OperableAudioBuffer {
         let before
         let after
         if (start_offset >= 0) {
@@ -187,7 +221,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * @param {AudioBuffer} that
      * @param {number} [numberOfChannels]
      */
-    concat(that: AudioBuffer) {
+    concat(that: AudioBuffer): OperableAudioBuffer {
         const { sampleRate } = this;
         const length = this.length + that.length;
         const numberOfChannels = Math.max(this.numberOfChannels, that.numberOfChannels);
@@ -225,7 +259,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * Split the buffer into two buffer at a given index.
      * @param {number} position in sample
      */
-    split(position: number) {
+    split(position: number): [OperableAudioBuffer, OperableAudioBuffer] {
         if (position <= 0 || position >= this.length) throw new RangeError("Split point is out of bound");
         return [this.view(0, position).clone(), this.view(position).clone()];
     }
@@ -268,7 +302,7 @@ export default abstract class OperableAudioBuffer implements AudioBuffer {
      * Else return a new stereo buffer with the same content by duplicating the mono channel.
      * @returns {OperableAudioBuffer}
      */
-    makeStereo() {
+    makeStereo(): OperableAudioBuffer {
         if (this.numberOfChannels > 1) return this;  // Already stereo or more.
 
         let newBuffer = OperableAudioBuffer.create({ numberOfChannels: 2, length: this.length, sampleRate: this.sampleRate });
