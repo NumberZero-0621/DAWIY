@@ -157,6 +157,11 @@ export default class DawProjectLoader {
                 await this.parseLanes(rootLanes);
             }
         }
+
+        // 5. Update all tracks to sync regions with Rust backend and UI
+        for (const track of this._app.tracksController.tracks) {
+            track.update(audioCtx);
+        }
     }
 
     private async parseLanes(lanesEl: Element, parentTimeUnit: string = "beats", parentTrack: Track | null = null): Promise<void> {

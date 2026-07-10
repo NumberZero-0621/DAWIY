@@ -423,10 +423,17 @@ export default class Loader {
         let totalSize = new Map<XMLHttpRequest, number>();
         let loadedSize = new Map<XMLHttpRequest, number>();
 
+        if (!regions || regions.length === 0) {
+            track.element.progressDone();
+            track.update(audioCtx);
+            return;
+        }
+
         const checkCompletion = () => {
             loadedRegions++;
             if (loadedRegions === regions.length) {
                 track.element.progressDone();
+                track.update(audioCtx);
             }
         }
 

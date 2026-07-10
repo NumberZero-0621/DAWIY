@@ -163,7 +163,7 @@ fn process_vst_audio(instance_id: u32, req_samples: usize, input_l_bytes: Vec<u8
         unsafe { std::slice::from_raw_parts(ptr, len).to_vec() }
     };
 
-    let (out_l, out_r) = vst_host::process_audio(instance_id, req_samples, in_l_f32, in_r_f32, false, 0)?;
+    let (out_l, out_r) = vst_host::process_audio(instance_id, req_samples, in_l_f32, in_r_f32, false, false, 0)?;
     
     let samples = out_l.len() as u32;
     let mut bytes = Vec::with_capacity(4 + (out_l.len() + out_r.len()) * 4);
@@ -202,6 +202,14 @@ struct JsRegion {
     start_samples: f64,
     length_samples: f64,
     offset_samples: f64,
+}
+
+#[derive(serde::Deserialize)]
+struct JsMidiEvent {
+    sample_time: u64,
+    status: u8,
+    data1: u8,
+    data2: u8,
 }
 
 #[command]
@@ -251,7 +259,12 @@ fn read_file_bytes(path: String) -> Result<tauri::ipc::Response, String> {
 }
 
 #[command]
-fn update_track_regions(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, regions: Vec<JsRegion>) {
+fn update_track_regions(
+    state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, 
+    track_id: u32, 
+    regions: Vec<JsRegion>,
+    midi_events: Option<Vec<JsMidiEvent>>
+) {
     if let Ok(mut mixer) = state.lock() {
         let rust_regions = regions.into_iter().map(|r| mixer::Region {
             buffer_id: r.buffer_id,
@@ -260,6 +273,19 @@ fn update_track_regions(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<
             offset_samples: r.offset_samples as u64,
         }).collect();
         mixer.update_track_regions(track_id, rust_regions);
+        
+        if let Some(events) = midi_events {
+            println!("[update_track_regions] Track {}: Received {} midi events", track_id, events.len());
+            if let Some(track) = mixer.tracks.get_mut(&track_id) {
+                track.midi_sequence = events.into_iter().map(|e| (e.sample_time, e.status, e.data1, e.data2)).collect();
+            }
+        } else {
+            println!("[update_track_regions] Track {}: Received None for midi events", track_id);
+            // Optionally clear if None is received?
+            // if let Some(track) = mixer.tracks.get_mut(&track_id) {
+            //     track.midi_sequence.clear();
+            // }
+        }
     }
 }
 
@@ -321,6 +347,87 @@ fn host_set_playhead(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mix
     }
 }
 
+#[command]
+async fn bounce_offline(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, max_duration_samples: u32, track_ids: Option<Vec<u32>>) -> Result<tauri::ipc::Response, String> {
+    let mixer_arc = state.inner().clone();
+    
+    // Background execution via spawn_blocking prevents blocking Tauri's async executor thread
+    let (out_l, out_r) = tauri::async_runtime::spawn_blocking(move || {
+        let mut out_l = Vec::with_capacity(max_duration_samples as usize);
+        let mut out_r = Vec::with_capacity(max_duration_samples as usize);
+
+        if let Ok(mut mixer) = mixer_arc.lock() {
+            // Save state
+            let orig_playing = mixer.is_playing;
+            let orig_offline = mixer.is_offline_render;
+            let orig_playhead = mixer.playhead_samples;
+            
+            let mut orig_muted = std::collections::HashMap::new();
+            for (id, track) in &mixer.tracks {
+                orig_muted.insert(*id, track.is_muted);
+            }
+
+            // Apply offline settings
+            mixer.is_playing = true;
+            mixer.is_offline_render = true;
+            mixer.playhead_samples = 0;
+
+            if let Some(ids) = &track_ids {
+                for (id, track) in &mut mixer.tracks {
+                    if !ids.contains(id) {
+                        track.is_muted = true;
+                    }
+                }
+            }
+
+            let chunk_size = 512;
+            let mut samples_processed = 0;
+            let mut buffer = vec![0.0; chunk_size * 2]; // Stereo
+
+            for (id, track) in &mixer.tracks {
+                println!("[bounce_offline] Track {}: muted={}, vsts={:?}, regions={}, midi_len={}", id, track.is_muted, track.vst_instances, track.regions.len(), track.midi_sequence.len());
+            }
+
+            while samples_processed < max_duration_samples {
+                let to_process = std::cmp::min(chunk_size as u32, max_duration_samples - samples_processed) as usize;
+                let buffer_slice = &mut buffer[..to_process * 2];
+                
+                mixer.process(buffer_slice, 2);
+
+                for i in 0..to_process {
+                    out_l.push(buffer_slice[i * 2]);
+                    out_r.push(buffer_slice[i * 2 + 1]);
+                }
+                samples_processed += to_process as u32;
+            }
+
+            // Restore state
+            mixer.is_playing = orig_playing;
+            mixer.is_offline_render = orig_offline;
+            mixer.playhead_samples = orig_playhead;
+            for (id, muted) in orig_muted {
+                if let Some(track) = mixer.tracks.get_mut(&id) {
+                    track.is_muted = muted;
+                }
+            }
+        }
+        (out_l, out_r)
+    }).await.map_err(|e| format!("Task failed: {}", e))?;
+
+    let samples = out_l.len() as u32;
+    let mut bytes = Vec::with_capacity(4 + (out_l.len() + out_r.len()) * 4);
+    
+    bytes.extend_from_slice(&samples.to_le_bytes());
+    
+    let l_bytes: &[u8] = unsafe { std::slice::from_raw_parts(out_l.as_ptr() as *const u8, out_l.len() * 4) };
+    bytes.extend_from_slice(l_bytes);
+    
+    let r_bytes: &[u8] = unsafe { std::slice::from_raw_parts(out_r.as_ptr() as *const u8, out_r.len() * 4) };
+    bytes.extend_from_slice(r_bytes);
+    
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -348,6 +455,7 @@ pub fn run() {
         load_audio_file,
         load_audio_from_memory,
         read_file_bytes,
+        bounce_offline,
         midi::list_midi_outputs,
         midi::open_midi_output,
         midi::close_midi_output,

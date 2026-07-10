@@ -42,7 +42,7 @@ enum VstCommand {
     Load(String, f32, Sender<Result<u32, String>>), // returns Instance ID
     Midi(u32, u8, u8, u8), // instance_id, status, data1, data2
     GetAudio(u32, usize, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, response
-    ProcessAudio(u32, usize, Vec<f32>, Vec<f32>, bool, u64, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, in_l, in_r, is_playing, playhead_samples, response
+    ProcessAudio(u32, usize, Vec<f32>, Vec<f32>, bool, bool, u64, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, in_l, in_r, is_playing, is_offline, playhead_samples, response
     Close(u32), // instance_id
     Show(u32), // instance_id
     CloseAll, // close all instances
@@ -1169,7 +1169,7 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                         let _ = tx_audio.send(Err(format!("Instance not found: {}", vst_id)));
                     }
                 }
-                VstCommand::ProcessAudio(vst_id, req_samples, mut in_l, mut in_r, is_playing, playhead_samples, tx_audio) => {
+                VstCommand::ProcessAudio(vst_id, req_samples, mut in_l, mut in_r, is_playing, is_offline, playhead_samples, tx_audio) => {
                     // 対象インスタンスのプロセスを呼び出してオーディオ生成（入力あり）
                     let mut found = false;
                     for inst in instances.iter_mut() {
@@ -1230,7 +1230,7 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         }
                                         
                                         let mut data = std::mem::zeroed::<ProcessData>();
-                                        data.process_mode = ProcessModes::kRealtime as i32;
+                                        data.process_mode = if is_offline { ProcessModes::kOffline as i32 } else { ProcessModes::kRealtime as i32 };
                                         data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
                                         data.num_samples = num_samples as i32;
                                         data.num_inputs = 1; // 1ステレオ入力バス
@@ -2394,11 +2394,11 @@ pub fn get_audio(vst_id: u32, req_samples: usize) -> Result<(Vec<f32>, Vec<f32>)
     }
 }
 
-pub fn process_audio(vst_id: u32, req_samples: usize, in_l: Vec<f32>, in_r: Vec<f32>, is_playing: bool, playhead_samples: u64) -> Result<(Vec<f32>, Vec<f32>), String> {
+pub fn process_audio(vst_id: u32, req_samples: usize, in_l: Vec<f32>, in_r: Vec<f32>, is_playing: bool, is_offline: bool, playhead_samples: u64) -> Result<(Vec<f32>, Vec<f32>), String> {
     let coord_lock = COORDINATOR.lock().unwrap();
     if let Some(coordinator) = coord_lock.as_ref() {
         let (tx, rx) = std::sync::mpsc::channel();
-        coordinator.tx.send(VstCommand::ProcessAudio(vst_id, req_samples, in_l, in_r, is_playing, playhead_samples, tx)).map_err(|e| e.to_string())?;
+        coordinator.tx.send(VstCommand::ProcessAudio(vst_id, req_samples, in_l, in_r, is_playing, is_offline, playhead_samples, tx)).map_err(|e| e.to_string())?;
         loop {
             match rx.recv_timeout(std::time::Duration::from_millis(50)) {
                 Ok(result) => return result,

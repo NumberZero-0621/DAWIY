@@ -10,24 +10,27 @@ pub struct Region {
 }
 
 pub struct Track {
+    pub id: u32,
+    pub vst_instances: Vec<u32>,
     pub volume: f32,
     pub pan: f32,
     pub is_muted: bool,
+    pub regions: Vec<Region>,
     pub pending_midi: Vec<(u8, u8, u8)>,
-    pub vst_instances: Vec<u32>,
+    pub midi_sequence: Vec<(u64, u8, u8, u8)>,
     pub peak_l: f32,
     pub peak_r: f32,
-    pub regions: Vec<Region>,
 }
 
 pub struct Mixer {
     pub tracks: HashMap<u32, Track>,
-    pub audio_buffers: HashMap<u32, (Vec<f32>, Vec<f32>)>,
     pub is_playing: bool,
+    pub is_offline_render: bool,
     pub playhead_samples: u64,
     pub sample_rate: u32,
     pub peak_l: f32,
     pub peak_r: f32,
+    pub audio_buffers: HashMap<u32, (Vec<f32>, Vec<f32>)>,
 }
 
 impl Mixer {
@@ -36,6 +39,7 @@ impl Mixer {
             tracks: HashMap::new(),
             audio_buffers: HashMap::new(),
             is_playing: false,
+            is_offline_render: false,
             playhead_samples: 0,
             sample_rate: 48000,
             peak_l: 0.0,
@@ -45,10 +49,12 @@ impl Mixer {
 
     fn ensure_track(&mut self, track_id: u32) -> &mut Track {
         self.tracks.entry(track_id).or_insert(Track {
+            id: track_id,
             volume: 1.0,
             pan: 0.0,
             is_muted: false,
             pending_midi: Vec::new(),
+            midi_sequence: Vec::new(),
             vst_instances: Vec::new(),
             peak_l: 0.0,
             peak_r: 0.0,
@@ -90,6 +96,7 @@ impl Mixer {
             output[i] = 0.0;
         }
 
+        let prev_playhead = self.playhead_samples;
         if self.is_playing {
             self.playhead_samples += num_samples as u64;
         }
@@ -102,6 +109,16 @@ impl Mixer {
                 track.peak_r = 0.0;
                 continue;
             }
+            
+            if self.is_offline_render {
+                let playhead_start = prev_playhead; 
+                let playhead_end = self.playhead_samples;
+                for &(time, status, d1, d2) in &track.midi_sequence {
+                    if time >= playhead_start && time < playhead_end {
+                        track.pending_midi.push((status, d1, d2));
+                    }
+                }
+            }
 
             let mut current_l = vec![0.0; num_samples];
             let mut current_r = vec![0.0; num_samples];
@@ -111,8 +128,8 @@ impl Mixer {
                 // リージョンが現在の再生範囲に被っているかチェック
                 let region_end = region.start_samples + region.length_samples;
                 if self.is_playing {
-                    let playhead_start = self.playhead_samples;
-                    let playhead_end = self.playhead_samples + num_samples as u64;
+                    let playhead_start = prev_playhead;
+                    let playhead_end = self.playhead_samples;
                     
                     if region.start_samples < playhead_end && region_end > playhead_start {
                         // 被っている部分を計算
@@ -157,7 +174,7 @@ impl Mixer {
                         let _ = vst_host::send_midi(*vst_id, *status, *data1, *data2);
                     }
                 }
-                if let Ok((out_l, out_r)) = vst_host::process_audio(*vst_id, num_samples, current_l.clone(), current_r.clone(), self.is_playing, self.playhead_samples) {
+                if let Ok((out_l, out_r)) = vst_host::process_audio(*vst_id, num_samples, current_l.clone(), current_r.clone(), self.is_playing, self.is_offline_render, self.playhead_samples) {
                     current_l = out_l;
                     current_r = out_r;
                 }

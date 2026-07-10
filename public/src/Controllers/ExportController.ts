@@ -6,6 +6,7 @@ import Track from "../Models/Track/Track";
 import { audioCtx } from "../index";
 import AutomationController from "./AutomationController";
 import { exportToMidi } from "../Audio/MIDI/MIDIExport";
+import { invoke } from "@tauri-apps/api/core";
 
 /**
  * Controller class that binds the events of the exporter.
@@ -133,6 +134,20 @@ export default class ExporterController {
      * @returns The audio buffer of the track.
      */
     private async processTrack(track: Track, maxDuration: number, initializeWamHost: any): Promise<AudioBuffer> {
+        // @ts-ignore
+        if (window.__TAURI_INTERNALS__) {
+            try {
+                let max_duration_samples = Math.ceil(maxDuration * audioCtx.sampleRate);
+                let response = await invoke<Uint8Array>("bounce_offline", {
+                    maxDurationSamples: max_duration_samples,
+                    trackIds: [track.id]
+                });
+                return this.decodeTauriAudioResponse(response);
+            } catch (e) {
+                alert("Error bouncing track offline: " + e);
+                throw e;
+            }
+        }
 
         // Create offline audio context.
         let offlineCtx = new OfflineAudioContext(2, audioCtx.sampleRate * maxDuration, audioCtx.sampleRate)
@@ -174,48 +189,44 @@ export default class ExporterController {
      * @returns The audio buffer of the master track.
      */
     private async exportMasterTrack(buffers: AudioBuffer[], name: string, maxDuration: number, preSelectedHandle: any): Promise<void> {
-        /*console.log("Exporting track master");
-
-        let offlineCtx = new OfflineAudioContext(2, audioCtx.sampleRate * maxDuration, audioCtx.sampleRate);
-        let masterBuffer = combineBuffers(buffers);
-
-        // Create master gain and source nodes.
-        const masterGainNode = offlineCtx.createGain();
-        masterGainNode.gain.value = this._app.host.volume;
-
-        let masterSourceNode = offlineCtx.createBufferSource();
-        masterSourceNode.buffer = masterBuffer;
-
-        // Connect nodes, start, and render.
-        masterSourceNode.connect(masterGainNode).connect(offlineCtx.destination);
-        masterSourceNode.start();
-
-        let renderedBuffer = await offlineCtx.startRendering();
-
-        // Clean up connections.
-        masterGainNode.disconnect();
-        masterSourceNode.disconnect();*/
-
-        // Create offline audio context.
-        let offlineCtx = new OfflineAudioContext(2, audioCtx.sampleRate * maxDuration, audioCtx.sampleRate)
-        //let offlineCtx = audioCtx
-        const { default: initializeWamHost } = await import("@webaudiomodules/sdk/src/initializeWamHost");
-        const [hostGroupId] = await initializeWamHost(offlineCtx)
-
-        // Recreate the graph in the online audio context.
-        const graph=await this._app.host.host_graph.instantiate(offlineCtx,hostGroupId)
-        graph.connect(offlineCtx.destination)
-        await new Promise(it=>setTimeout(it,1000))
-
-        // Start source node and render.
-        await graph.playEfficiently(0, maxDuration*1000)
-
-        let renderedBuffer = await offlineCtx.startRendering();
-
-        // Clean up everything.
-        await graph.dispose()
-
         const exportElement = this._app.projectView.exportElement;
+        
+        let renderedBuffer: AudioBuffer;
+
+        // @ts-ignore
+        if (window.__TAURI_INTERNALS__) {
+            try {
+                exportElement.showProgress(0, "Rendering Master Track...");
+                let max_duration_samples = Math.ceil(maxDuration * audioCtx.sampleRate);
+                let response = await invoke<Uint8Array>("bounce_offline", {
+                    maxDurationSamples: max_duration_samples,
+                    trackIds: null
+                });
+                renderedBuffer = this.decodeTauriAudioResponse(response);
+            } catch (e) {
+                alert("Error bouncing master offline: " + e);
+                throw e;
+            }
+        } else {
+            // Create offline audio context.
+            let offlineCtx = new OfflineAudioContext(2, audioCtx.sampleRate * maxDuration, audioCtx.sampleRate)
+            //let offlineCtx = audioCtx
+            const { default: initializeWamHost } = await import("@webaudiomodules/sdk/src/initializeWamHost");
+            const [hostGroupId] = await initializeWamHost(offlineCtx)
+
+            // Recreate the graph in the online audio context.
+            const graph=await this._app.host.host_graph.instantiate(offlineCtx,hostGroupId)
+            graph.connect(offlineCtx.destination)
+            await new Promise(it=>setTimeout(it,1000))
+
+            // Start source node and render.
+            await graph.playEfficiently(0, maxDuration*1000)
+
+            renderedBuffer = await offlineCtx.startRendering();
+
+            // Clean up everything.
+            await graph.dispose()
+        }
         
         if (preSelectedHandle) {
             exportElement.showProgress(0, `Encoding ${preSelectedHandle.type === 'mp3' ? 'MP3' : 'WAV'}...`);
@@ -225,6 +236,44 @@ export default class ExporterController {
         } else {
             // Fallback for browsers without File System API or individual track export (if reused)
             await this.exportTrackBuffer(renderedBuffer, `${name}_master.wav`);
+        }
+    }
+
+    private decodeTauriAudioResponse(response: any): AudioBuffer {
+        try {
+            let buffer: ArrayBuffer;
+            let byteOffset = 0;
+            let byteLength = undefined;
+            if (response instanceof ArrayBuffer) {
+                buffer = response;
+            } else if (response instanceof Uint8Array) {
+                buffer = response.buffer;
+                byteOffset = response.byteOffset;
+                byteLength = response.byteLength;
+            } else if (Array.isArray(response)) {
+                buffer = new Uint8Array(response).buffer;
+            } else {
+                throw new Error("Invalid response type from Tauri");
+            }
+
+            const dataView = new DataView(buffer, byteOffset, byteLength);
+            const numSamples = dataView.getUint32(0, true);
+            
+            const audioBuffer = audioCtx.createBuffer(2, numSamples, audioCtx.sampleRate);
+            const channelL = audioBuffer.getChannelData(0);
+            const channelR = audioBuffer.getChannelData(1);
+            
+            const lOffset = 4;
+            const rOffset = 4 + numSamples * 4;
+            
+            for (let i = 0; i < numSamples; i++) {
+                channelL[i] = dataView.getFloat32(lOffset + i * 4, true);
+                channelR[i] = dataView.getFloat32(rOffset + i * 4, true);
+            }
+            return audioBuffer;
+        } catch (e) {
+            alert("Error in decodeTauriAudioResponse: " + e);
+            throw e;
         }
     }
 
