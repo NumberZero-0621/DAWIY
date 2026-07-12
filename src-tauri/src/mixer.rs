@@ -62,6 +62,10 @@ impl Mixer {
         })
     }
 
+    pub fn remove_track(&mut self, track_id: u32) {
+        self.tracks.remove(&track_id);
+    }
+
     pub fn set_track_volume(&mut self, track_id: u32, volume: f32) {
         self.ensure_track(track_id).volume = volume;
     }

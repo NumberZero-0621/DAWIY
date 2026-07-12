@@ -255,6 +255,12 @@ export default class Track extends SoundProvider {
     this.recorders.dispose()
     this._playhead_player.audioNode.destroy()
     this.deleted = true
+
+    if ((window as any).__TAURI__) {
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke('remove_track', { trackId: this.id }).catch(console.error);
+      });
+    }
   }
 
   /** Audio Graph Creation */

@@ -321,6 +321,13 @@ fn add_track(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixe
 }
 
 #[command]
+fn remove_track(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32) {
+    if let Ok(mut mixer) = state.lock() {
+        mixer.remove_track(track_id);
+    }
+}
+
+#[command]
 fn set_track_volume(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, track_id: u32, volume: f32) {
     if let Ok(mut mixer) = state.lock() {
         mixer.set_track_volume(track_id, volume);
@@ -468,6 +475,7 @@ pub fn run() {
         add_audio_buffer,
         update_track_regions,
         add_track,
+        remove_track,
         set_track_volume,
         set_track_pan,
         set_track_vsts,
