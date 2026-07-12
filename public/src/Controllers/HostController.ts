@@ -713,8 +713,31 @@ export default class HostController {
     })
 
 
-    this._view.importSongs.addEventListener("click", () => {
-      this._view.newTrackInput.click();
+    this._view.importSongs.addEventListener("click", async () => {
+      if ((window as any).__TAURI__) {
+        try {
+          const { open } = await import('@tauri-apps/plugin-dialog');
+          const selected = await open({
+            multiple: true,
+            filters: [{
+              name: 'Audio',
+              extensions: ['wav', 'mp3', 'ogg', 'flac', 'm4a', 'aac']
+            }]
+          });
+          if (Array.isArray(selected)) {
+            for (const path of selected) {
+              await this._app.tracksController.createTrackWithTauriPath(path);
+            }
+          } else if (selected) {
+            await this._app.tracksController.createTrackWithTauriPath(selected);
+          }
+        } catch (e) {
+          console.error("Tauri dialog error:", e);
+          this._view.newTrackInput.click();
+        }
+      } else {
+        this._view.newTrackInput.click();
+      }
     });
     this._view.newTrackInput.addEventListener("change", (e) => {
       this.importFilesSongs(e as InputEvent);

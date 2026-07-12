@@ -25,16 +25,16 @@ const CURRENT_PROJECT_VERSION: [number, number] = [1, 0]
 /** Loaders to load regions. */
 const regionLoaders: {
     [key: RegionType<any>]: {
-        loader: (buffer: ArrayBuffer | string) => Promise<RegionOf<any>>,
+        loader: (buffer: ArrayBuffer | string, onProgressCallback?: (message: any) => void) => Promise<RegionOf<any>>,
         extension: string,
     }
 } = {
     [MIDIRegion.TYPE]: {
-        loader: async buffer => new MIDIRegion(await MIDI.load(buffer as ArrayBuffer), 0),
+        loader: async (buffer, onProgressCallback) => new MIDIRegion(await MIDI.load(buffer as ArrayBuffer), 0),
         extension: "wamstudiomidi",
     },
     [SampleRegion.TYPE]: {
-        loader: async buffer => {
+        loader: async (buffer, onProgressCallback) => {
             if ((window as any).__TAURI__) {
                 const { invoke } = await import('@tauri-apps/api/core');
                 let tempPath: string;
@@ -49,9 +49,16 @@ const regionLoaders: {
                 }
 
                 const bufferId = OperableAudioBuffer.getNewId();
+                const { Channel } = await import('@tauri-apps/api/core');
+                const onProgress = new Channel<any>();
+                onProgress.onmessage = (message) => {
+                    if (onProgressCallback) onProgressCallback(message);
+                };
+
                 const info: any = await invoke('load_audio_file', {
                     bufferId: bufferId,
-                    path: tempPath
+                    path: tempPath,
+                    onProgress: onProgress
                 });
                 let rustBuffer = new RustAudioBuffer(
                     info.buffer_id,
@@ -448,15 +455,21 @@ export default class Loader {
                 // Native path loading bypasses XHR and blob loading
                 (async () => {
                     try {
-                        const { invoke } = await import('@tauri-apps/api/core');
+                        const { invoke, Channel } = await import('@tauri-apps/api/core');
                         const OperableAudioBuffer = (await import('../Audio/OperableAudioBuffer')).default;
                         const RustAudioBuffer = (await import('../Audio/RustAudioBuffer')).default;
                         const SampleRegion = (await import('../Models/Region/SampleRegion')).default;
                         
                         const bufferId = OperableAudioBuffer.getNewId();
+                        const onProgress = new Channel<any>();
+                        onProgress.onmessage = (message) => {
+                            track.element.progress(message.loaded, message.total);
+                        };
+
                         const info: any = await invoke('load_audio_file', {
                             bufferId: bufferId,
-                            path: region.native_path
+                            path: region.native_path,
+                            onProgress: onProgress
                         });
                         
                         let rustBuffer = new RustAudioBuffer(
@@ -506,7 +519,9 @@ export default class Loader {
                 if (xhr.status == 200) {
                     let audioArrayBuffer = xhr.response as ArrayBuffer
                     try {
-                        let newRegion = await decoder(audioArrayBuffer)
+                        let newRegion = await decoder(audioArrayBuffer, (message) => {
+                            track.element.progress(message.loaded, message.total);
+                        });
                         if (track.deleted) {
                             return; // Abort/return but don't checkCompletion as we are "deleted"
                         }
@@ -540,10 +555,17 @@ export default class Loader {
     async loadTrackUrl(track: Track, url: string) {
         console.log("Load Track via Rust: " + url);
         try {
+            const { Channel } = await import('@tauri-apps/api/core');
+            const onProgress = new Channel<any>();
+            onProgress.onmessage = (message) => {
+                track.element.progress(message.loaded, message.total);
+            };
+
             const bufferId = OperableAudioBuffer.getNewId();
             const info: any = await invoke('load_audio_file', {
                 bufferId: bufferId,
-                path: url
+                path: url,
+                onProgress: onProgress
             });
             
             if (track.deleted) return;

@@ -34,16 +34,16 @@ export default class EditorController {
      * The file loaders used to load dragged files.
      * It should return the loaded region or null if the file is not supported.
      */
-    static DRAG_LOADERS: ((start: number, file: ArrayBuffer | string, type: string) => Promise<RegionOf<any> | null>)[] = [
+    static DRAG_LOADERS: ((start: number, file: ArrayBuffer | string, type: string, onProgressCallback?: (message: any) => void) => Promise<RegionOf<any> | null>)[] = [
         // Load MIDI files through note list
-        async function (start, buffer, type) {
+        async function (start, buffer, type, onProgressCallback) {
             if (typeof buffer === "string") return null;
             const midi = await parseNoteList(buffer)
             if (midi) return new MIDIRegion(midi, start)
             else return null
         },
         // Load MIDI files
-        async function (start, buffer, type) {
+        async function (start, buffer, type, onProgressCallback) {
             if (typeof buffer === "string") return null;
             if (!["audio/mid"].includes(type)) return null
             const midi = await MIDI.load2(buffer)
@@ -51,26 +51,63 @@ export default class EditorController {
             else return null
         },
         // Load sample files
-        async function (start, buffer, type) {
+        async function (start, buffer, type, onProgressCallback) {
             if (!["audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav"].includes(type)) return null
             try {
                 if (typeof buffer === "string") {
-                    const { invoke } = await import('@tauri-apps/api/core');
+                    const { invoke, Channel } = await import('@tauri-apps/api/core');
                     const RustAudioBuffer = (await import('../../Audio/RustAudioBuffer')).default;
                     const bufferId = OperableAudioBuffer.getNewId();
+                    
+                    const onProgress = new Channel<any>();
+                    onProgress.onmessage = (message) => {
+                        if (onProgressCallback) onProgressCallback(message);
+                    };
+
                     const info: any = await invoke('load_audio_file', {
                         bufferId: bufferId,
-                        path: buffer
+                        path: buffer,
+                        onProgress: onProgress
                     });
                     let rustBuffer = new RustAudioBuffer(
                         info.buffer_id, info.length, info.sample_rate, info.channels, info.peaks, buffer
                     );
                     return new SampleRegion(rustBuffer, start);
                 } else {
-                    let audioArrayBuffer = buffer as ArrayBuffer
-                    let audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer);
-                    let operableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
-                    return new SampleRegion(operableAudioBuffer, start)
+                    let audioArrayBuffer = buffer as ArrayBuffer;
+
+                    if ((window as any).__TAURI__) {
+                        const { invoke, Channel } = await import('@tauri-apps/api/core');
+                        const RustAudioBuffer = (await import('../../Audio/RustAudioBuffer')).default;
+                        const bufferId = OperableAudioBuffer.getNewId();
+                        
+                        const onProgress = new Channel<any>();
+                        onProgress.onmessage = (message) => {
+                            if (onProgressCallback) onProgressCallback(message);
+                        };
+
+                        // To bypass Tauri v2 IPC JSON serialization freeze for large Uint8Array,
+                        // upload the raw bytes to the local backend server (bank) and pass the path to Rust.
+                        let formData = new FormData();
+                        formData.append("file", new Blob([audioArrayBuffer]));
+                        let uploadRes = await fetch("http://localhost:6002/upload_temp", { method: "POST", body: formData });
+                        if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+                        let tempPath = (await uploadRes.json()).path;
+
+                        const info: any = await invoke('load_audio_file', {
+                            bufferId: bufferId,
+                            path: tempPath,
+                            onProgress: onProgress
+                        });
+                        let rustBuffer = new RustAudioBuffer(
+                            info.buffer_id, info.length, info.sample_rate, info.channels, info.peaks, tempPath
+                        );
+                        return new SampleRegion(rustBuffer, start);
+                    } else {
+                        let audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer);
+                        let operableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
+                        return new SampleRegion(operableAudioBuffer, start);
+                    }
                 }
             } catch (e) {
                 console.error(e)
@@ -329,10 +366,18 @@ export default class EditorController {
                     } else if (path.toLowerCase().match(/\.(wav|mp3|ogg|flac|m4a|aac)$/i)) {
                         target.track.element.progress(0, 1);
                         try {
+                            const { invoke, Channel } = await import('@tauri-apps/api/core');
                             const bufferId = OperableAudioBuffer.getNewId();
+                            
+                            const onProgress = new Channel<any>();
+                            onProgress.onmessage = (message) => {
+                                target.track.element.progress(message.loaded, message.total);
+                            };
+
                             const info: any = await invoke('load_audio_file', {
                                 bufferId: bufferId,
-                                path: path
+                                path: path,
+                                onProgress: onProgress
                             });
 
                             let rustBuffer = new RustAudioBuffer(
@@ -622,7 +667,9 @@ export default class EditorController {
         let region: RegionOf<any> | null = null
         for (const loader of EditorController.DRAG_LOADERS) {
             // Try each audio file loader until one can decode the file
-            let loaded_region = await loader(start, buffer, type)
+            let loaded_region = await loader(start, buffer, type, (message) => {
+                track.element.progress(message.loaded, message.total);
+            });
             if (loaded_region !== null) {
                 region = loaded_region
                 this._app.regionsController.addRegion(track, loaded_region)

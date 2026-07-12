@@ -212,8 +212,19 @@ struct JsMidiEvent {
     data2: u8,
 }
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct ProgressPayload {
+    loaded: usize,
+    total: usize,
+}
+
 #[command]
-async fn load_audio_file(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, buffer_id: u32, path: String) -> Result<audio_loader::AudioFileInfo, String> {
+async fn load_audio_file(
+    state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, 
+    buffer_id: u32, 
+    path: String,
+    on_progress: tauri::ipc::Channel<ProgressPayload>,
+) -> Result<audio_loader::AudioFileInfo, String> {
     // Resolve URL-like paths
     let mut real_path = path;
     if real_path.starts_with("http://localhost:6002/") {
@@ -230,9 +241,13 @@ async fn load_audio_file(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex
         real_path = bank_path.to_string_lossy().to_string();
     }
     
+    let target_sample_rate = if let Ok(mixer) = state.lock() { mixer.sample_rate } else { 48000 };
+    
     // Background execution via spawn_blocking prevents blocking Tauri's async executor thread
     let (info, left, right) = tauri::async_runtime::spawn_blocking(move || {
-        audio_loader::decode_file(&real_path, buffer_id)
+        audio_loader::decode_file(&real_path, buffer_id, target_sample_rate, |loaded, total| {
+            let _ = on_progress.send(ProgressPayload { loaded, total });
+        })
     }).await.map_err(|e| format!("Task failed: {}", e))??;
     
     if let Ok(mut mixer) = state.lock() {
@@ -242,8 +257,16 @@ async fn load_audio_file(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex
 }
 
 #[command]
-async fn load_audio_from_memory(state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, buffer_id: u32, data: Vec<u8>) -> Result<audio_loader::AudioFileInfo, String> {
-    let (info, left, right) = audio_loader::decode_memory(data, buffer_id)?;
+async fn load_audio_from_memory(
+    state: tauri::State<'_, std::sync::Arc<std::sync::Mutex<mixer::Mixer>>>, 
+    buffer_id: u32, 
+    data: Vec<u8>,
+    on_progress: tauri::ipc::Channel<ProgressPayload>,
+) -> Result<audio_loader::AudioFileInfo, String> {
+    let target_sample_rate = if let Ok(mixer) = state.lock() { mixer.sample_rate } else { 48000 };
+    let (info, left, right) = audio_loader::decode_memory(data, buffer_id, target_sample_rate, |loaded, total| {
+        let _ = on_progress.send(ProgressPayload { loaded, total });
+    })?;
     if let Ok(mut mixer) = state.lock() {
         mixer.add_audio_buffer(buffer_id, left, right);
     }

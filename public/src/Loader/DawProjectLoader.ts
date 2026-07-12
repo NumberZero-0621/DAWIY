@@ -209,7 +209,7 @@ export default class DawProjectLoader {
                 if (warpsEl) {
                     const internalAudioEl = warpsEl.querySelector("Audio");
                     if (internalAudioEl) {
-                        const sampleRegion = await this.parseAudio(internalAudioEl, startTimeMs);
+                        const sampleRegion = await this.parseAudio(internalAudioEl, startTimeMs, track);
                         if (sampleRegion) {
                             this._app.regionsController.addRegion(track, sampleRegion);
                             audioLoaded = true;
@@ -221,7 +221,7 @@ export default class DawProjectLoader {
                 if (!audioLoaded) {
                     const audioEl = clipEl.querySelector("Audio");
                     if (audioEl) {
-                        const sampleRegion = await this.parseAudio(audioEl, startTimeMs);
+                        const sampleRegion = await this.parseAudio(audioEl, startTimeMs, track);
                         if (sampleRegion) {
                             this._app.regionsController.addRegion(track, sampleRegion);
                         }
@@ -278,7 +278,7 @@ export default class DawProjectLoader {
         return new MIDIRegion(midi, startTimeMs);
     }
 
-    private async parseAudio(audioEl: Element, startTimeMs: number): Promise<SampleRegion | null> {
+    private async parseAudio(audioEl: Element, startTimeMs: number, track?: Track): Promise<SampleRegion | null> {
         const fileEl = audioEl.querySelector("File");
         if (!fileEl) return null;
 
@@ -305,9 +305,16 @@ export default class DawProjectLoader {
                 if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
                 let tempPath = (await uploadRes.json()).path;
 
+                const { Channel } = await import('@tauri-apps/api/core');
+                const onProgress = new Channel<any>();
+                onProgress.onmessage = (message) => {
+                    if (track) track.element.progress(message.loaded, message.total);
+                };
+
                 const info: any = await invoke('load_audio_file', {
                     bufferId: bufferId,
-                    path: tempPath
+                    path: tempPath,
+                    onProgress: onProgress
                 });
                 
                 let rustBuffer = new RustAudioBuffer(
