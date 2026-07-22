@@ -7,7 +7,7 @@ import torch
 import numpy as np
 
 # 先ほど定義したGeneratorクラスをインポート
-from cnn_gan import Generator, LATENT_DIM, TIME_STEPS, PITCH_RANGE
+from wgan_gp import Generator, LATENT_DIM, TIME_STEPS, PITCH_RANGE
 
 app = FastAPI()
 

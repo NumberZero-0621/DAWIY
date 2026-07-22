@@ -6,8 +6,8 @@ import pretty_midi
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 
-# cnn_gan.py からモデルをインポート
-from cnn_gan import Generator, Discriminator, LATENT_DIM, TIME_STEPS, PITCH_RANGE
+# wgan_gp.py からモデルをインポート
+from wgan_gp import Generator, Discriminator, LATENT_DIM, TIME_STEPS, PITCH_RANGE
 
 # サンプリング周波数 (1秒間に何回サンプリングするか)
 # 例: 4に設定すると1ステップ = 0.25秒(16分音符相当/BPM120換算)
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     maestro_path = r"C:\Documents\UnivFukuchiyama\maestro-v3.0.0-midi\maestro-v3.0.0\2004"
     
     # データセットとデータローダーの作成
-    dataset = MaestroPianoRollDataset(maestro_path, max_files=100)
+    dataset = MaestroPianoRollDataset(maestro_path, max_files=10)
     
     if len(dataset) == 0:
         print("有効な学習データが見つかりませんでした。パスを確認してください。")
@@ -84,52 +84,69 @@ if __name__ == "__main__":
     # モデルの準備
     generator = Generator().to(device)
     discriminator = Discriminator().to(device)
+    # -----------------------------
+    # WGAN-GP 用の設定
+    # -----------------------------
+    n_critic = 5 # Generator 1回の更新に対して Discriminator を何回更新するか
     
-    adversarial_loss = nn.BCELoss()
-    optimizer_G = torch.optim.Adam(generator.parameters(), lr=0.0002)
-    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=0.0005)
+    # WGAN-GP では Adam の beta1 を 0.0 にするのが推奨されています
+    optimizer_G = torch.optim.Adam(generator.parameters(), lr=0.0001, betas=(0.0, 0.9))
+    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=0.0001, betas=(0.0, 0.9))
 
-    epochs = 100
-    print("学習を開始します...")
+    # Gradient Penalty 計算用関数
+    from wgan_gp import compute_gradient_penalty
+
+    epochs = 1000
+    print("WGAN-GP での学習を開始します...")
     for epoch in range(epochs):
         for i, real_imgs in enumerate(dataloader):
             real_imgs = real_imgs.to(device)
             batch_size = real_imgs.size(0)
 
-            # 正解ラベル(1) と 偽物ラベル(0) を用意
-            valid = torch.ones(batch_size, 1).to(device) * 0.9
-            fake = torch.zeros(batch_size, 1).to(device)
-
-            # -----------------
-            #  Generatorの学習
-            # -----------------
-            optimizer_G.zero_grad()
-            # ランダムなノイズ z を生成
-            z = torch.randn(batch_size, LATENT_DIM).to(device)
-            # ノイズから偽のピアノロールを生成
-            gen_imgs = generator(z)
-            
-            # Discriminatorがこれを「本物(valid)」と騙されれば Loss が小さくなる
-            g_loss = adversarial_loss(discriminator(gen_imgs), valid)
-            g_loss.backward()
-            optimizer_G.step()
-
-            # ---------------------
-            #  Discriminatorの学習
-            # ---------------------
+            # =========================
+            #  1. Discriminator の学習
+            # =========================
             optimizer_D.zero_grad()
-            # 本物の画像を入れたときは「本物(valid)」と判定させたい
-            real_loss = adversarial_loss(discriminator(real_imgs), valid)
-            # 偽物の画像を入れたときは「偽物(fake)」と判定させたい
-            fake_loss = adversarial_loss(discriminator(gen_imgs.detach()), fake)
             
-            d_loss = (real_loss + fake_loss) / 2
+            # ランダムなノイズ
+            z = torch.randn(batch_size, LATENT_DIM).to(device)
+            # 偽の画像を生成 (Dの学習中なのでGの勾配は不要 -> detach)
+            fake_imgs = generator(z).detach()
+            
+            # 本物のスコアと偽物のスコア
+            real_validity = discriminator(real_imgs)
+            fake_validity = discriminator(fake_imgs)
+            
+            # Gradient Penalty の計算
+            gradient_penalty = compute_gradient_penalty(discriminator, real_imgs.data, fake_imgs.data, device)
+            
+            # DのLoss: -本物のスコア + 偽物のスコア + Penalty (本物に高く、偽物に低いスコアを出したい)
+            d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + gradient_penalty
+            
             d_loss.backward()
             optimizer_D.step()
+
+            # =========================
+            #  2. Generator の学習
+            # =========================
+            # Critic (D) を n_critic 回更新するごとに G を 1回更新する
+            if i % n_critic == 0:
+                optimizer_G.zero_grad()
+                
+                # 同じノイズから再度生成 (今度はGの勾配を計算する)
+                gen_imgs = generator(z)
+                # 偽物の画像をDに判定させる
+                fake_validity = discriminator(gen_imgs)
+                
+                # GのLoss: -偽物のスコア (Dに「本物だ」と高いスコアを出させたい)
+                g_loss = -torch.mean(fake_validity)
+                
+                g_loss.backward()
+                optimizer_G.step()
 
         if epoch % 10 == 0:
             print(f"[Epoch {epoch}/{epochs}] [D loss: {d_loss.item():.4f}] [G loss: {g_loss.item():.4f}]")
 
     # 学習完了後、モデルの重みを保存する
     torch.save(generator.state_dict(), "generator.pth")
-    print("学習が完了し、 generator.pth を保存しました！")
+    print("WGAN-GPでの学習が完了し、 generator.pth を保存しました！")
