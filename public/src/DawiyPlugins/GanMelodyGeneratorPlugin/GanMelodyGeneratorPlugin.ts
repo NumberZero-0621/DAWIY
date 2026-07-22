@@ -17,9 +17,7 @@ export default class GanMelodyGeneratorPlugin extends DawiyPluginBase {
         apiEndpoint: "http://localhost:8000/generate",
         lengthBars: 4,
         lengthBeats: 0,
-        temperature: 1.0,
         seed: -1,
-        latentVectorSize: 100,
         minPitch: 60, // C4
         maxPitch: 84, // C6
     };
@@ -139,9 +137,7 @@ export default class GanMelodyGeneratorPlugin extends DawiyPluginBase {
         createRow("Pitch Range:", pitchContainer);
 
         // API Params
-        createRow("Temperature:", createNumberInput(this.params.temperature, 0, 5, 0.1, v => this.params.temperature = v));
         createRow("Seed (-1: random):", createNumberInput(this.params.seed, -1, null, 1, v => this.params.seed = v));
-        createRow("Latent Vector Size:", createNumberInput(this.params.latentVectorSize, 1, null, 1, v => this.params.latentVectorSize = v));
 
         container.appendChild(form);
     }
@@ -177,9 +173,9 @@ export default class GanMelodyGeneratorPlugin extends DawiyPluginBase {
                 length_bars: this.params.lengthBars,
                 length_beats: this.params.lengthBeats,
                 tempo: TEMPO,
-                temperature: this.params.temperature,
+                temperature: 1.0, // Hardcoded, unused by backend
                 seed: this.params.seed,
-                latent_vector_size: this.params.latentVectorSize,
+                latent_vector_size: 100, // Hardcoded to match wgan_gp.py LATENT_DIM
                 min_pitch: this.params.minPitch,
                 max_pitch: this.params.maxPitch,
                 total_duration_ms: totalDurationMs
