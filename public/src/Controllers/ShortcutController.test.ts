@@ -61,6 +61,15 @@ jest.mock("../Utils/i18n", () => ({
     t: (key: string) => key
 }));
 
+// Mock SettingsPersistenceController
+jest.mock("./SettingsPersistenceController", () => ({
+    get: jest.fn(),
+    save: jest.fn(),
+    init: jest.fn().mockResolvedValue(undefined),
+    settings: {}
+}));
+import SettingsPersistenceController from "./SettingsPersistenceController";
+
 describe("ShortcutController", () => {
     let app: App;
     let controller: ShortcutController;
@@ -86,6 +95,8 @@ describe("ShortcutController", () => {
 
         // Clear mocks
         (App as unknown as jest.Mock).mockClear();
+        (SettingsPersistenceController.get as jest.Mock).mockReset();
+        (SettingsPersistenceController.save as jest.Mock).mockReset();
 
         app = new App();
         controller = new ShortcutController(app);
@@ -163,7 +174,7 @@ describe("ShortcutController", () => {
         expect(shortcuts).toHaveLength(1);
         expect(shortcuts[0]).toEqual(newCombo);
 
-        expect(localStorage.setItem).toHaveBeenCalledWith("dawiy_shortcuts", expect.any(String));
+        expect(SettingsPersistenceController.save).toHaveBeenCalledWith("dawiy_shortcuts", expect.any(Object));
     });
 
     test("updateShortcut should throw on conflict", () => {
@@ -192,12 +203,12 @@ describe("ShortcutController", () => {
         expect(controller.getShortcuts(actionId)).toEqual(defaults.defaultKeys);
     });
 
-    test("loadSettings should load from localStorage on init", () => {
+    test("loadSettings should load from SettingsPersistenceController on init", () => {
         // Setup storage before init
         const saved = {
             "transport.playPause": [{ key: "z" }]
         };
-        (localStorage.getItem as jest.Mock).mockReturnValue(JSON.stringify(saved));
+        (SettingsPersistenceController.get as jest.Mock).mockReturnValue(saved);
 
         const newController = new ShortcutController(new App());
         expect(newController.getShortcuts("transport.playPause")[0].key).toBe("z");

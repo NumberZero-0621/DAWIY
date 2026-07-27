@@ -47,6 +47,7 @@ import AutoSaveController from "./Controllers/AutoSaveController";
 import ContextMenuController from "./Controllers/ContextMenuController";
 import MidiOutputController from "./Controllers/MidiOutputController";
 import HostAPI from "./DawiyPlugins/API/HostAPI";
+import AppEventBridge from "./Utils/AppEventBridge";
 
 /**
  * Main class for the host. Start all controllers, views and models. All controllers and views are accessible frome this app.
@@ -174,6 +175,10 @@ export default class App {
         window.pipe = pipe
 
         this.setupPluginDragAndDrop();
+
+        if (!new URLSearchParams(window.location.search).get('popout')) {
+            AppEventBridge.initMain(this);
+        }
     }
 
     /**

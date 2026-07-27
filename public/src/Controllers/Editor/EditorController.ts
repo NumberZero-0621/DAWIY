@@ -327,82 +327,78 @@ export default class EditorController {
         }, true);
         
         // Listen to Tauri file drop event (Provides absolute paths for OS files)
-        getCurrentWindow().onDragDropEvent(async (event: any) => {
-            if (event.payload.type === 'drop') {
-                const paths = event.payload.paths;
-                const pos = event.payload.position;
-                if (!pos) return;
+        if ((window as any).__TAURI__ || (window as any).__TAURI_INTERNALS__) {
+            getCurrentWindow().onDragDropEvent(async (event: any) => {
+                if (event.payload.type === 'drop') {
+                    const paths = event.payload.paths;
+                    const pos = event.payload.position;
+                    if (!pos) return;
 
-                console.log("[EditorController] Tauri file drop:", paths, pos);
+                    console.log("[EditorController] Tauri file drop:", paths, pos);
 
-                // Need clientX/clientY for getTrackAt. Tauri position is PhysicalPosition or LogicalPosition
-                // Depending on dpi, let's assume it maps to clientX/clientY for now.
-                // Convert Tauri's PhysicalPosition to logical coordinates used by CSS
-                let clientX = pos.x / window.devicePixelRatio;
-                let clientY = pos.y / window.devicePixelRatio;
+                    // Need clientX/clientY for getTrackAt. Tauri position is PhysicalPosition or LogicalPosition
+                    // Depending on dpi, let's assume it maps to clientX/clientY for now.
+                    // Convert Tauri's PhysicalPosition to logical coordinates used by CSS
+                    let clientX = pos.x / window.devicePixelRatio;
+                    let clientY = pos.y / window.devicePixelRatio;
 
-                let needNewTrack = false;
-                const target = await this.getTrackAt(clientX, clientY, true);
-                if (!target) return;
+                    let needNewTrack = false;
+                    const target = await this.getTrackAt(clientX, clientY, true);
+                    if (!target) return;
 
-                let success = false;
-                for (const path of paths) {
-                    if (needNewTrack) {
-                        const tracks = this._app.tracksController.tracks;
-                        let next_track = tracks.get(tracks.indexOf(target.track) + 1);
-                        if (next_track == null) {
-                            next_track = await this._app.tracksController.createTrack();
+                    let success = false;
+                    for (const path of paths) {
+                        if (needNewTrack) {
+                            const tracks = this._app.tracksController.tracks;
+                            let next_track = tracks.get(tracks.indexOf(target.track) + 1);
+                            if (next_track == null) {
+                                next_track = await this._app.tracksController.createTrack();
+                            }
+                            target.track = next_track;
+                            needNewTrack = false;
                         }
-                        target.track = next_track;
-                        needNewTrack = false;
-                    }
 
-                    // Check if it's midi
-                    if (path.toLowerCase().endsWith('.mid') || path.toLowerCase().endsWith('.midi')) {
-                        // MIDI still handled by JS since it doesn't need huge buffers
-                        // But since we only have path, we can't easily read the ArrayBuffer unless we use tauri-plugin-fs!
-                        // For now, custom MIDI drop might require fs. Let's ignore MIDI via Tauri path for a moment,
-                        // actually we should handle audio here:
-                    } else if (path.toLowerCase().match(/\.(wav|mp3|ogg|flac|m4a|aac)$/i)) {
-                        target.track.element.progress(0, 1);
-                        try {
-                            const { invoke, Channel } = await import('@tauri-apps/api/core');
-                            const bufferId = OperableAudioBuffer.getNewId();
-                            
-                            const onProgress = new Channel<any>();
-                            onProgress.onmessage = (message) => {
-                                target.track.element.progress(message.loaded, message.total);
-                            };
+                        // Check if it's midi
+                        if (path.toLowerCase().endsWith('.mid') || path.toLowerCase().endsWith('.midi')) {
+                            // MIDI still handled by JS since it doesn't need huge buffers
+                            // But since we only have path, we can't easily read the ArrayBuffer unless we use tauri-plugin-fs!
+                            // For now, custom MIDI drop might require fs. Let's ignore MIDI via Tauri path for a moment,
+                            // actually we should handle audio here:
+                        } else if (path.toLowerCase().match(/\.(wav|mp3|ogg|flac|m4a|aac)$/i)) {
+                            target.track.element.progress(0, 1);
+                            try {
+                                const { invoke, Channel } = await import('@tauri-apps/api/core');
+                                const bufferId = OperableAudioBuffer.getNewId();
+                                
+                                const onProgress = new Channel<any>();
+                                onProgress.onmessage = (message) => {
+                                    target.track.element.progress(message.loaded, message.total);
+                                };
 
-                            const info: any = await invoke('load_audio_file', {
-                                bufferId: bufferId,
-                                path: path,
-                                onProgress: onProgress
-                            });
+                                const info: any = await invoke('load_audio_file', {
+                                    bufferId: bufferId,
+                                    path: path,
+                                    onProgress: onProgress
+                                });
+                                let rustBuffer = new RustAudioBuffer(
+                                    info.buffer_id, info.length, info.sample_rate, info.channels, info.peaks, path
+                                );
 
-                            let rustBuffer = new RustAudioBuffer(
-                                info.buffer_id,
-                                info.length,
-                                info.sample_rate,
-                                info.channels,
-                                info.peaks,
-                                path // Pass the native file path for Tauri auto-save
-                            );
-
-                            target.track.element.name = path.split(/[\\/]/).pop() || "Audio Track";
-                            this._app.regionsController.addRegion(target.track, new SampleRegion(rustBuffer, target.start));
-                            success = true;
-                            needNewTrack = true;
-                        } catch (e) {
-                            console.error('Failed to load dropped audio via Rust:', e);
-                            this._app.showToast(`Import failed: ${e}`, true);
+                                target.track.element.name = path.split(/[\\/]/).pop() || "Audio Track";
+                                this._app.regionsController.addRegion(target.track, new SampleRegion(rustBuffer, target.start));
+                                success = true;
+                                needNewTrack = true;
+                            } catch (e) {
+                                console.error('Failed to load dropped audio via Rust:', e);
+                                this._app.showToast(`Import failed: ${e}`, true);
+                            }
+                            target.track.element.progressDone();
                         }
-                        target.track.element.progressDone();
                     }
+                    if (!success && !needNewTrack) target.cancel();
                 }
-                if (!success && !needNewTrack) target.cancel();
-            }
-        });
+            });
+        };
 
         // Handle drop on the canvas/window (Used for Internal drag & drop, and non-audio files handled by web API)
         window.addEventListener('drop', (e: DragEvent) => {

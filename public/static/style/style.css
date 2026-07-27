@@ -973,12 +973,15 @@ body.loading>*:not(.loading-overlay) {
     background-color: #222;
     padding: 10px;
     display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
     color: #777;
     overflow: hidden;
 }
 
 .dawiy-ext-placeholder {
     font-style: italic;
+    margin: auto;
+    text-align: center;
 }

@@ -510,9 +510,20 @@ pub fn run() {
         match event {
             tauri::WindowEvent::CloseRequested { .. } => {
                 println!("[TAURI] Window Close Requested (Label: {}). Cleaning up...", window.label());
+                if window.label() == "main" {
+                    let _ = vst_host::close_all_editors();
+                    for (label, w) in window.app_handle().webview_windows() {
+                        if label != "main" {
+                            let _ = w.close();
+                        }
+                    }
+                }
             }
             tauri::WindowEvent::Destroyed => {
                 println!("[TAURI] Window Destroyed (Label: {}).", window.label());
+                if window.label() == "main" {
+                    window.app_handle().exit(0);
+                }
             }
             _ => {}
         }

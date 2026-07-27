@@ -28,7 +28,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, IDC_ARROW, MSG, WINDOW_EX_STYLE,
     WM_DESTROY, WM_SIZE, WM_CLOSE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
     AdjustWindowRect, SetWindowLongPtrW, GetWindowLongPtrW, GWLP_USERDATA,
-    SetWindowPos, SWP_NOMOVE, SWP_NOZORDER, SWP_NOACTIVATE, SW_SHOW, SetTimer, ShowWindow, DestroyWindow, SetWindowTextW
+    SetWindowPos, SWP_NOMOVE, SWP_NOZORDER, SWP_NOACTIVATE, SetTimer, SetWindowTextW
 };
 use windows::Win32::Graphics::Gdi::{GetStockObject, BLACK_BRUSH, HBRUSH};
 use windows::Win32::System::Ole::{OleInitialize, OleUninitialize};

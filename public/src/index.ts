@@ -2,6 +2,7 @@ import 'bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import App from './App';
 import { BACKEND_URL } from './Env';
+import AppEventBridge from './Utils/AppEventBridge';
 import BPF from './Components/BPF';
 import AutomationTrackElement from './Components/Editor/AutomationTrackElement';
 import ExportProjectElement from "./Components/Project/ExportProjectElement";
@@ -71,8 +72,17 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 window.addEventListener('unload', () => {
-    // ページ遷移・リロードが確定した段階ですべてのVSTウインドウを強制クローズする
-    invoke('close_all_vst_editors').catch(console.error);
+    // ページ遷移・リロードが確定した段階ですべてのVSTウインドウおよびポップアウトを強制クローズする
+    if ((window as any).__TAURI__ || (window as any).__TAURI_INTERNALS__) {
+        if (!new URLSearchParams(window.location.search).get('popout')) {
+            invoke('close_all_vst_editors').catch(console.error);
+            import('@tauri-apps/api/webviewWindow').then(({ WebviewWindow }) => {
+                WebviewWindow.getAll().then(wins => wins.forEach(w => {
+                    if (w.label.startsWith('dawiy-popout-')) w.close();
+                }));
+            }).catch(() => {});
+        }
+    }
 });
 
 const audioCtx = new AudioContext({ latencyHint: 0.00001 });
@@ -108,7 +118,38 @@ let app: App;
     const lang = SettingsPersistenceController.get<Language>("language", "en");
     setLanguage(lang);
 
-    // 3. Instantiate App (Now that settings are ready)
+    // 3. Check for Popout Mode
+    const params = new URLSearchParams(window.location.search);
+    const popoutExtId = params.get('popout');
+
+    if (popoutExtId) {
+        document.body.classList.add('popout-mode');
+        const menuBar = document.getElementById('menu-bar');
+        if (menuBar) menuBar.style.display = 'none';
+        const appDiv = document.getElementById('app');
+        if (appDiv) appDiv.style.display = 'none';
+        const loadingOverlay = document.querySelector('.loading-overlay');
+        if (loadingOverlay) (loadingOverlay as HTMLElement).style.display = 'none';
+
+        document.body.style.cssText = 'background-color: #222; color: #eee; margin: 0; padding: 0; overflow: auto; width: 100vw; height: 100vh;';
+        
+        app = new App();
+        (window as any).app = app;
+        
+        await app.dawiyPluginController.waitForPluginsLoaded();
+        await AppEventBridge.initPopout(app, popoutExtId);
+        
+        const container = document.createElement('div');
+        container.className = 'dawiy-popout-container';
+        container.style.cssText = 'padding: 10px; box-sizing: border-box; min-height: 100vh;';
+        document.body.appendChild(container);
+        
+        app.dawiyPluginController.renderPluginInPopoutWindow(popoutExtId, container);
+        hideLoading();
+        return;
+    }
+
+    // Normal DAW Instantiation
     app = new App();
 
     // 4. Initialize Host
