@@ -338,13 +338,7 @@ class VstProxyNode extends CompositeAudioNode {
                     this.currentBuffered = Math.max(0, this.currentBuffered - e.data.consumed);
                     // underrun警告は初期待機時等にも出るため削除
                 } else if (e.data.type === 'audio_input') {
-                    // Workletからの入力を受け取る
-                    this.inputAudioQueueL.push(e.data.left);
-                    this.inputAudioQueueR.push(e.data.right);
-                    this.inputAudioBuffered += e.data.left.length;
-
-                    // サーバーへプッシュ
-                    this.pushAudioProcess();
+                    // オーディオの入出力はRust側で行うため、JS側では破棄する
                 }
             };
 
@@ -357,7 +351,7 @@ class VstProxyNode extends CompositeAudioNode {
             this._output = this._audioOutputNode;
 
             // 音声取得ループ開始（初期バッファリング用）
-            this.pushAudioProcess();
+            // this.pushAudioProcess(); // Removed because Rust Master Engine handles VST audio directly
         } catch (e) {
             console.error("Failed to setup AudioWorklet for VST:", e);
         } finally {
@@ -365,98 +359,7 @@ class VstProxyNode extends CompositeAudioNode {
         }
     }
 
-    async pushAudioProcess() {
-        if (this.instanceId == null || !window.__TAURI__ || this.isFetching) return;
-
-        // レイテンシ削減のため、1回あたりの処理サンプル数と目標バッファ量を半減
-        const reqSamples = 1024;
-        const TARGET_BUFFER = 4096;
-
-        if (this.currentBuffered > TARGET_BUFFER) return;
-
-        this.isFetching = true;
-        try {
-            let in_l = new Float32Array(reqSamples);
-            let in_r = new Float32Array(reqSamples);
-
-            // バッファに入力波形があれば取り出す
-            if (this.inputAudioBuffered >= reqSamples) {
-                let offset = 0;
-                while (offset < reqSamples && this.inputAudioQueueL.length > 0) {
-                    let chunkL = this.inputAudioQueueL[0];
-                    let chunkR = this.inputAudioQueueR[0];
-
-                    let take = Math.min(chunkL.length, reqSamples - offset);
-                    in_l.set(chunkL.subarray(0, take), offset);
-                    in_r.set(chunkR.subarray(0, take), offset);
-
-                    offset += take;
-                    this.inputAudioBuffered -= take;
-
-                    if (take < chunkL.length) {
-                        this.inputAudioQueueL[0] = chunkL.subarray(take);
-                        this.inputAudioQueueR[0] = chunkR.subarray(take);
-                    } else {
-                        this.inputAudioQueueL.shift();
-                        this.inputAudioQueueR.shift();
-                    }
-                }
-            } else {
-                // 入力が足りない場合（またはインストゥルメントの場合）はゼロ埋め（初期化済みなのでそのまま）
-                // ただしキューを空にしておく（遅延蓄積防止）
-                this.inputAudioQueueL = [];
-                this.inputAudioQueueR = [];
-                this.inputAudioBuffered = 0;
-            }
-
-            // Rust側はFloat32を期待しているので、ArrayBuffer (Uint8Array) に変換して送信
-            const reqBufL = new Uint8Array(in_l.buffer);
-            const reqBufR = new Uint8Array(in_r.buffer);
-
-            const response = await window.__TAURI__.core.invoke("process_vst_audio", {
-                instanceId: this.instanceId,
-                reqSamples: reqSamples,
-                inputLBytes: Array.from(reqBufL),
-                inputRBytes: Array.from(reqBufR)
-            });
-
-            const responseLength = response?.byteLength ?? response?.length;
-            if (response && responseLength > 4) {
-                const bytes = response instanceof ArrayBuffer ? new Uint8Array(response)
-                    : response instanceof Uint8Array ? response
-                        : new Uint8Array(response);
-                const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-                const samplesCount = view.getUint32(0, true);
-
-                if (samplesCount > 0 && this._audioOutputNode) {
-                    const leftBytes = new Uint8Array(bytes.buffer, bytes.byteOffset + 4, samplesCount * 4);
-                    const rightBytes = new Uint8Array(bytes.buffer, bytes.byteOffset + 4 + samplesCount * 4, samplesCount * 4);
-
-                    const left = new Float32Array(leftBytes.slice().buffer);
-                    const right = new Float32Array(rightBytes.slice().buffer);
-
-                    this._audioOutputNode.port.postMessage({
-                        type: 'audio',
-                        left: left,
-                        right: right
-                    });
-
-                    // Workletからの通知を待たずにローカルの推測値を更新
-                    this.currentBuffered += samplesCount;
-                }
-            }
-        } catch (e) {
-            console.error("VST process_audio failed:", e);
-            // サーバーエラーなどで無限ループが走りブラウザがフリーズするのを防ぐ
-            await new Promise(r => setTimeout(r, 1000));
-        } finally {
-            this.isFetching = false;
-            // 未処理の入力がまだあれば連続で処理
-            if (this.inputAudioBuffered >= 1024) {
-                this.pushAudioProcess();
-            }
-        }
-    }
+    /* pushAudioProcess is removed because audio is processed purely in Rust */
 
     destroy() {
         this.isFetching = true; // prevent further fetches
@@ -498,6 +401,7 @@ class VstProxyNode extends CompositeAudioNode {
                     visible: visible
                 });
                 console.log(`[VstProxy] VST Loaded with instanceId: ${this.instanceId}`);
+                this.dispatchEvent(new CustomEvent("vst-loaded"));
                 if (this._audioOutputNode) {
                     this.pushAudioProcess();
                 }

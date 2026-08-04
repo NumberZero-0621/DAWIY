@@ -3,6 +3,7 @@ import { HEIGHT_TRACK } from "../../../Env";
 import SampleRegion from "../../../Models/Region/SampleRegion";
 import EditorView from "../EditorView";
 import RegionView from "./RegionView";
+import RustAudioBuffer from "../../../Audio/RustAudioBuffer";
 
 /**
  * Class that extends PIXI.Container.
@@ -37,42 +38,80 @@ export default class SampleRegionView extends RegionView<SampleRegion> {
         let amp = (channelHeight - 1) / 2;
 
         const sampleRate = region.buffer.sampleRate;
+        let isRustBuffer = region.buffer instanceof RustAudioBuffer;
 
         for (let channel = 0; channel < numChannels; channel++) {
-            let data = region.buffer.getChannelData(channel);
             let channelOffset = isStereo ? channel * channelHeight : 0;
-
-            let lastSampleIdx = 0;
-
-            for (let i = 0; i < regionWidth; i++) {
-                // Determine the time interval for this pixel
-                const tCurrent = app.xToMs(regionStartX + i);
-                const tNext = app.xToMs(regionStartX + i + 1);
+            
+            if (isRustBuffer) {
+                let rustBuffer = region.buffer as unknown as RustAudioBuffer;
+                let peaks = rustBuffer.peaks;
+                let numChunks = Math.floor(peaks.length / 2); 
+                const chunkDurationMs = region.duration / numChunks;
                 
-                const relativeStartMs = tCurrent - region.start;
-                const relativeEndMs = tNext - region.start;
-                
-                const startSample = Math.floor(relativeStartMs * sampleRate / 1000);
-                const endSample = Math.max(startSample + 1, Math.floor(relativeEndMs * sampleRate / 1000));
-                
-                if (startSample >= data.length) break;
-
-                let min = 1.0;
-                let max = -1.0;
-                for (let s = startSample; s < endSample && s < data.length; s++) {
-                    let datum = data[s];
-                    if (datum < min) min = datum;
-                    if (datum > max) max = datum;
+                for (let i = 0; i < regionWidth; i++) {
+                    const tCurrent = app.xToMs(regionStartX + i);
+                    const tNext = app.xToMs(regionStartX + i + 1);
+                    
+                    const relativeStartMs = tCurrent - region.start;
+                    const relativeEndMs = tNext - region.start;
+                    
+                    let startChunk = Math.floor(relativeStartMs / chunkDurationMs);
+                    let endChunk = Math.max(startChunk + 1, Math.floor(relativeEndMs / chunkDurationMs));
+                    
+                    if (startChunk >= numChunks) break;
+                    if (endChunk > numChunks) endChunk = numChunks;
+                    
+                    let min = 1.0;
+                    let max = -1.0;
+                    for (let c = startChunk; c < endChunk; c++) {
+                        let cMin = peaks[c * 2];
+                        let cMax = peaks[c * 2 + 1];
+                        if (cMin < min) min = cMin;
+                        if (cMax > max) max = cMax;
+                    }
+                    
+                    const rectWidth = 1;
+                    let rectHeight = Math.max(1, (max - min) * amp);
+                    let y = channelOffset + (1 + min) * amp;
+                    
+                    if (rectHeight < channelHeight) {
+                        target.drawRect(i, y, rectWidth, rectHeight);
+                    } else {
+                        target.drawRect(i, channelOffset, rectWidth, channelHeight);
+                    }
                 }
-                
-                const rectWidth = 1;
-                let rectHeight = Math.max(1, (max - min) * amp);
-                let y = channelOffset + (1 + min) * amp;
-                
-                if (rectHeight < channelHeight) {
-                    target.drawRect(i, y, rectWidth, rectHeight);
-                } else {
-                    target.drawRect(i, channelOffset, rectWidth, channelHeight);
+            } else {
+                let data = region.buffer.getChannelData(channel);
+                for (let i = 0; i < regionWidth; i++) {
+                    const tCurrent = app.xToMs(regionStartX + i);
+                    const tNext = app.xToMs(regionStartX + i + 1);
+                    
+                    const relativeStartMs = tCurrent - region.start;
+                    const relativeEndMs = tNext - region.start;
+                    
+                    const startSample = Math.floor(relativeStartMs * sampleRate / 1000);
+                    const endSample = Math.max(startSample + 1, Math.floor(relativeEndMs * sampleRate / 1000));
+                    
+                    if (startSample >= data.length) break;
+
+                    let min = 1.0;
+                    let max = -1.0;
+                    for (let s = startSample; s < endSample && s < data.length; s++) {
+                        let datum = data[s];
+                        if (datum < min) min = datum;
+                        if (datum > max) max = datum;
+                    }
+                    
+                    const rectWidth = 1;
+                    let rectHeight = Math.max(1, (max - min) * amp);
+                    let y = channelOffset + (1 + min) * amp;
+                    
+                    if (rectHeight < channelHeight) {
+                        target.drawRect(i, y, rectWidth, rectHeight);
+                    } else {
+                        target.drawRect(i, channelOffset, rectWidth, channelHeight);
+                    }
                 }
             }
         }

@@ -762,8 +762,31 @@ export default class HostController {
     })
 
 
-    this._view.importSongs.addEventListener("click", () => {
-      this._view.newTrackInput.click();
+    this._view.importSongs.addEventListener("click", async () => {
+      if ((window as any).__TAURI__) {
+        try {
+          const { open } = await import('@tauri-apps/plugin-dialog');
+          const selected = await open({
+            multiple: true,
+            filters: [{
+              name: 'Audio',
+              extensions: ['wav', 'mp3', 'ogg', 'flac', 'm4a', 'aac']
+            }]
+          });
+          if (Array.isArray(selected)) {
+            for (const path of selected) {
+              await this._app.tracksController.createTrackWithTauriPath(path);
+            }
+          } else if (selected) {
+            await this._app.tracksController.createTrackWithTauriPath(selected);
+          }
+        } catch (e) {
+          console.error("Tauri dialog error:", e);
+          this._view.newTrackInput.click();
+        }
+      } else {
+        this._view.newTrackInput.click();
+      }
     });
     this._view.newTrackInput.addEventListener("change", (e) => {
       this.importFilesSongs(e as InputEvent);
@@ -894,6 +917,24 @@ export default class HostController {
         maskTransition: "0.1s",
       }
     );
+    // Tauriのイベントリスナーを使ってRustからのピークレベルを反映
+    if ((window as any).__TAURI__) {
+      import("@tauri-apps/api/event").then(({ listen }) => {
+        listen<[number, number]>("meter_update", (event) => {
+          if ((peakMeter as any).setManualPeaks) {
+            (peakMeter as any).setManualPeaks(event.payload);
+          }
+        });
+        listen<Array<[number, number, number]>>("track_meter_update", (event) => {
+          for (let [trackId, peakL, peakR] of event.payload) {
+            const track = this._app.tracksController.getTrackById(trackId);
+            if (track && (track as any).peakMeter && (track as any).peakMeter.setManualPeaks) {
+              (track as any).peakMeter.setManualPeaks([peakL, peakR]);
+            }
+          }
+        });
+      });
+    }
     // MB replaced by another vu-meter
     //this.vuMeter = new VuMeter(this._view.vuMeterCanvas, 30, 157);
 

@@ -111,7 +111,7 @@ export default class SettingsController {
                         this._selectedMIDIOutputDeviceName = null;
                     }
                 },
-                -1
+                null
             )
         }
 

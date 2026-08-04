@@ -149,14 +149,13 @@ export default class WebAudioPeakMeter {
         this.textLabels[i] = "-∞";
       }
   
+      // Rust Master Engine: Disable JS audio processing meter updates
+      /*
       this.meterNode.addEventListener("audioprocess", (event) =>
         this.updateMeter(event)
       );
-      /*
-      this.meterNode.onaudioprocess = function() {
-        console.log("fffgg")
-      }
       */
+      
       meterElement.addEventListener(
         "click",
         () => {
@@ -316,15 +315,31 @@ export default class WebAudioPeakMeter {
   
       for (i = 0; i < this.channelCount; i++) {
         if((this.leftInputActivated && i === 0) || (this.rightInputActivated && i === 1)) {
-        this.maskSizes[i] = this.maskSize(channelMaxes[i], this.meterHeight);
-        } else  {
+          if (channelMaxes[i] > this.channelPeaks[i]) {
+            this.channelPeaks[i] = channelMaxes[i];
+          } else {
+            this.channelPeaks[i] *= 0.95; // decay to match VST meter behavior
+          }
+          this.maskSizes[i] = this.maskSize(this.channelPeaks[i]);
+          this.textLabels[i] = this.dbFromFloat(this.channelPeaks[i]).toFixed(1);
+        } else {
           this.maskSizes[i] = this.meterHeight;
         }
-  
-        if (channelMaxes[i] > this.channelPeaks[i]) {
-          this.channelPeaks[i] = channelMaxes[i];
-          this.textLabels[i] = this.dbFromFloat(this.channelPeaks[i]).toFixed(1);
+      }
+    }
+
+    setManualPeaks(peaks) {
+      for (var i = 0; i < this.channelCount && i < peaks.length; i++) {
+        var p = peaks[i];
+        if((this.leftInputActivated && i === 0) || (this.rightInputActivated && i === 1)) {
+          this.maskSizes[i] = this.maskSize(p, this.meterHeight);
+        } else {
+          this.maskSizes[i] = this.meterHeight;
         }
+
+        // Rust already handles decay
+        this.channelPeaks[i] = p;
+        this.textLabels[i] = this.dbFromFloat(this.channelPeaks[i]).toFixed(1);
       }
     }
   

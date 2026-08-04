@@ -53,7 +53,7 @@ enum VstCommand {
     Load(String, f32, bool, Option<HWND>, Sender<Result<u32, String>>), // returns Instance ID
     Midi(u32, u8, u8, u8), // instance_id, status, data1, data2
     GetAudio(u32, usize, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, response
-    ProcessAudio(u32, usize, Vec<f32>, Vec<f32>, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, in_l, in_r, response
+    ProcessAudio(u32, usize, Vec<f32>, Vec<f32>, bool, bool, u64, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, in_l, in_r, is_playing, is_offline, playhead_samples, response
     GetParameters(u32, Sender<Result<Vec<VstParameterInfo>, String>>),
     GetParameter(u32, u32, Sender<Result<f64, String>>),
     SetParameter(u32, u32, f64),
@@ -1055,7 +1055,7 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         ctx.sample_rate = inst.sample_rate;
                                         ctx.continuous_time_samples = inst.continuous_time_samples;
                                         ctx.project_time_music = 0.0;
-                                        
+
                                         let mut data = std::mem::zeroed::<ProcessData>();
                                         data.process_mode = ProcessModes::kRealtime as i32;
                                         data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
@@ -1156,7 +1156,7 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                         let _ = tx_audio.send(Err(format!("Instance not found: {}", vst_id)));
                     }
                 }
-                VstCommand::ProcessAudio(vst_id, req_samples, mut in_l, mut in_r, tx_audio) => {
+                VstCommand::ProcessAudio(vst_id, req_samples, mut in_l, mut in_r, is_playing, is_offline, playhead_samples, tx_audio) => {
                     // 対象インスタンスのプロセスを呼び出してオーディオ生成（入力あり）
                     let mut found = false;
                     for inst in instances.iter_mut() {
@@ -1196,14 +1196,28 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         }];
                                         
                                         let mut ctx: vst3_sys::vst::ProcessContext = std::mem::zeroed();
-                                        // kPlaying = 1<<1, kContinousTimeValid = 1<<9, kProjectTimeMusicValid = 1<<10
-                                        ctx.state = 2 | 512 | 1024;
+                                        // kPlaying = 1<<1, kSystemTimeValid = 1<<8, kContinousTimeValid = 1<<9, kProjectTimeMusicValid = 1<<10
+                                        let mut state = 256 | 512 | 1024;
+                                        if is_playing {
+                                            state |= 2;
+                                        }
+                                        ctx.state = state;
                                         ctx.sample_rate = inst.sample_rate;
                                         ctx.continuous_time_samples = inst.continuous_time_samples;
-                                        ctx.project_time_music = 0.0;
+                                        
+                                        let time_seconds = playhead_samples as f64 / inst.sample_rate;
+                                        let bpm = 120.0;
+                                        ctx.project_time_music = time_seconds * (bpm / 60.0);
+                                        ctx.project_time_samples = playhead_samples as i64;
+                                        ctx.tempo = bpm;
+                                        
+                                        let now = std::time::SystemTime::now();
+                                        if let Ok(duration) = now.duration_since(std::time::UNIX_EPOCH) {
+                                            ctx.system_time = duration.as_nanos() as i64;
+                                        }
                                         
                                         let mut data = std::mem::zeroed::<ProcessData>();
-                                        data.process_mode = ProcessModes::kRealtime as i32;
+                                        data.process_mode = if is_offline { ProcessModes::kOffline as i32 } else { ProcessModes::kRealtime as i32 };
                                         data.symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
                                         data.num_samples = num_samples as i32;
                                         data.num_inputs = 1; // 1ステレオ入力バス
@@ -1288,7 +1302,7 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         }
 
                                         // VSTiなどが出力を全く生成しなかった（全て0.0）場合、入力信号をそのまま出力へパススルーする
-                                        let out_is_silent = out_l.iter().all(|&v| v == 0.0);
+                                        let out_is_silent = out_l.iter().all(|&v| v == 0.0) && out_r.iter().all(|&v| v == 0.0);
                                         if out_is_silent {
                                             // 入力バッファの内容を出力バッファへコピーする
                                             out_l.copy_from_slice(&in_l);
@@ -2131,11 +2145,10 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
         let can_64 = processor.can_process_sample_size(SymbolicSampleSizes::kSample64 as i32) == kResultOk;
         println!("[Native] AudioProcessor Capabilities: 32-bit={}, 64-bit={}", can_32, can_64);
         
-        let symbolic_sample_size = if can_64 {
-            SymbolicSampleSizes::kSample64 as i32
-        } else {
-            SymbolicSampleSizes::kSample32 as i32
-        };
+        let symbolic_sample_size = SymbolicSampleSizes::kSample32 as i32;
+        if !can_32 {
+            println!("[Native] WARNING: Plugin does not support 32-bit audio processing!");
+        }
 
         let setup = ProcessSetup {
             process_mode: ProcessModes::kRealtime as i32,
@@ -2233,7 +2246,11 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
         let type_hwnd = s!("HWND").as_ptr() as *const std::ffi::c_char;
         println!("[Native] Attaching view...");
         match v.attached(hwnd.0 as *mut c_void, type_hwnd) {
-             kResultOk => println!("[Native] Attached successfully."),
+             kResultOk => {
+                 println!("[Native] Attached successfully. Forcing hide...");
+                 // プラグインが勝手に表示するのを防ぐため強制的に隠す
+                 windows::Win32::UI::WindowsAndMessaging::ShowWindow(hwnd, windows::Win32::UI::WindowsAndMessaging::SW_HIDE);
+             },
              err => println!("[Native] Attach failed: {}", err),
         }
         
@@ -2490,11 +2507,11 @@ pub fn get_audio(vst_id: u32, req_samples: usize) -> Result<(Vec<f32>, Vec<f32>)
     }
 }
 
-pub fn process_audio(vst_id: u32, req_samples: usize, in_l: Vec<f32>, in_r: Vec<f32>) -> Result<(Vec<f32>, Vec<f32>), String> {
+pub fn process_audio(vst_id: u32, req_samples: usize, in_l: Vec<f32>, in_r: Vec<f32>, is_playing: bool, is_offline: bool, playhead_samples: u64) -> Result<(Vec<f32>, Vec<f32>), String> {
     let coord_lock = COORDINATOR.lock().unwrap();
     if let Some(coordinator) = coord_lock.as_ref() {
         let (tx, rx) = std::sync::mpsc::channel();
-        coordinator.tx.send(VstCommand::ProcessAudio(vst_id, req_samples, in_l, in_r, tx)).map_err(|e| e.to_string())?;
+        coordinator.tx.send(VstCommand::ProcessAudio(vst_id, req_samples, in_l, in_r, is_playing, is_offline, playhead_samples, tx)).map_err(|e| e.to_string())?;
         loop {
             match rx.recv_timeout(std::time::Duration::from_millis(50)) {
                 Ok(result) => return result,

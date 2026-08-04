@@ -116,10 +116,72 @@ export default class Track extends SoundProvider {
     // Collect all player THEN clear and replace them (Probable race condition)
     // TODO Make sure there is no race condition
 
+    // Rustバックエンドに全リージョンとMIDI情報を同期
+    if ((window as any).__TAURI__) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      
+      const jsRegions = [];
+      const jsMidiEvents: any[] = [];
+      
+      for (const region of this.regions as RegionOf<any>[]) {
+        if (region.regionType === 'SAMPLE') {
+          const sampleRegion = region as any;
+          // バックグラウンドでアップロードさせる（awaitしない）
+          sampleRegion.buffer.sendToRust().catch(console.error);
+          
+          jsRegions.push({
+            buffer_id: sampleRegion.buffer.bufferId,
+            start_samples: (sampleRegion.start / 1000) * this.audioContext.sampleRate,
+            length_samples: (sampleRegion.duration / 1000) * this.audioContext.sampleRate,
+            offset_samples: (sampleRegion.buffer as any).offset || 0
+          });
+        } else if (region.regionType === 'MIDI') {
+          const midiRegion = region as any;
+          const regionStartMs = midiRegion.start;
+          
+          if (midiRegion.midi) {
+              midiRegion.midi.forEachNote((note: any, start: number) => {
+                  const noteOnTimeMs = regionStartMs + start;
+                  const noteOffTimeMs = noteOnTimeMs + note.duration;
+                  
+                  const noteOnSample = Math.floor((noteOnTimeMs / 1000) * this.audioContext.sampleRate);
+                  const noteOffSample = Math.floor((noteOffTimeMs / 1000) * this.audioContext.sampleRate);
+                  
+                  jsMidiEvents.push({
+                      sample_time: noteOnSample,
+                      status: 0x90,
+                      data1: note.note,
+                      data2: Math.floor(note.velocity)
+                  });
+                  
+                  jsMidiEvents.push({
+                      sample_time: noteOffSample,
+                      status: 0x80,
+                      data1: note.note,
+                      data2: 0
+                  });
+              });
+          }
+        }
+      }
+      
+      jsMidiEvents.sort((a, b) => a.sample_time - b.sample_time);
+      try {
+          await invoke('update_track_regions', { trackId: this.id, regions: jsRegions, midiEvents: jsMidiEvents.length > 0 ? jsMidiEvents : null });
+      } catch (e) {
+          console.error("Failed to sync track regions to Rust", e);
+      }
+    }
+
     // Merge regions
     const new_merged_regions = new Map<RegionType<any>, [RegionOf<any>, RegionPlayer]>()
 
     for (const [type, regions] of regionMap) {
+      if (type === "SAMPLE") {
+        // SAMPLEはRustで再生するため、JS側のプレイヤー作成はスキップ
+        continue;
+      }
+
       const merged = Region.mergeAll(regions, true)
       const player = await merged.createPlayer(this.groupId, this.audioContext)
       player.connect(this.junctionNode)
@@ -193,6 +255,12 @@ export default class Track extends SoundProvider {
     this.recorders.dispose()
     this._playhead_player.audioNode.destroy()
     this.deleted = true
+
+    if ((window as any).__TAURI__) {
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke('remove_track', { trackId: this.id }).catch(console.error);
+      });
+    }
   }
 
   /** Audio Graph Creation */

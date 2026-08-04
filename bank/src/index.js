@@ -72,6 +72,24 @@ app.get('/heartbeat', cors(CORS_ALL), (req, res) => {
 });
 // ---------------------------------
 
+// --- Temp File Upload for Fast IPC ---
+const multer = require('multer');
+const fs = require('fs');
+const tempUploadDir = path.join(__dirname, '../temp');
+if (!fs.existsSync(tempUploadDir)) {
+    fs.mkdirSync(tempUploadDir, { recursive: true });
+}
+const upload = multer({ dest: tempUploadDir });
+
+app.post('/upload_temp', cors(CORS_ALL), upload.single('file'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).send('No file uploaded.');
+    }
+    // Return the absolute path of the uploaded file so Tauri can read it directly
+    res.json({ path: req.file.path });
+});
+// -------------------------------------
+
 
 app.listen(config.port, () => {
     console.log(`Server running at http://localhost:${config.port}`);

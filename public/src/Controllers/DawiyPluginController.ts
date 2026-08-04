@@ -5,6 +5,7 @@ import { saveAs } from "file-saver";
 import { IDawiyPlugin } from "../DawiyPlugins/IDawiyPlugin";
 import DawiyPluginLoader from "../Loader/DawiyPluginLoader";
 import { t, resolveGroupKey, DICTIONARY, CURRENT_LANGUAGE } from "../Utils/i18n";
+import { isDesktop } from "../Utils/Environment";
 
 // Declaration for Webpack's require.context is REMOVED (Moved to Loader)
 
@@ -25,7 +26,7 @@ export default class DawiyPluginController {
     private loader: DawiyPluginLoader;
 
     // Extensions list
-    private installedExtensions: IDawiyPlugin[];
+    public installedExtensions: IDawiyPlugin[];
     private pluginGroups: Map<string, string> = new Map(); // Store group per plugin ID
 
     private pluginLayout: PluginLayoutItem[] = [];
@@ -34,9 +35,11 @@ export default class DawiyPluginController {
 
     private disabledPluginIds: Set<string> = new Set();
 
-    private activeExtensionId: string | null = null;
+    public activeExtensionId: string | null = null;
     private currentFilter: 'all' | 'installed' | 'not-installed' = 'all';
     private popOutWindow: Window | null = null;
+    private tauriPopOutWindow: any | null = null;
+    private loadPluginsPromise: Promise<void> | null = null;
 
     private getUserDataKey(pluginId: string): string {
         return `dawiy_plugin_user_data_${pluginId}`;
@@ -46,7 +49,13 @@ export default class DawiyPluginController {
         this.app = app;
         this.installedExtensions = [];
         this.loader = new DawiyPluginLoader(app);
-        this.loadPlugins();
+        this.loadPluginsPromise = this.loadPlugins();
+    }
+
+    public async waitForPluginsLoaded(): Promise<void> {
+        if (this.loadPluginsPromise) {
+            await this.loadPluginsPromise;
+        }
     }
 
     /**
@@ -987,8 +996,10 @@ export default class ${className} extends DawiyPluginBase {
 
         this.refreshBottomPanel();
 
-        if (this.popOutWindow && !this.popOutWindow.closed) {
-            this.renderExtensionInPopOut();
+        if ((this.popOutWindow && !this.popOutWindow.closed) || (isDesktop() && this.tauriPopOutWindow)) {
+            if (!isDesktop()) {
+                this.renderExtensionInPopOut();
+            }
             // Update main view placeholder
             const viewContainer = this.app.hostView.dawiyExtensionView;
             if (viewContainer) {
@@ -1106,6 +1117,20 @@ export default class ${className} extends DawiyPluginBase {
     }
 
     private togglePopOut() {
+        if (isDesktop()) {
+            if (this.tauriPopOutWindow) {
+                try {
+                    this.tauriPopOutWindow.close();
+                } catch (e) {
+                    console.warn("Error closing Tauri popout window:", e);
+                }
+                this.onPopoutWindowClosedExternal();
+            } else {
+                this.openPopOut();
+            }
+            return;
+        }
+
         if (this.popOutWindow && !this.popOutWindow.closed) {
             this.popOutWindow.close();
         } else {
@@ -1116,7 +1141,15 @@ export default class ${className} extends DawiyPluginBase {
     private openPopOut() {
         if (!this.activeExtensionId) return;
 
-        this.popOutWindow = window.open("", "_blank", "width=800,height=600");
+        if (isDesktop()) {
+            this.openPopOutInTauri();
+            return;
+        }
+
+        this.popOutWindow = window.open("", "_blank", "width=800,height=600,resizable=yes,scrollbars=yes");
+        if (!this.popOutWindow) {
+            this.popOutWindow = window.open("", "_blank");
+        }
         if (!this.popOutWindow) {
             this.app.showToast("Pop-up blocked? Please allow.", true);
             return;
@@ -1171,7 +1204,57 @@ export default class ${className} extends DawiyPluginBase {
         };
     }
 
+    private async openPopOutInTauri() {
+        if (!this.activeExtensionId) return;
+
+        const ext = this.installedExtensions.find(e => e.id === this.activeExtensionId);
+        const title = ext ? `DAWIY - ${ext.name}` : "DAWIY Plugin";
+        const cleanId = this.activeExtensionId.toLowerCase().replace(/[^a-z0-9]/g, "-");
+        const label = `dawiy-popout-${cleanId}`;
+
+        try {
+            const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+            const existing = await WebviewWindow.getByLabel(label);
+            if (existing) {
+                await existing.setFocus();
+                return;
+            }
+
+            const url = `index.html?popout=${encodeURIComponent(this.activeExtensionId)}`;
+            this.tauriPopOutWindow = new WebviewWindow(label, {
+                url: url,
+                title: title,
+                width: 800,
+                height: 600,
+                resizable: true
+            });
+
+            // Update Main View placeholder
+            const viewContainer = this.app.hostView.dawiyExtensionView;
+            if (viewContainer) {
+                viewContainer.innerHTML = '<div class="dawiy-ext-placeholder">Opened in external window</div>';
+            }
+
+            this.tauriPopOutWindow.once('tauri://destroyed', () => {
+                this.onPopoutWindowClosedExternal();
+            });
+        } catch (e) {
+            console.error("Failed to open Tauri popout window:", e);
+            this.app.hostAPI.ui.showToast("Failed to open desktop popup window.", true);
+        }
+    }
+
+    public onPopoutWindowClosedExternal() {
+        if (!this.tauriPopOutWindow && !this.popOutWindow) return;
+        this.tauriPopOutWindow = null;
+        this.popOutWindow = null;
+        if (this.activeExtensionId) {
+            this.renderExtensionContent();
+        }
+    }
+
     private renderExtensionInPopOut() {
+        if (isDesktop()) return;
         if (!this.popOutWindow || this.popOutWindow.closed) return;
         if (!this.activeExtensionId) return;
 
@@ -1195,6 +1278,25 @@ export default class ${className} extends DawiyPluginBase {
         } catch (e) {
             console.error(`Error rendering plugin ${ext.name} in popout:`, e);
             container.innerHTML = `<div style="color:red">Error rendering plugin: ${e}</div>`;
+        }
+    }
+
+    public renderPluginInPopoutWindow(extId: string, container: HTMLElement) {
+        const ext = this.installedExtensions.find(e => e.id === extId);
+        if (!ext) {
+            container.innerHTML = `<div style="padding:20px; color:red;">Plugin "${extId}" not found.</div>`;
+            return;
+        }
+        document.title = `DAWIY - ${ext.name}`;
+        try {
+            if (ext.render) {
+                ext.render(container);
+            } else {
+                container.innerHTML = '<div style="padding:20px;">No GUI available for this plugin.</div>';
+            }
+        } catch (e: any) {
+            console.error(`Error rendering plugin ${ext.name} in popout window:`, e);
+            container.innerHTML = `<div style="color:red; padding:20px;">Error rendering plugin: ${e}</div>`;
         }
     }
 }

@@ -5,6 +5,7 @@ import MIDIRegion from "../Models/Region/MIDIRegion";
 import SampleRegion from "../Models/Region/SampleRegion";
 import { MIDI, MIDINote } from "../Audio/MIDI/MIDI";
 import OperableAudioBuffer from "../Audio/OperableAudioBuffer";
+import RustAudioBuffer from "../Audio/RustAudioBuffer";
 import { audioCtx } from "../index";
 import { setTempo } from "../Env";
 
@@ -158,6 +159,11 @@ export default class DawProjectLoader {
                 await this.parseLanes(rootLanes);
             }
         }
+
+        // 5. Update all tracks to sync regions with Rust backend and UI
+        for (const track of this._app.tracksController.tracks) {
+            track.update(audioCtx);
+        }
     }
 
     private async parseLanes(lanesEl: Element, parentTimeUnit: string = "beats", parentTrack: Track | null = null): Promise<void> {
@@ -205,7 +211,7 @@ export default class DawProjectLoader {
                 if (warpsEl) {
                     const internalAudioEl = warpsEl.querySelector("Audio");
                     if (internalAudioEl) {
-                        const sampleRegion = await this.parseAudio(internalAudioEl, startTimeMs);
+                        const sampleRegion = await this.parseAudio(internalAudioEl, startTimeMs, track);
                         if (sampleRegion) {
                             this._app.regionsController.addRegion(track, sampleRegion);
                             audioLoaded = true;
@@ -217,7 +223,7 @@ export default class DawProjectLoader {
                 if (!audioLoaded) {
                     const audioEl = clipEl.querySelector("Audio");
                     if (audioEl) {
-                        const sampleRegion = await this.parseAudio(audioEl, startTimeMs);
+                        const sampleRegion = await this.parseAudio(audioEl, startTimeMs, track);
                         if (sampleRegion) {
                             this._app.regionsController.addRegion(track, sampleRegion);
                         }
@@ -274,7 +280,7 @@ export default class DawProjectLoader {
         return new MIDIRegion(midi, startTimeMs);
     }
 
-    private async parseAudio(audioEl: Element, startTimeMs: number): Promise<SampleRegion | null> {
+    private async parseAudio(audioEl: Element, startTimeMs: number, track?: Track): Promise<SampleRegion | null> {
         const fileEl = audioEl.querySelector("File");
         if (!fileEl) return null;
 
@@ -287,11 +293,52 @@ export default class DawProjectLoader {
             return null;
         }
 
-        const buffer = await zipFile.async("arraybuffer");
-        const audioBuffer = await audioCtx.decodeAudioData(buffer);
-        const operableAudioBuffer = OperableAudioBuffer.make(audioBuffer).makeStereo();
+        const buffer = await zipFile.async("uint8array");
+        if ((window as any).__TAURI__) {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const bufferId = OperableAudioBuffer.getNewId();
+            
+            try {
+                // To bypass Tauri v2 IPC JSON serialization freeze for large Uint8Array,
+                // we upload the raw bytes to the local backend server (bank) and pass the path to Rust.
+                let formData = new FormData();
+                formData.append("file", new Blob([buffer as any]));
+                let uploadRes = await fetch("http://localhost:6002/upload_temp", { method: "POST", body: formData });
+                if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+                let tempPath = (await uploadRes.json()).path;
 
-        return new SampleRegion(operableAudioBuffer, startTimeMs);
+                const { Channel } = await import('@tauri-apps/api/core');
+                const onProgress = new Channel<any>();
+                onProgress.onmessage = (message) => {
+                    if (track) track.element.progress(message.loaded, message.total);
+                };
+
+                const info: any = await invoke('load_audio_file', {
+                    bufferId: bufferId,
+                    path: tempPath,
+                    onProgress: onProgress
+                });
+                
+                let rustBuffer = new RustAudioBuffer(
+                    info.buffer_id,
+                    info.length,
+                    info.sample_rate,
+                    info.channels,
+                    info.peaks,
+                    tempPath
+                );
+                return new SampleRegion(rustBuffer, startTimeMs);
+            } catch (e) {
+                console.error("Failed to load audio from memory via Rust:", e);
+                return null;
+            }
+        } else {
+            // Fallback for non-Tauri
+            const arrayBuffer = await zipFile.async("arraybuffer");
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            const operableAudioBuffer = OperableAudioBuffer.make(audioBuffer).makeStereo();
+            return new SampleRegion(operableAudioBuffer, startTimeMs);
+        }
     }
 
     private convertToMs(value: number, unit: string): number {

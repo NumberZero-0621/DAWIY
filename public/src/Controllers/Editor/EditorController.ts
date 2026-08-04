@@ -3,6 +3,9 @@ import App, { crashOnDebug } from "../../App";
 import { MIDI } from "../../Audio/MIDI/MIDI";
 import { parseNoteList } from "../../Audio/MIDI/MIDILoaders";
 import OperableAudioBuffer from "../../Audio/OperableAudioBuffer";
+import RustAudioBuffer from "../../Audio/RustAudioBuffer";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { MAX_ZOOM_LEVEL, MIN_ZOOM_LEVEL, RATIO_MILLS_BY_PX, ZOOM_LEVEL, setZoomLevel } from "../../Env";
 import MIDIRegion from "../../Models/Region/MIDIRegion";
 import { RegionOf } from "../../Models/Region/Region";
@@ -31,28 +34,81 @@ export default class EditorController {
      * The file loaders used to load dragged files.
      * It should return the loaded region or null if the file is not supported.
      */
-    static DRAG_LOADERS: ((start: number, file: ArrayBuffer, type: string) => Promise<RegionOf<any> | null>)[] = [
+    static DRAG_LOADERS: ((start: number, file: ArrayBuffer | string, type: string, onProgressCallback?: (message: any) => void) => Promise<RegionOf<any> | null>)[] = [
         // Load MIDI files through note list
-        async function (start, buffer, type) {
+        async function (start, buffer, type, onProgressCallback) {
+            if (typeof buffer === "string") return null;
             const midi = await parseNoteList(buffer)
             if (midi) return new MIDIRegion(midi, start)
             else return null
         },
         // Load MIDI files
-        async function (start, buffer, type) {
+        async function (start, buffer, type, onProgressCallback) {
+            if (typeof buffer === "string") return null;
             if (!["audio/mid"].includes(type)) return null
             const midi = await MIDI.load2(buffer)
             if (midi) return new MIDIRegion(midi, start)
             else return null
         },
         // Load sample files
-        async function (start, buffer, type) {
+        async function (start, buffer, type, onProgressCallback) {
             if (!["audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav"].includes(type)) return null
             try {
-                let audioArrayBuffer = buffer
-                let audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer);
-                let operableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
-                return new SampleRegion(operableAudioBuffer, start)
+                if (typeof buffer === "string") {
+                    const { invoke, Channel } = await import('@tauri-apps/api/core');
+                    const RustAudioBuffer = (await import('../../Audio/RustAudioBuffer')).default;
+                    const bufferId = OperableAudioBuffer.getNewId();
+                    
+                    const onProgress = new Channel<any>();
+                    onProgress.onmessage = (message) => {
+                        if (onProgressCallback) onProgressCallback(message);
+                    };
+
+                    const info: any = await invoke('load_audio_file', {
+                        bufferId: bufferId,
+                        path: buffer,
+                        onProgress: onProgress
+                    });
+                    let rustBuffer = new RustAudioBuffer(
+                        info.buffer_id, info.length, info.sample_rate, info.channels, info.peaks, buffer
+                    );
+                    return new SampleRegion(rustBuffer, start);
+                } else {
+                    let audioArrayBuffer = buffer as ArrayBuffer;
+
+                    if ((window as any).__TAURI__) {
+                        const { invoke, Channel } = await import('@tauri-apps/api/core');
+                        const RustAudioBuffer = (await import('../../Audio/RustAudioBuffer')).default;
+                        const bufferId = OperableAudioBuffer.getNewId();
+                        
+                        const onProgress = new Channel<any>();
+                        onProgress.onmessage = (message) => {
+                            if (onProgressCallback) onProgressCallback(message);
+                        };
+
+                        // To bypass Tauri v2 IPC JSON serialization freeze for large Uint8Array,
+                        // upload the raw bytes to the local backend server (bank) and pass the path to Rust.
+                        let formData = new FormData();
+                        formData.append("file", new Blob([audioArrayBuffer]));
+                        let uploadRes = await fetch("http://localhost:6002/upload_temp", { method: "POST", body: formData });
+                        if (!uploadRes.ok) throw new Error(`Upload failed: ${uploadRes.status}`);
+                        let tempPath = (await uploadRes.json()).path;
+
+                        const info: any = await invoke('load_audio_file', {
+                            bufferId: bufferId,
+                            path: tempPath,
+                            onProgress: onProgress
+                        });
+                        let rustBuffer = new RustAudioBuffer(
+                            info.buffer_id, info.length, info.sample_rate, info.channels, info.peaks, tempPath
+                        );
+                        return new SampleRegion(rustBuffer, start);
+                    } else {
+                        let audioBuffer = await audioCtx.decodeAudioData(audioArrayBuffer);
+                        let operableAudioBuffer = OperableAudioBuffer.make(audioBuffer);
+                        return new SampleRegion(operableAudioBuffer, start);
+                    }
+                }
             } catch (e) {
                 console.error(e)
                 return null
@@ -269,8 +325,82 @@ export default class EditorController {
                 e.dataTransfer.dropEffect = "copy";
             }
         }, true);
+        
+        // Listen to Tauri file drop event (Provides absolute paths for OS files)
+        if ((window as any).__TAURI__ || (window as any).__TAURI_INTERNALS__) {
+            getCurrentWindow().onDragDropEvent(async (event: any) => {
+                if (event.payload.type === 'drop') {
+                    const paths = event.payload.paths;
+                    const pos = event.payload.position;
+                    if (!pos) return;
 
-        // Handle drop on the canvas/window
+                    console.log("[EditorController] Tauri file drop:", paths, pos);
+
+                    // Need clientX/clientY for getTrackAt. Tauri position is PhysicalPosition or LogicalPosition
+                    // Depending on dpi, let's assume it maps to clientX/clientY for now.
+                    // Convert Tauri's PhysicalPosition to logical coordinates used by CSS
+                    let clientX = pos.x / window.devicePixelRatio;
+                    let clientY = pos.y / window.devicePixelRatio;
+
+                    let needNewTrack = false;
+                    const target = await this.getTrackAt(clientX, clientY, true);
+                    if (!target) return;
+
+                    let success = false;
+                    for (const path of paths) {
+                        if (needNewTrack) {
+                            const tracks = this._app.tracksController.tracks;
+                            let next_track = tracks.get(tracks.indexOf(target.track) + 1);
+                            if (next_track == null) {
+                                next_track = await this._app.tracksController.createTrack();
+                            }
+                            target.track = next_track;
+                            needNewTrack = false;
+                        }
+
+                        // Check if it's midi
+                        if (path.toLowerCase().endsWith('.mid') || path.toLowerCase().endsWith('.midi')) {
+                            // MIDI still handled by JS since it doesn't need huge buffers
+                            // But since we only have path, we can't easily read the ArrayBuffer unless we use tauri-plugin-fs!
+                            // For now, custom MIDI drop might require fs. Let's ignore MIDI via Tauri path for a moment,
+                            // actually we should handle audio here:
+                        } else if (path.toLowerCase().match(/\.(wav|mp3|ogg|flac|m4a|aac)$/i)) {
+                            target.track.element.progress(0, 1);
+                            try {
+                                const { invoke, Channel } = await import('@tauri-apps/api/core');
+                                const bufferId = OperableAudioBuffer.getNewId();
+                                
+                                const onProgress = new Channel<any>();
+                                onProgress.onmessage = (message) => {
+                                    target.track.element.progress(message.loaded, message.total);
+                                };
+
+                                const info: any = await invoke('load_audio_file', {
+                                    bufferId: bufferId,
+                                    path: path,
+                                    onProgress: onProgress
+                                });
+                                let rustBuffer = new RustAudioBuffer(
+                                    info.buffer_id, info.length, info.sample_rate, info.channels, info.peaks, path
+                                );
+
+                                target.track.element.name = path.split(/[\\/]/).pop() || "Audio Track";
+                                this._app.regionsController.addRegion(target.track, new SampleRegion(rustBuffer, target.start));
+                                success = true;
+                                needNewTrack = true;
+                            } catch (e) {
+                                console.error('Failed to load dropped audio via Rust:', e);
+                                this._app.showToast(`Import failed: ${e}`, true);
+                            }
+                            target.track.element.progressDone();
+                        }
+                    }
+                    if (!success && !needNewTrack) target.cancel();
+                }
+            });
+        };
+
+        // Handle drop on the canvas/window (Used for Internal drag & drop, and non-audio files handled by web API)
         window.addEventListener('drop', (e: DragEvent) => {
             e.preventDefault();
             e.stopPropagation(); // Stop default browser behavior
@@ -298,7 +428,19 @@ export default class EditorController {
 
                 const itemsForTracks: DataTransferItem[] = [];
 
+                // Filter out items because Tauri `onFileDropEvent` handles local files!
+                // We only handle non-file items (like dragged text/URLs) OR custom web imports here.
                 for (const item of items) {
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile();
+                        if (file) {
+                            const isAudio = file.name.match(/\.(wav|mp3|ogg|flac|m4a|aac)$/i);
+                            if (isAudio && (window as any).__TAURI_INTERNALS__) {
+                                // OS file drops are handled by Tauri's onFileDropEvent to get absolute paths.
+                                continue;
+                            }
+                        }
+                    }
                     const file = item.getAsFile();
                     if (file) {
                         const ext = "." + file.name.split('.').pop()?.toLowerCase();
@@ -413,9 +555,12 @@ export default class EditorController {
             } else {
                 const result = await this.importFile(
                     async () => {
-                        const audioFile = item.file
+                        const audioFile = item.file as File & { path?: string }
                         if (!audioFile) return null
                         target.track.element.name = audioFile.name
+                        if ((window as any).__TAURI__ && audioFile.path) {
+                            return { buffer: audioFile.path, type: item.type }
+                        }
                         return { buffer: await audioFile.arrayBuffer(), type: item.type }
                     },
                     target.track,
@@ -462,34 +607,31 @@ export default class EditorController {
         let offsetLeft = this._view.canvasContainer.offsetLeft // offset x of the canvas
         let offsetTop = this._view.canvasContainer.offsetTop // offset y of the canvas
 
-        if ((clientX >= offsetLeft && clientX <= offsetLeft + this._view.width) &&
-            (clientY >= offsetTop && clientY <= offsetTop + this._view.height)) {
+        let start = 0;
+        if (clientX >= offsetLeft) {
+            start = (this._app.editorView.viewport.left + (clientX - offsetLeft)) * RATIO_MILLS_BY_PX;
+        }
 
-            // Get the start location
-            const start = (this._app.editorView.viewport.left + (clientX - offsetLeft)) * RATIO_MILLS_BY_PX;
+        // Check if the position is on an existing track
+        let waveform = this._view.getWaveformAtPos(clientY - offsetTop);
 
-            // Check if the position is on an existing track
-            let waveform = this._view.getWaveformAtPos(clientY - offsetTop);
-
-            // Else create the track if asked to
-            if (!waveform) {
-                if (doCreate) {
-                    const track = await this._app.tracksController.createTrack();
-                    track.element.name = "NEW TRACK"
-                    return { start, track, cancel: () => this._app.tracksController.removeTrack(track) }
-                }
-                else return null
+        // Else create the track if asked to
+        if (!waveform) {
+            if (doCreate) {
+                const track = await this._app.tracksController.createTrack();
+                track.element.name = "NEW TRACK"
+                return { start, track, cancel: () => this._app.tracksController.removeTrack(track) }
             }
+            else return null
+        }
+        else {
+            const track = this._app.tracksController.getTrackById(waveform.trackId)!;
+            if (track) return { start, track, cancel: () => { } }
             else {
-                const track = this._app.tracksController.getTrackById(waveform.trackId)!;
-                if (track) return { start, track, cancel: () => { } }
-                else {
-                    crashOnDebug("A track should be associated to this waveform")
-                    return null
-                }
+                crashOnDebug("A track should be associated to this waveform")
+                return null
             }
         }
-        return null
     }
 
     /**
@@ -498,7 +640,11 @@ export default class EditorController {
      * @param track The track to import the file in
      * @param start The start position of the loaded region
      */
-    private async importFile(bufferLoader: () => Promise<{ buffer: ArrayBuffer, type: string } | null>, track: Track, start: number): Promise<RegionOf<any> | null> {
+    private async importFile(bufferLoader: () => Promise<{ buffer: ArrayBuffer | string, type: string } | null>, track: Track, start: number): Promise<RegionOf<any> | null> {
+        if (this._app.host.isPlaying) {
+            this._app.hostController.stop();
+        }
+        
         this._view.setLoading(true)
         track.element.progress();
 
@@ -517,7 +663,9 @@ export default class EditorController {
         let region: RegionOf<any> | null = null
         for (const loader of EditorController.DRAG_LOADERS) {
             // Try each audio file loader until one can decode the file
-            let loaded_region = await loader(start, buffer, type)
+            let loaded_region = await loader(start, buffer, type, (message) => {
+                track.element.progress(message.loaded, message.total);
+            });
             if (loaded_region !== null) {
                 region = loaded_region
                 this._app.regionsController.addRegion(track, loaded_region)

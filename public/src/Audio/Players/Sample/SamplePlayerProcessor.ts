@@ -27,17 +27,12 @@ export function getSamplePlayerProcessor(moduleId:string){
             if (!this.audio) return
             const bufferSize: number = outputs[0][0].length;
             const output: Float32Array[] = outputs[0];
-    
-            const audioLength: number = this.audio[0].length
-            const fromSample= Math.floor(from*sampleRate/1000);                     if (fromSample > audioLength)return
-            const toSample= Math.min(Math.floor(to*sampleRate/1000), audioLength)
-            const sampleCount= toSample-fromSample;                                 if (sampleCount <= 0) return
-            const maxi=Math.min(bufferSize, sampleCount)
             const channelCount = Math.min(this.audio.length, output.length)
     
             for (let channel = 0; channel < channelCount; channel++) {
-                for (let i = 0; i < maxi; i++) {
-                    output[channel][i] = this.audio[channel][i+fromSample];
+                for (let i = 0; i < bufferSize; i++) {
+                    // Rust側で音声を合成するため、JS側は無音を出力する
+                    output[channel][i] = 0;
                 }
             }
         }

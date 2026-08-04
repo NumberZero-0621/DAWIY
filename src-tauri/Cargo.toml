@@ -41,3 +41,6 @@ windows = { version = "0.52", features = [
 vst3-sys = { path = "vst3-sys" }
 vst3-com = { path = "vst3-sys/com" }
 raw-window-handle = "0.5"
+cpal = "0.15"
+ringbuf = "0.3"
+symphonia = { version = "0.5.5", features = ["all"] }
