@@ -159,7 +159,7 @@ export default class PlayheadView extends Container {
      */
     private getPosFromPlayhead(playhead: number): number {
         let millis = (playhead / audioCtx.sampleRate) * 1000;
-        return millis / RATIO_MILLS_BY_PX;
+        return this._editor.app.msToX(millis);
     }
 
       /** The viewport left position in pixel */

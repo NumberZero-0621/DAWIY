@@ -56,6 +56,7 @@ export default class HostController {
 
     this._view.host?.append(this._app.host.element)
     this._app.host.element.name = "Master Track"
+    this._view.tempoSelector.app = app;
     this._app.tracksController.bindSoundProviderEvents(this._app.host)
 
     this.initializeDemoSongs();
@@ -543,12 +544,14 @@ export default class HostController {
     document.addEventListener("keydown", (e: KeyboardEvent) => {
       // Replaced with ShortcutController
       if (this._app.shortcutController.isTriggered("edit.undo", e)) {
+        e.preventDefault(); // ブラウザ標準のテキストボックスUndoを防ぐ
         this._app.undoManager.undo();
         this._app.hostView.setUndoButtonState(this._app.undoManager.hasUndo());
         this._app.hostView.setRedoButtonState(this._app.undoManager.hasRedo());
         return;
       }
       if (this._app.shortcutController.isTriggered("edit.redo", e)) {
+        e.preventDefault(); // ブラウザ標準のテキストボックスRedoを防ぐ
         this._app.undoManager.redo();
         this._app.hostView.setUndoButtonState(this._app.undoManager.hasUndo());
         this._app.hostView.setRedoButtonState(this._app.undoManager.hasRedo());
@@ -608,49 +611,95 @@ export default class HostController {
         return
       }
 
-      const oldTempo = TEMPO;
-      const ratio = oldTempo / newTempo;
+      if (newTempo === TEMPO) return;
 
-      this._app.hostView.metronome.tempo = newTempo
-      setTempo(newTempo)
+      const actionNewTempo = newTempo;
+      const actionOldTempo = TEMPO;
 
-      const newPlayhead = this._app.host.playhead * ratio;
-      this._app.playheadController.moveTo(newPlayhead, false)
-      this._app.host.playhead = newPlayhead;
-
-      const currentLoopRange = this._app.host.loopRange;
-      if (currentLoopRange) {
-        this.setLoop([currentLoopRange[0] * ratio, currentLoopRange[1] * ratio]);
-      }
-
-      // redraw all tracks according to new tempo
-      this._app.tracksController.tracks.forEach((track) => {
-        // redraw all regions taking into account the new tempo
-        for (const region of track.regions) {
-          region.start *= ratio;
-
-          if (region.regionType === "MIDI" && 'midi' in region) {
-            const midiObj = (region as any).midi;
-            if (midiObj && typeof midiObj.stretch === 'function') {
-              midiObj.stretch(ratio);
-            }
-          } else if (region.regionType === "Automation" && 'points' in region) {
-            const points = (region as any).points;
-            if (Array.isArray(points)) {
-              for (const p of points) {
-                p.time *= ratio;
-              }
-            }
+      const doTempoChange = (targetTempo: number, refTempo: number) => {
+        // BPMオートメーション実行中にテキストボックスを変更した場合の処理
+        if (this._app.automationController.isBpmAutomating) {
+          if (this._app.host.bpmAutomationRegion) {
+            // 画面にオートメーションを開いている場合はそのまま平坦なカーブに直す
+            this._app.host.bpmAutomationRegion.points = [
+                { time: 0, value: (targetTempo - 60) / (200 - 60), curve: 0 },
+                { time: this._app.host.bpmAutomationRegion.duration, value: (targetTempo - 60) / (200 - 60), curve: 0 }
+            ];
+            this._app.host.bpmAutomationData = this._app.host.bpmAutomationRegion.points;
+          } else {
+            // 閉じている場合は、データをクリアして通常のグローバルテンポ状態に戻す（残留ポイントによる縮尺バグの防止）
+            this._app.host.bpmAutomationData = [];
           }
         }
 
-        track.modified = true;
-        this._app.editorView.drawRegions(track);
+        const ratio = refTempo / targetTempo;
+
+        this._app.hostView.metronome.tempo = targetTempo;
+        setTempo(targetTempo);
+
+        const newPlayhead = this._app.host.playhead * ratio;
+        this._app.playheadController.moveTo(newPlayhead, false);
+        this._app.host.playhead = newPlayhead;
+
+        const currentLoopRange = this._app.host.loopRange;
+        if (currentLoopRange) {
+          this.setLoop([currentLoopRange[0] * ratio, currentLoopRange[1] * ratio]);
+        }
+
+        // redraw all tracks according to new tempo
+        this._app.tracksController.tracks.forEach((track) => {
+          // redraw all regions taking into account the new tempo
+          for (const region of track.regions) {
+            region.start *= ratio;
+
+            if (region.regionType === "MIDI" && 'midi' in region) {
+              const midiObj = (region as any).midi;
+              if (midiObj && typeof midiObj.stretch === 'function') {
+                midiObj.stretch(ratio);
+              }
+            } else if (region.regionType === "Automation" && 'points' in region) {
+              const points = (region as any).points;
+              if (Array.isArray(points)) {
+                for (const p of points) {
+                  p.time *= ratio;
+                }
+              }
+            }
+          }
+
+          track.modified = true;
+          this._app.editorView.drawRegions(track);
+        });
+
+        if (this._app.editorView.loop.active) {
+          this._app.editorView.loop.updateActive(true);
+        }
+      };
+
+      // DAWの全体履歴に記録する
+      this._app.undoManager.add({
+        undo: () => {
+          doTempoChange(actionOldTempo, actionNewTempo);
+          // UIを更新（イベントを発火させずに内部更新するのが理想だが、DOMアクセスで直接変更）
+          this._view.tempoSelector.input.value = actionOldTempo.toFixed(2);
+          this._app.hostView.setUndoButtonState(this._app.undoManager.hasUndo());
+          this._app.hostView.setRedoButtonState(this._app.undoManager.hasRedo());
+          
+          this._app.editorView.resizeCanvas(); // 波形・オートメーション等を全クリーン
+        },
+        redo: () => {
+          doTempoChange(actionNewTempo, actionOldTempo);
+          this._view.tempoSelector.input.value = actionNewTempo.toFixed(2);
+          this._app.hostView.setUndoButtonState(this._app.undoManager.hasUndo());
+          this._app.hostView.setRedoButtonState(this._app.undoManager.hasRedo());
+
+          this._app.editorView.resizeCanvas();
+        }
       });
 
-      if (this._app.editorView.loop.active) {
-        this._app.editorView.loop.updateActive(true);
-      }
+      // 今回のアクションを実行
+      doTempoChange(actionNewTempo, actionOldTempo);
+      this._app.editorView.resizeCanvas();
     })
 
     // MENU BUTTONS

@@ -48,7 +48,7 @@ export default class GridView extends Container {
   private draw(): void {
     // get width of editorView
 
-    const width = (MAX_DURATION_SEC * 1000) / RATIO_MILLS_BY_PX; //this._editorView.viewport.width;
+    const width = this._editorView.app.msToX(MAX_DURATION_SEC * 1000);
     const height = this._editorView.viewport.height;
 
     // using a for loop, draw vertical lines, from x = 0 to x=width, step = 100 pixels

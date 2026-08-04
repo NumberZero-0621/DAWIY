@@ -12,8 +12,8 @@ export default class AutomationRegionView extends RegionView<AutomationRegion> {
         super(editor, region);
         // Ensure interactive
         this.eventMode = 'static';
-        // Position below the main track waveform
-        this.y = HEIGHT_TRACK;
+        // Position below the main track waveform, unless it's a global lane
+        this.y = region.trackId === -1 ? 0 : HEIGHT_TRACK;
         // Remove mask to prevent clipping of start/end points
         this.mask = null;
     }
@@ -51,7 +51,9 @@ export default class AutomationRegionView extends RegionView<AutomationRegion> {
 
             for (let i = 0; i < numPoints; i++) {
                 const p = points[i];
-                const x = p.time / RATIO_MILLS_BY_PX;
+                const app = this._editorView.app;
+                const regionX = app.msToX(region.start);
+                const x = app.msToX(p.time) - regionX;
                 const y = (1 - p.value) * height;
 
                 if (i === 0) {
@@ -65,7 +67,7 @@ export default class AutomationRegionView extends RegionView<AutomationRegion> {
                 } else {
                     // 前のポイントから現在のポイントへ線を描く
                     const prevP = points[i - 1];
-                    const prevX = prevP.time / RATIO_MILLS_BY_PX;
+                    const prevX = app.msToX(prevP.time) - regionX;
                     const prevY = (1 - prevP.value) * height;
                     const curveMode = prevP.curve ?? CurveMode.Linear;
 
@@ -75,9 +77,11 @@ export default class AutomationRegionView extends RegionView<AutomationRegion> {
 
             // 2. Draw Points
             target.lineStyle(0); // Reset line style for points (no border)
+            const app = this._editorView.app;
+            const regionX = app.msToX(region.start);
             for (let i = 0; i < numPoints; i++) {
                 const p = points[i];
-                const x = p.time / RATIO_MILLS_BY_PX;
+                const x = app.msToX(p.time) - regionX;
                 const y = (1 - p.value) * height;
 
                 const isSelected = this.selectedPointIndices.has(i);

@@ -29,6 +29,25 @@ const close_template = doc/*html*/`
 `
 
 const automation_template = doc/*html*/`
+    <style>
+        #automation.control {
+            opacity: 0.4;
+            transition: all 0.2s ease;
+        }
+        #automation.control:hover {
+            filter: invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%);
+        }
+        #automation.control._has-points {
+            opacity: 0.7;
+        }
+        #automation.control._toggled {
+            opacity: 1.0;
+            filter: contrast(0) brightness(2);
+        }
+        #automation.control._toggled:hover {
+            filter: contrast(0) brightness(2);
+        }
+    </style>
     <div id="automation" class="control" style="padding-top: 1px">
         <i class="icon automation-icon" style="width: 15px"></i>
     </div>
@@ -115,9 +134,15 @@ export default class TrackElement extends SoundProviderElement {
 
     get automationBtn() { return this.shadowRoot?.getElementById("automation") as HTMLDivElement }
 
-    set isMonitoring(value:boolean) { this.monitoringBtn.classList.toggle("_toggled",value)}
+    set isMonitoring(value: boolean) { this.monitoringBtn.classList.toggle("_toggled", value) }
 
+    set isAutomationOpened(value: boolean) {
+        this.automationBtn.classList.toggle("_toggled", value);
+    }
 
+    set hasAutomation(value: boolean) {
+        this.automationBtn.classList.toggle("_has-points", value);
+    }
 }
 
 customElements.define("track-element", TrackElement)

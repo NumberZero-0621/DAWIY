@@ -118,17 +118,21 @@ export default class App {
         this.wamPluginView = new WamPluginView();
         this.vstPluginManagerView = new VstPluginManagerView();
         this.projectView = new ProjectView();
-        this.editorView = new EditorView();
-        this.aboutView = new AboutView();
 
+        // Initialize TracksController and Host BEFORE EditorView
+        // because EditorView (via GridView) needs app.msToX which needs app.host
+        this.tracksController = new TracksController(this);
+        this.host = new Host(this, audioCtx, this.tracksController.tracks);
+
+        this.editorView = new EditorView(this);
+
+        this.aboutView = new AboutView();
         this.keyboardShortcutsView = new KeyboardShortcutsView();
         this.menuCustomizationView = new MenuCustomizationView(this);
 
         this.editorController = new EditorController(this);
         this.waveformController = new WaveformController(this);
         this.regionsController = new RegionController(this);
-        this.tracksController = new TracksController(this);
-        this.host = new Host(this, audioCtx, this.tracksController.tracks);
         this.playheadController = new PlayheadController(this);
         this.hostController = new HostController(this);
         this.pluginsController = new PluginsController(this);
@@ -429,7 +433,26 @@ export default class App {
         })
         refreshButtons()
     }
+    /**
+     * Converts milliseconds to pixel X coordinate using the current tempo map and zoom level.
+     */
+    public msToX(ms: number): number {
+        const zoomFactor = ZOOM_LEVEL;
+        // TempoMap handles pixelsPerBeat at zoom 1.
+        // At 120bpm, 29.67px per beat.
+        return this.host.getTempoMap(29.67 * zoomFactor).timeToX(ms);
+    }
+
+    /**
+     * Converts pixel X coordinate to milliseconds.
+     */
+    public xToMs(x: number): number {
+        const zoomFactor = ZOOM_LEVEL;
+        return this.host.getTempoMap(29.67 * zoomFactor).xToMs(x);
+    }
 }
+
+import { ZOOM_LEVEL, RATIO_MILLS_BY_PX } from "./Env";
 
 /**
  * In debug mode, the program should crash and print error for every unintended behaviors.

@@ -13,7 +13,7 @@ import AutomationRegionView from "../../../Views/Editor/Region/AutomationRegionV
 import MIDIRegionView from "../../../Views/Editor/Region/MIDIRegionView";
 import RegionView from "../../../Views/Editor/Region/RegionView";
 import SampleRegionView from "../../../Views/Editor/Region/SampleRegionView";
-import WaveformView from "../../../Views/Editor/WaveformView.js";
+import WaveformView from "../../../Views/Editor/WaveformView";
 import { SelectionManager } from "../Track/SelectionManager";
 import { audioCtx } from "../../../index";
 import { lightenColor } from "../../../Utils/Color";
@@ -158,15 +158,11 @@ export default class RegionController {
             }
             // If only regions, no clamping (except maybe 0 start check done later)
 
-            const distancePx = distanceMs / RATIO_MILLS_BY_PX;
+            // TODO: This is still used for visual movement, but should be ms aware.
 
             for (const item of this._arrowMoveState.regions) {
-                // Ensure regions don't go negative
-                if (item.initialPos + distancePx < 0) {
-                    // If region hits 0, clamp?
-                    // Let's simplfy: just move visuals.
-                }
-                item.view.position.x = Math.max(0, item.initialPos + distancePx);
+                const currentStartMs = Math.max(0, item.region.start + distanceMs);
+                item.view.position.x = this._app.msToX(currentStartMs);
             }
 
             for (const group of this._arrowMoveState.automationPoints) {
@@ -212,8 +208,7 @@ export default class RegionController {
                 const oldTrack = this._app.tracksController.getTrackById(item.region.trackId)!;
                 const oldX = item.initialPos;
                 const newStartMs = Math.max(0, item.region.start + distanceMs);
-                const newX = newStartMs / RATIO_MILLS_BY_PX;
-                // Update item.region.start here? No, moveRegion does it.
+                const newX = this._app.msToX(newStartMs);
                 // But wait, automation points are already updated in `stepMove`.
                 // `doIt` for regions calls `moveRegion`, which does logic.
                 // `doIt` for automation points just needs to set data?
@@ -280,6 +275,9 @@ export default class RegionController {
 
     // ... (handleAutomationPointerDown) ...
     private lastSelectedAutomationPoint: { region: AutomationRegion, index: number } | null = null;
+    private _lastAutomationPointClickTime: number = 0;
+    private _lastClickedAutomationPoint: { region: AutomationRegion, index: number } | null = null;
+    private _initialAutomationSelection: Map<AutomationRegion, Set<number>> = new Map();
 
     protected oldTrackWhenMoving!: Track;
     protected newTrackWhenMoving!: Track;
@@ -365,18 +363,40 @@ export default class RegionController {
     get tracks() { return this._app.tracksController.tracks }
 
     public addRegion<T extends RegionOf<T>>(track: Track, region: RegionOf<T>, waveform?: WaveformView): RegionView<T> {
-        if (track.regions.indexOf(region) >= 0) crashOnDebug("Try to add a region already in the track")
+        if (track && track.regions.indexOf(region) >= 0) crashOnDebug("Try to add a region already in the track")
         if (region.id === -1) region.id = this.getNewId()
         const factory = RegionController.regionViewFactories[region.regionType]!
         if (!factory) { crashOnDebug("No factory for region type " + region.regionType) }
-        track.addRegion(region)
-        track.modified = true
+        
+        if (track) {
+            track.addRegion(region)
+            track.modified = true
+        }
+
         let regionView = factory(this._editorView, region)
         this.bindRegionEvents(region, regionView)
-        regionView.initializeRegionView(track.color, region)
-        waveform ??= this._editorView.getWaveFormViewById(track.id)!
-        waveform.addChild(regionView)
-        waveform.regionViews.push(regionView)
+        
+        const color = track ? track.color : "#ffcc00"; // Default to BPM color if no track
+        regionView.initializeRegionView(color, region)
+        
+        if (!waveform) {
+            if (track) {
+                waveform = this._editorView.getWaveFormViewById(track.id)!
+            } else if (region.regionType === AutomationRegion.TYPE) {
+                // Global BPM Automation case
+                waveform = this._editorView.getWaveFormViewById(-1); // Use -1 as global ID
+                if (!waveform) {
+                    // Create a dummy waveform for global automation
+                    waveform = new WaveformView(this._editorView, { id: -1, color: "#ffcc00" } as any);
+                    this._editorView.addWaveformView(waveform);
+                }
+            }
+        }
+        
+        if (waveform) {
+            waveform.addChild(regionView)
+            waveform.regionViews.push(regionView)
+        }
         return regionView
     }
 
@@ -573,6 +593,11 @@ export default class RegionController {
             if (e.button === 2) {
                 this._isSelecting = true;
                 this._initialSelection = new Set(this.selection.selecteds);
+                // Deep copy automation selection
+                this._initialAutomationSelection = new Map();
+                this.selectedAutomationPoints.forEach((indices, region) => {
+                    this._initialAutomationSelection.set(region, new Set(indices));
+                });
                 this._selectionStart = this._editorView.viewport.toLocal(e.data.global);
                 this.viewportAnimationLoopId = requestAnimationFrame(this.viewportAnimationLoop.bind(this));
                 return;
@@ -582,6 +607,12 @@ export default class RegionController {
 
             if (App.TOOL_MODE === "SELECT") {
                 this._isSelecting = true;
+                this._initialSelection = new Set(this.selection.selecteds);
+                // Deep copy automation selection
+                this._initialAutomationSelection = new Map();
+                this.selectedAutomationPoints.forEach((indices, region) => {
+                    this._initialAutomationSelection.set(region, new Set(indices));
+                });
                 this._selectionStart = this._editorView.viewport.toLocal(e.data.global);
 
                 // Deselect all only on left-click without modifiers
@@ -757,6 +788,7 @@ export default class RegionController {
                                 view.selectedPointIndices = this.selectedAutomationPoints.get(anchorRegion)!;
                                 view.redraw("", anchorRegion);
                             }
+                            track.updateAutomationIcon();
                         },
                         () => {
                             // Restore initial state for undo
@@ -768,6 +800,7 @@ export default class RegionController {
                                 }
                                 const v = this.getView(group.region);
                                 v?.redraw("", group.region);
+                                this._app.tracksController.getTrackById(group.region.trackId)?.updateAutomationIcon();
                             }
                             // Restore selection state for undo
                             this.selectedAutomationPoints.clear();
@@ -809,6 +842,7 @@ export default class RegionController {
                         }
                         const view = this.getView(region) as AutomationRegionView;
                         view?.redraw("", region);
+                        track.updateAutomationIcon();
                     },
                     () => {
                         region.points = JSON.parse(JSON.stringify(initialPoints));
@@ -817,6 +851,7 @@ export default class RegionController {
                         }
                         const view = this.getView(region) as AutomationRegionView;
                         view?.redraw("", region);
+                        track.updateAutomationIcon();
                     }
                 );
 
@@ -824,6 +859,7 @@ export default class RegionController {
                 if (region.paramId) {
                     track.automationData.set(region.paramId, region.points);
                 }
+                track.updateAutomationIcon();
 
                 // 再生中ならストリーミングリセット
                 if (this._app.host.isPlaying) {
@@ -1037,18 +1073,33 @@ export default class RegionController {
     }
 
     public removeRegion(region: RegionOf<any>, undoable = false) {
-        const track = this._app.tracksController.getTrackById(region.trackId)!
-        const waveform = this._editorView.getWaveFormViewById(track.id)!
+        const track = region.trackId !== -1 ? this._app.tracksController.getTrackById(region.trackId) : undefined;
+        const waveform = this._editorView.getWaveFormViewById(region.trackId);
+        
         this.doIt(undoable,
             () => {
-                track.removeRegionById(region.id)
-                region.trackId = -1
-                track.modified = true
-                const view = waveform.getRegionViewById(region.id)!
-                waveform.removeRegionView(view)
-                this.selection.remove(region)
+                if (track) {
+                    track.removeRegionById(region.id);
+                    track.modified = true;
+                }
+                const oldTrackId = region.trackId;
+                region.trackId = -1;
+                
+                if (waveform) {
+                    const view = waveform.getRegionViewById(region.id);
+                    if (view) {
+                        waveform.removeRegionView(view);
+                    }
+                }
+                this.selection.remove(region);
+                
+                // Keep track ID for redo
+                (region as any)._oldTrackId = oldTrackId;
             },
-            () => { this.addRegion(track, region) }
+            () => { 
+                const targetTrack = (region as any)._oldTrackId !== -1 ? this._app.tracksController.getTrackById((region as any)._oldTrackId) : null;
+                this.addRegion(targetTrack as any, region); 
+            }
         )
     }
 
@@ -1070,12 +1121,14 @@ export default class RegionController {
                     this.selectedAutomationPoints.get(region)?.clear(); // Clear selection for this region
                     view.selectedPointIndices = new Set(); // Update view
                     view.redraw("", region); // Redraw AFTER clearing selection
+                    track.updateAutomationIcon();
                     this.doIt(undoable,
                         () => { /* already done */ },
                         () => {
                             region.points = originalPoints;
                             if (region.paramId) track.automationData.set(region.paramId, originalPoints);
                             view.redraw("", region);
+                            track.updateAutomationIcon();
                         }
                     );
                 }
@@ -1304,8 +1357,10 @@ export default class RegionController {
         if (!this.selection.primary) return
         if (!this.isPlayheadOnSelectedRegion()) return
         let originalRegion = this.selection.primary
-        const splitPosition = this._app.editorView.playhead.position.x - originalRegion.pos
-        const splitTime = splitPosition * RATIO_MILLS_BY_PX;
+        const app = this._app;
+        const regionStartX = app.msToX(originalRegion.start);
+        const splitPositionX = app.editorView.playhead.position.x;
+        const splitTime = app.xToMs(splitPositionX) - originalRegion.start;
         let [firstRegion, secondRegion] = originalRegion.split(splitTime);
         let trackId = originalRegion.trackId
         let track = this._app.tracksController.getTrackById(trackId)!
@@ -1346,11 +1401,11 @@ export default class RegionController {
 
     isPlayheadOnSelectedRegion() {
         if (!this.selection.primary) return;
-        const view = this.getView(this.selection.primary)
-        const playHeadPosX = this._app.editorView.playhead.position.x
-        const selectedRegionPosX = view.position.x
-        const selectedRegionWidth = this.selection.primary.width
-        return (playHeadPosX >= selectedRegionPosX && playHeadPosX <= selectedRegionPosX + selectedRegionWidth);
+        const app = this._app;
+        const playHeadPosX = app.editorView.playhead.position.x;
+        const selectedRegionStartX = app.msToX(this.selection.primary.start);
+        const selectedRegionEndX = app.msToX(this.selection.primary.end);
+        return (playHeadPosX >= selectedRegionStartX && playHeadPosX <= selectedRegionEndX);
     }
 
     private updateDragPosition(globalX: number, globalY: number) {
@@ -1399,7 +1454,7 @@ export default class RegionController {
         const trackIndexDelta = newAnchorTrackIndex - currentAnchorTrackIndex;
 
         // Calculate Anchor Start MS
-        const anchorNewStartMs = newX * RATIO_MILLS_BY_PX;
+        const anchorNewStartMs = this._app.xToMs(newX);
 
         for (const item of this.draggedRegionState.draggingRegions) {
             // Calculate New Track
@@ -1410,14 +1465,15 @@ export default class RegionController {
 
             // Calculate New Position
             const itemNewStartMs = Math.max(0, anchorNewStartMs + item.offsetMs);
-            const itemNewX = itemNewStartMs / RATIO_MILLS_BY_PX;
+            const itemNewX = this._app.msToX(itemNewStartMs);
 
             this.moveRegion(item.region, itemNewTrack, itemNewX);
         }
 
         // Sync Automation Points
         if (this.draggedRegionState.draggingAutomationPoints) {
-            const deltaMs = anchorNewStartMs - (this.draggedRegionState.initialAnchorPos * RATIO_MILLS_BY_PX);
+            const initialAnchorTime = this._app.xToMs(this.draggedRegionState.initialAnchorPos);
+            const deltaMs = anchorNewStartMs - initialAnchorTime;
 
             for (const item of this.draggedRegionState.draggingAutomationPoints) {
                 const region = item.region;
@@ -1456,7 +1512,8 @@ export default class RegionController {
         if (isPenMode && local.y >= 0 && local.y <= height) {
             const track = this._app.tracksController.getTrackById(region.trackId);
             if (track) {
-                const time = Math.max(0, local.x * RATIO_MILLS_BY_PX);
+                const absoluteX = local.x + view.position.x;
+                const time = Math.max(0, this._app.xToMs(absoluteX));
                 const value = Math.max(0, Math.min(1, 1 - (local.y / height)));
 
                 // 初期状態を保存（Undo用）
@@ -1513,6 +1570,22 @@ export default class RegionController {
         }
 
         if (closestIndex !== -1) {
+            // Check for double click to reset to default
+            // detail === 2 might not be reliable, so we also check time delta
+            const isManualDoubleClick = (Date.now() - this._lastAutomationPointClickTime < 500) &&
+                                       (this._lastClickedAutomationPoint?.region === region && this._lastClickedAutomationPoint?.index === closestIndex);
+            
+            if (originalEvent.detail === 2 || (e as any).detail === 2 || isManualDoubleClick) {
+                this.resetSelectedAutomationPoints(region, closestIndex);
+                this._lastAutomationPointClickTime = 0;
+                this._lastClickedAutomationPoint = null;
+                e.stopPropagation();
+                return;
+            }
+
+            this._lastAutomationPointClickTime = Date.now();
+            this._lastClickedAutomationPoint = { region, index: closestIndex };
+
             // Drag existing point
             const isShift = originalEvent.shiftKey;
             const isCtrl = originalEvent.ctrlKey || originalEvent.metaKey;
@@ -1785,6 +1858,33 @@ export default class RegionController {
             const cellSizeMs = this._editorView.cellSize * RATIO_MILLS_BY_PX;
             targetTime = Math.round(targetTime / cellSizeMs) * cellSizeMs;
         }
+
+        // BPM 動的スケーリング処理
+        const isBpmRegion = anchorRegion === this._app.host.bpmAutomationRegion;
+        if (isBpmRegion) {
+            const host = this._app.host;
+            const oldMin = host.bpmMinDisplay;
+            const oldMax = host.bpmMaxDisplay;
+            const yRatio = local.y / height; // 0 (top) to 1 (bottom)
+            const targetBpm = oldMax - yRatio * (oldMax - oldMin);
+
+            if (targetBpm > oldMax || targetBpm < oldMin) {
+                host.updateBpmDisplayRange(targetBpm < oldMin ? targetBpm : undefined, targetBpm > oldMax ? targetBpm : undefined);
+                const newMin = host.bpmMinDisplay;
+                const newMax = host.bpmMaxDisplay;
+
+                // スケールが変わったので、ドラッグ開始時の基準点 (initialPoints) も再正規化して同期させる
+                draggingPoints.forEach(group => {
+                    if (group.region === host.bpmAutomationRegion) {
+                        group.initialPoints.forEach(p => {
+                            const absBpm = oldMin + p.value * (oldMax - oldMin);
+                            p.value = (absBpm - newMin) / (newMax - newMin);
+                        });
+                    }
+                });
+            }
+        }
+
         const targetValue = Math.max(0, Math.min(1, 1 - (local.y / height)));
 
         // Calculate Deltas based on Anchor
@@ -1890,6 +1990,29 @@ export default class RegionController {
         const height = HEIGHT_AUTOMATION;
 
         const time = Math.max(0, local.x * RATIO_MILLS_BY_PX);
+
+        // BPM 動的スケーリング処理 (ペンモード)
+        if (region === this._app.host.bpmAutomationRegion) {
+            const host = this._app.host;
+            const oldMin = host.bpmMinDisplay;
+            const oldMax = host.bpmMaxDisplay;
+            const yRatio = local.y / height;
+            const targetBpm = oldMax - yRatio * (oldMax - oldMin);
+
+            if (targetBpm > oldMax || targetBpm < oldMin) {
+                host.updateBpmDisplayRange(targetBpm < oldMin ? targetBpm : undefined, targetBpm > oldMax ? targetBpm : undefined);
+                const newMin = host.bpmMinDisplay;
+                const newMax = host.bpmMaxDisplay;
+
+                // 描画開始時の初期状態 (initialPoints) も再正規化する
+                this._drawingAutomationState.initialPoints.forEach(p => {
+                    const absBpm = oldMin + p.value * (oldMax - oldMin);
+                    p.value = (absBpm - newMin) / (newMax - newMin);
+                    p.value = Math.max(0, Math.min(1, p.value));
+                });
+            }
+        }
+
         const value = Math.max(0, Math.min(1, 1 - (local.y / height)));
 
         // 最小間隔をチェック（ピクセル相当）
@@ -2232,8 +2355,9 @@ export default class RegionController {
     private updateSelectionFromBox(x: number, y: number, w: number, h: number) {
         const newInBox = new Set<RegionOf<any>>();
         const newSelectedAutomationPoints = new Map<AutomationRegion, Set<number>>();
+        const isShift = isKeyPressed("Shift");
 
-        // Helper to update automation view
+        // オートメーションビューを更新するためのヘルパー
         const updateAutoView = (region: AutomationRegion, indices: Set<number>) => {
             const track = this._app.tracksController.getTrackById(region.trackId);
             if (track) {
@@ -2252,18 +2376,16 @@ export default class RegionController {
             const waveform = this._editorView.getWaveFormViewById(track.id);
             if (!waveform) return;
             const waveY = waveform.y;
-            // Visible height of the track part (excluding automation)
             const trackHeight = HEIGHT_TRACK;
 
-            // 1. Standard Regions (Check intersection with Track area only)
+            // 1. 通常のリージョン（トラック領域との交差をチェック）
             if (y < waveY + trackHeight && y + h > waveY) {
                 track.regions.forEach(region => {
-                    if (region instanceof AutomationRegion) return; // Skip automation regions here
+                    if (region instanceof AutomationRegion) return;
                     const view = waveform.getRegionViewById(region.id);
                     if (view) {
                         const rX = view.x;
                         const rW = view.width;
-                        // Simple X intersection (since Y is constrained to track)
                         if (x < rX + rW && x + w > rX) {
                             newInBox.add(region as RegionOf<any>);
                         }
@@ -2271,35 +2393,46 @@ export default class RegionController {
                 });
             }
 
-            // 2. Automation Points (Check intersection with Automation Lane)
+            // 2. オートメーションポイント（オートメーションレーンとの交差をチェック）
             if (track.isAutomationOpened) {
                 for (let i = 0; i < track.automationRegions.length; i++) {
                     const region = track.automationRegions[i];
                     const view = waveform.getRegionViewById(region.id) as AutomationRegionView;
 
                     if (view) {
-                        // Automation region sits at waveY + HEIGHT_TRACK + (index * HEIGHT_AUTOMATION)
                         const autoRegionY = waveY + trackHeight + (i * HEIGHT_AUTOMATION);
 
-                        // Check if selection box intersects automation lane
                         if (y < autoRegionY + HEIGHT_AUTOMATION && y + h > autoRegionY) {
-                            const indices = new Set<number>();
+                            const indicesInBox = new Set<number>();
 
-                            // Check each point
                             for (let j = 0; j < region.points.length; j++) {
                                 const p = region.points[j];
                                 const pVx = view.x + p.time / RATIO_MILLS_BY_PX;
                                 const pVy = autoRegionY + (1 - p.value) * HEIGHT_AUTOMATION;
 
                                 if (pVx >= x && pVx <= x + w && pVy >= y && pVy <= y + h) {
-                                    indices.add(j);
+                                    indicesInBox.add(j);
                                 }
                             }
 
-                            if (indices.size > 0) {
-                                this.selectedAutomationPoints.set(region, indices);
-                                view.selectedPointIndices = indices;
-                                view.redraw("", region);
+                            // Shift押下時は初期選択状態とマージ
+                            let finalIndices = new Set<number>();
+                            if (isShift) {
+                                const initial = this._initialAutomationSelection.get(region);
+                                if (initial) {
+                                    initial.forEach(idx => finalIndices.add(idx));
+                                }
+                            }
+                            indicesInBox.forEach(idx => finalIndices.add(idx));
+
+                            if (finalIndices.size > 0) {
+                                newSelectedAutomationPoints.set(region, finalIndices);
+                            }
+                        } else if (isShift) {
+                            // 矩形外だがShift押下時は初期状態を維持
+                            const initial = this._initialAutomationSelection.get(region);
+                            if (initial && initial.size > 0) {
+                                newSelectedAutomationPoints.set(region, new Set(initial));
                             }
                         }
                     }
@@ -2307,38 +2440,15 @@ export default class RegionController {
             }
         });
 
-        // Update Standard Selection
+        // 標準リージョンの選択更新
         const finalSelection = new Set([...this._initialSelection, ...newInBox]);
         const current = new Set(this.selection.selecteds);
         for (const r of current) { if (!finalSelection.has(r)) this.selection.remove(r); }
         for (const r of finalSelection) { if (!current.has(r)) this.selection.add(r); }
 
-        // Update Automation Selection
-        // For automation, we replace correctly or merge? 
-        // Logic: if modifier key, merge? Here we assume "newInBox" adds to initial.
-        // We don't have _initialAutomationSelection but we can infer or just clear/set.
-        // For now, let's just use what's in box, assuming shift isn't persisting previous selection in this simple logic unless we add initial state.
-        // To support Shift correctly, we should have stored initial state in pointerdown.
-        // But for step 1, let's just show box selection working.
-
-        // Clear old selection that are not in new map (if we want to replace)
-        // OR MERGE if IsKeyPressed. 
-        // Let's implement simple Replace for box selection to match standard behavior (usually box clears unless shift).
-        // Actually standard code above does: final = initial + newInBox. 
-        // We need similar for automation.
-
-        // Note: We haven't stored _initialAutomationSelection. 
-        // For this task, let's just Set logic: Box -> Selection. 
-        // If user wants add, they hold shift -> logic in pointerdown handles initial setup?
-        // Standard logic: this._initialSelection = new Set(this.selection.selecteds); is set in pointerdown.
-
-        // Let's rely on map replacement for now, fixing later if detailed shift-box needed
+        // オートメーションポイントの選択更新
         this.selectedAutomationPoints.forEach((indices, region) => {
             if (!newSelectedAutomationPoints.has(region)) {
-                // Was selected, now not in box. Remove? 
-                // Only if we are not appending. 
-                // Assuming replace mode for rectangle if no modifiers (usually).
-                // Actually standard code above merges with _initialSelection.
                 updateAutoView(region, new Set());
             }
         });
@@ -2442,5 +2552,57 @@ export default class RegionController {
             }
         }
         return null;
+    }
+
+    /**
+     * 選択されたオートメーションポイントをデフォルト値にリセットする
+     */
+    private async resetSelectedAutomationPoints(region: AutomationRegion, clickedIndex: number) {
+        const track = this._app.tracksController.getTrackById(region.trackId);
+        if (!track || !region.paramId) return;
+
+        const defaultValue = await this._app.automationController.getParameterDefaultValue(track, region.paramId);
+        const originalPoints = JSON.parse(JSON.stringify(region.points)) as AutomationPoint[];
+        
+        // リセット対象のポイントを決定
+        const targetIndices = new Set<number>();
+        const currentSelected = this.selectedAutomationPoints.get(region);
+
+        if (currentSelected && currentSelected.has(clickedIndex)) {
+            // クリックされたポイントが選択中なら、全選択ポイントをリセット
+            currentSelected.forEach(idx => targetIndices.add(idx));
+        } else {
+            // そうでなければクリックされたポイントのみリセット
+            targetIndices.add(clickedIndex);
+        }
+
+        if (targetIndices.size === 0) return;
+
+        const newPoints = JSON.parse(JSON.stringify(region.points)) as AutomationPoint[];
+        targetIndices.forEach(idx => {
+            if (newPoints[idx]) {
+                newPoints[idx].value = defaultValue;
+            }
+        });
+
+        const redo = () => {
+            region.points = JSON.parse(JSON.stringify(newPoints));
+            if (region.paramId) track.automationData.set(region.paramId, region.points);
+            const view = this.getView(region) as AutomationRegionView;
+            view?.redraw("", region);
+            track.updateAutomationIcon();
+            if (this._app.host.isPlaying) this._app.automationController.resetAutomationStreaming();
+        };
+
+        const undo = () => {
+            region.points = JSON.parse(JSON.stringify(originalPoints));
+            if (region.paramId) track.automationData.set(region.paramId, region.points);
+            const view = this.getView(region) as AutomationRegionView;
+            view?.redraw("", region);
+            track.updateAutomationIcon();
+            if (this._app.host.isPlaying) this._app.automationController.resetAutomationStreaming();
+        };
+
+        this.doIt(true, redo, undo);
     }
 }

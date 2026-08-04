@@ -338,6 +338,7 @@ export default class Loader {
                     }
                 }
             }
+            track.updateAutomationIcon();
 
             // Restore Automation UI State
             if (trackJson.automationOpened) {

@@ -28,6 +28,20 @@ export default class TracksView {
     }
 
     /**
+     * Adds the BPM automation track element at the very top of the track list.
+     * @param automationTrackElement 
+     */
+    public addBpmAutomationTrack(automationTrackElement: AutomationTrackElement): void {
+        const firstTrack = this.trackContainerDiv.querySelector("track-element");
+        if (firstTrack) {
+            firstTrack.before(automationTrackElement);
+        } else {
+            // No tracks, add after the first child (header maybe?) or just prepend
+            this.trackContainerDiv.prepend(automationTrackElement);
+        }
+    }
+
+    /**
      * Adds the automation track element right after the track element.
      * @param trackElement The track element to append the automation track after.
      * @param automationTrackElement The automation track element to add.

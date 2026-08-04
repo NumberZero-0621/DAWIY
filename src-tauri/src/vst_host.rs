@@ -28,7 +28,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, IDC_ARROW, MSG, WINDOW_EX_STYLE,
     WM_DESTROY, WM_SIZE, WM_CLOSE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
     AdjustWindowRect, SetWindowLongPtrW, GetWindowLongPtrW, GWLP_USERDATA,
-    SetWindowPos, SWP_NOMOVE, SWP_NOZORDER, SWP_NOACTIVATE, SW_SHOW, SetTimer, ShowWindow, DestroyWindow, SetWindowTextW
+    SetWindowPos, SWP_NOMOVE, SWP_NOZORDER, SWP_NOACTIVATE, SW_SHOW, SetTimer, ShowWindow, SetWindowTextW
 };
 use windows::Win32::Graphics::Gdi::{GetStockObject, BLACK_BRUSH, HBRUSH};
 use windows::Win32::System::Ole::{OleInitialize, OleUninitialize};
@@ -38,13 +38,30 @@ use windows::core::{PCWSTR, s, w};
 
 // --- Unified Host Implementation ---
 
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct VstParameterInfo {
+    pub id: u32,
+    pub title: String,
+    pub short_title: String,
+    pub units: String,
+    pub step_count: i32,
+    pub default_value: f64,
+    pub unit_id: i32,
+}
+
 enum VstCommand {
-    Load(String, f32, Sender<Result<u32, String>>), // returns Instance ID
+    Load(String, f32, bool, Option<HWND>, Sender<Result<u32, String>>), // returns Instance ID
     Midi(u32, u8, u8, u8), // instance_id, status, data1, data2
     GetAudio(u32, usize, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, response
     ProcessAudio(u32, usize, Vec<f32>, Vec<f32>, Sender<Result<(Vec<f32>, Vec<f32>), String>>), // instance_id, req_samples, in_l, in_r, response
+    GetParameters(u32, Sender<Result<Vec<VstParameterInfo>, String>>),
+    GetParameter(u32, u32, Sender<Result<f64, String>>),
+    SetParameter(u32, u32, f64),
     Close(u32), // instance_id
     Show(u32), // instance_id
+    Hide(u32), // instance_id
+    SetGlobalVisibility(bool), // for Minimize/Restore
+    SetGlobalTopmost(bool), // for Focus/Blur
     CloseAll, // close all instances
 }
 
@@ -58,6 +75,8 @@ struct VstInstance {
     pub view: Option<VstPtr<dyn IPlugView>>,
     pub path: String,
     pub midi_events: std::collections::VecDeque<(u8, u8, u8)>,
+    pub param_changes: std::collections::VecDeque<(u32, f64)>,
+    pub is_ui_visible: bool, // ユーザーが明示的に開いたかどうか
     sample_rate: f64,
     continuous_time_samples: i64,
 }
@@ -496,6 +515,8 @@ fn create_host_event_list() -> *mut HostEventList {
 
 // ----------------------------------------
 
+include!("IParameterChanges_impl.rs");
+
 #[repr(C)]
 struct UnifiedHost {
     pub vptr_host: *const IHostApplicationVTableLayout,
@@ -876,81 +897,16 @@ const IID_ICONNECTIONPOINT: IID = IID {
     data: [0x6F, 0x15, 0xA4, 0x70, 0x6E, 0x6E, 0x26, 0x40, 0x98, 0x91, 0x48, 0xBF, 0xAA, 0x60, 0xD8, 0xD1],
 };
 
-unsafe impl ComInterface for dyn IConnectionPoint {
-    type VTable = IConnectionPointVTable;
-    type Super = dyn IUnknown;
-    const IID: IID = IID_ICONNECTIONPOINT;
-}
+// --- End of Connection Point Definitions ---
+// --- End of Extension Interfaces ---
 
-#[repr(C)]
-struct HostConnectionPoint {
-    pub vptr: *const IConnectionPointVTable,
-    ref_count: AtomicI32,
-    other: Mutex<Option<*mut c_void>>, // The thing connected to us
-}
+// --- End of VTable ---
 
-unsafe extern "system" fn cp_query_interface(this: *mut c_void, iid: *const IID, obj: *mut *mut c_void) -> tresult {
-    let check = *iid;
-    if check == <dyn IUnknown as ComInterface>::IID || check == IID_ICONNECTIONPOINT {
-         *obj = this;
-         cp_add_ref(this);
-         return kResultOk;
-    }
-    kNoInterface
-}
-unsafe extern "system" fn cp_add_ref(this: *mut c_void) -> u32 {
-    let s = &*(this as *const HostConnectionPoint);
-    s.ref_count.fetch_add(1, Ordering::Relaxed) as u32 + 1
-}
-unsafe extern "system" fn cp_release(this: *mut c_void) -> u32 {
-    let s = &*(this as *const HostConnectionPoint);
-    let val = s.ref_count.fetch_sub(1, Ordering::Relaxed);
-    if val == 1 {
-        let _ = Box::from_raw(this as *mut HostConnectionPoint);
-    }
-    val as u32 - 1
-}
-unsafe extern "system" fn cp_connect(this: *mut c_void, other: *mut c_void) -> tresult {
-    let s = &*(this as *const HostConnectionPoint);
-    println!("[Native] HostConnectionPoint::connect");
-    *s.other.lock().unwrap() = Some(other);
-    kResultOk
-}
-unsafe extern "system" fn cp_disconnect(this: *mut c_void, _other: *mut c_void) -> tresult {
-    let s = &*(this as *const HostConnectionPoint);
-    println!("[Native] HostConnectionPoint::disconnect");
-    *s.other.lock().unwrap() = None;
-    kResultOk
-}
-unsafe extern "system" fn cp_notify(this: *mut c_void, message: *mut c_void) -> tresult {
-     let _this = this;
-     let _message = message;
-     println!("[Native] HostConnectionPoint::notify received message!");
-     // We could inspect message info here if we want (via IMessage interface wrapper)
-     kResultOk
-}
-
-static HOST_CP_VTBL: IConnectionPointVTable = IConnectionPointVTable {
-    query_interface: cp_query_interface,
-    add_ref: cp_add_ref,
-    release: cp_release,
-    connect: cp_connect,
-    disconnect: cp_disconnect,
-    notify: cp_notify,
-};
-
-fn create_host_connection_point() -> *mut c_void {
-    let cp = Box::new(HostConnectionPoint {
-        vptr: &HOST_CP_VTBL,
-        ref_count: AtomicI32::new(1),
-        other: Mutex::new(None),
-    });
-    Box::into_raw(cp) as *mut c_void
-}
+// --- End of Helpers ---
 
 // --- Main Exported Function ---
 
-pub fn load_and_open(path: String, sample_rate: f32) -> Result<u32, String> {
+pub fn load_and_open(path: String, sample_rate: f32, visible: bool, parent_hwnd: Option<HWND>) -> Result<u32, String> {
     
     // Setup coordinator if not running
     let mut coord_lock = COORDINATOR.lock().unwrap();
@@ -971,7 +927,7 @@ pub fn load_and_open(path: String, sample_rate: f32) -> Result<u32, String> {
 
     // Send Load Command
     let (tx_res, rx_res) = channel();
-    tx_main.send(VstCommand::Load(path, sample_rate, tx_res)).map_err(|e| e.to_string())?;
+    tx_main.send(VstCommand::Load(path, sample_rate, visible, parent_hwnd, tx_res)).map_err(|e| e.to_string())?;
     
     // Block until creation result (Success or Init Failure)
     let instance_id = rx_res.recv().map_err(|e| format!("Receive error: {}", e))??;
@@ -980,6 +936,7 @@ pub fn load_and_open(path: String, sample_rate: f32) -> Result<u32, String> {
 }
 
 const WM_VST_DROP_INSTANCE: u32 = windows::Win32::UI::WindowsAndMessaging::WM_USER + 4242;
+const WM_VST_HIDE_INSTANCE: u32 = windows::Win32::UI::WindowsAndMessaging::WM_USER + 4243;
 
 unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
     OleInitialize(None).ok();
@@ -1018,6 +975,13 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                      instances.remove(pos); // Drop called here (triggers cleanup)
                  }
              }
+             if msg.message == WM_VST_HIDE_INSTANCE {
+                 let hwnd_val = msg.wParam.0;
+                 if let Some(inst) = instances.iter_mut().find(|x| x.hwnd.0 as usize == hwnd_val) {
+                     println!("[Native] Coordinator: Updating is_ui_visible to false for HWND: {}", hwnd_val);
+                     inst.is_ui_visible = false;
+                 }
+             }
 
              if msg.message == windows::Win32::UI::WindowsAndMessaging::WM_QUIT {
                  // If we receive WM_QUIT, it might be for the whole thread?
@@ -1034,9 +998,9 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
         // 2. Check Commands
         match rx_cmd.recv_timeout(std::time::Duration::from_millis(1)) {
             Ok(cmd) => match cmd {
-                VstCommand::Load(path, sample_rate, tx_res) => {
+                VstCommand::Load(path, sample_rate, visible, parent_hwnd, tx_res) => {
                      // We need to refactor run_vst_session to create_vst_instance
-                     match create_vst_instance(&path, sample_rate) {
+                     match create_vst_instance(&path, sample_rate, visible, parent_hwnd) {
                          Ok(mut inst) => {
                              inst.id = NEXT_INSTANCE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                              let instance_id = inst.id;
@@ -1145,6 +1109,24 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                             None
                                         };
                                         
+                                        let has_param_changes = !inst.param_changes.is_empty();
+                                        let param_changes_ptr = if has_param_changes {
+                                            let pc_ptr = create_host_parameter_changes();
+                                            let pc_vtbl = (*pc_ptr).vptr;
+                                            while let Some((p_id, p_val)) = inst.param_changes.pop_front() {
+                                                let mut index: i32 = 0;
+                                                let queue_ptr = ((*pc_vtbl).add_parameter_data)(pc_ptr as *mut c_void, p_id, &mut index);
+                                                if !queue_ptr.is_null() {
+                                                    let q_vtbl = *(queue_ptr as *mut *const IParamValueQueueVTableLayout);
+                                                    ((*q_vtbl).add_point)(queue_ptr, 0, p_val, std::ptr::null_mut());
+                                                }
+                                            }
+                                            data.input_param_changes = std::mem::transmute(pc_ptr);
+                                            Some(pc_ptr)
+                                        } else {
+                                            None
+                                        };
+                                        
                                         let _res = processor.process(&mut data);
                                         
                                         inst.continuous_time_samples += num_samples as i64;
@@ -1152,6 +1134,11 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         if let Some(elp) = event_list_ptr {
                                             let elvtbl = (*elp).vptr;
                                             ((*elvtbl).release)(elp as *mut c_void);
+                                        }
+                                        
+                                        if let Some(pc_ptr) = param_changes_ptr {
+                                            let pc_vtbl = (*pc_ptr).vptr;
+                                            ((*pc_vtbl).release)(pc_ptr as *mut c_void);
                                         }
                                         
                                         let _ = tx_audio.send(Ok((out_l, out_r)));
@@ -1268,6 +1255,24 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                             None
                                         };
                                         
+                                        let has_param_changes = !inst.param_changes.is_empty();
+                                        let param_changes_ptr = if has_param_changes {
+                                            let pc_ptr = create_host_parameter_changes();
+                                            let pc_vtbl = (*pc_ptr).vptr;
+                                            while let Some((p_id, p_val)) = inst.param_changes.pop_front() {
+                                                let mut index: i32 = 0;
+                                                let queue_ptr = ((*pc_vtbl).add_parameter_data)(pc_ptr as *mut c_void, p_id, &mut index);
+                                                if !queue_ptr.is_null() {
+                                                    let q_vtbl = *(queue_ptr as *mut *const IParamValueQueueVTableLayout);
+                                                    ((*q_vtbl).add_point)(queue_ptr, 0, p_val, std::ptr::null_mut());
+                                                }
+                                            }
+                                            data.input_param_changes = std::mem::transmute(pc_ptr);
+                                            Some(pc_ptr)
+                                        } else {
+                                            None
+                                        };
+                                        
                                         let _res = processor.process(&mut data);
                                         
                                         inst.continuous_time_samples += num_samples as i64;
@@ -1275,6 +1280,11 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         if let Some(elp) = event_list_ptr {
                                             let elvtbl = (*elp).vptr;
                                             ((*elvtbl).release)(elp as *mut c_void);
+                                        }
+                                        
+                                        if let Some(pc_ptr) = param_changes_ptr {
+                                            let pc_vtbl = (*pc_ptr).vptr;
+                                            ((*pc_vtbl).release)(pc_ptr as *mut c_void);
                                         }
 
                                         // VSTiなどが出力を全く生成しなかった（全て0.0）場合、入力信号をそのまま出力へパススルーする
@@ -1300,6 +1310,68 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                         let _ = tx_audio.send(Err(format!("Instance not found: {}", vst_id)));
                     }
                 }
+                VstCommand::GetParameters(vst_id, tx_res) => {
+                    let mut found = false;
+                    for inst in instances.iter() {
+                        if inst.id == vst_id {
+                            found = true;
+                            if let Some(ec) = &inst.edit_controller {
+                                let count = ec.get_parameter_count();
+                                let mut params = Vec::new();
+                                for i in 0..count {
+                                    let mut info = std::mem::zeroed();
+                                    if ec.get_parameter_info(i, &mut info) == kResultOk {
+                                        let title_u16: Vec<u16> = info.title.iter().map(|&c| c as u16).take_while(|&c| c != 0).collect();
+                                        let short_title_u16: Vec<u16> = info.short_title.iter().map(|&c| c as u16).take_while(|&c| c != 0).collect();
+                                        let units_u16: Vec<u16> = info.units.iter().map(|&c| c as u16).take_while(|&c| c != 0).collect();
+                                        
+                                        params.push(VstParameterInfo {
+                                            id: info.id,
+                                            title: String::from_utf16_lossy(&title_u16),
+                                            short_title: String::from_utf16_lossy(&short_title_u16),
+                                            units: String::from_utf16_lossy(&units_u16),
+                                            step_count: info.step_count,
+                                            default_value: info.default_normalized_value,
+                                            unit_id: info.unit_id,
+                                        });
+                                    }
+                                }
+                                let _ = tx_res.send(Ok(params));
+                            } else {
+                                let _ = tx_res.send(Err("No EditController".into()));
+                            }
+                            break;
+                        }
+                    }
+                    if !found { let _ = tx_res.send(Err("Instance not found".into())); }
+                }
+                VstCommand::GetParameter(vst_id, param_id, tx_res) => {
+                    let mut found = false;
+                    for inst in instances.iter() {
+                        if inst.id == vst_id {
+                            found = true;
+                            if let Some(ec) = &inst.edit_controller {
+                                let val = ec.get_param_normalized(param_id);
+                                let _ = tx_res.send(Ok(val));
+                            } else {
+                                let _ = tx_res.send(Err("No EditController".into()));
+                            }
+                            break;
+                        }
+                    }
+                    if !found { let _ = tx_res.send(Err("Instance not found".into())); }
+                }
+                VstCommand::SetParameter(vst_id, param_id, value) => {
+                    for inst in instances.iter_mut() {
+                        if inst.id == vst_id {
+                            if let Some(ec) = &inst.edit_controller {
+                                ec.set_param_normalized(param_id, value);
+                            }
+                            inst.param_changes.push_back((param_id, value));
+                            break;
+                        }
+                    }
+                }
                 VstCommand::Close(vst_id) => {
                     println!("[Native] Closing VST instance ID: {}", vst_id);
                     instances.retain(|inst| inst.id != vst_id);
@@ -1309,17 +1381,44 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                     for inst in instances.iter_mut() {
                         if inst.id == vst_id {
                             found = true;
+                            inst.is_ui_visible = true;
                             if inst.hwnd.0 != 0 {
                                 unsafe {
-                                    windows::Win32::UI::WindowsAndMessaging::ShowWindow(inst.hwnd, windows::Win32::UI::WindowsAndMessaging::SW_SHOW);
+                                    windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(inst.hwnd, windows::Win32::UI::WindowsAndMessaging::SW_SHOW);
                                     let _ = windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow(inst.hwnd);
                                 }
                             }
                             break;
                         }
                     }
-                    if !found {
-                        println!("[Native] Show called for unknown instance: {}", vst_id);
+                    if !found { println!("[Native] Show called for unknown instance: {}", vst_id); }
+                }
+                VstCommand::Hide(vst_id) => {
+                    for inst in instances.iter_mut() {
+                        if inst.id == vst_id {
+                            inst.is_ui_visible = false;
+                            if inst.hwnd.0 != 0 {
+                                unsafe { windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(inst.hwnd, windows::Win32::UI::WindowsAndMessaging::SW_HIDE); }
+                            }
+                            break;
+                        }
+                    }
+                }
+                VstCommand::SetGlobalVisibility(visible) => {
+                    let cmd = if visible { windows::Win32::UI::WindowsAndMessaging::SW_SHOW } else { windows::Win32::UI::WindowsAndMessaging::SW_HIDE };
+                    for inst in instances.iter() {
+                        if inst.is_ui_visible && inst.hwnd.0 != 0 {
+                            unsafe { windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(inst.hwnd, cmd); }
+                        }
+                    }
+                }
+                VstCommand::SetGlobalTopmost(topmost) => {
+                    use windows::Win32::UI::WindowsAndMessaging::{HWND_TOPMOST, HWND_NOTOPMOST, SWP_NOSIZE, SWP_NOMOVE, SWP_NOACTIVATE};
+                    let order = if topmost { HWND_TOPMOST } else { HWND_NOTOPMOST };
+                    for inst in instances.iter() {
+                        if inst.is_ui_visible && inst.hwnd.0 != 0 {
+                            unsafe { let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(inst.hwnd, order, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE); }
+                        }
                     }
                 }
                 VstCommand::CloseAll => {
@@ -1345,7 +1444,7 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
 }
 
 // Inner session function (formerly run_vst_thread)
-unsafe fn create_vst_instance(path: &str, sample_rate: f32) -> Result<VstInstance, String> {
+unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _parent_hwnd: Option<HWND>) -> Result<VstInstance, String> {
     // No OleInit here.
     
     println!("[Native] Session started.");
@@ -1363,7 +1462,7 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32) -> Result<VstInstanc
         WS_OVERLAPPEDWINDOW, 
         CW_USEDEFAULT, CW_USEDEFAULT,
         800, 600,
-        None, None, instance, None
+        None, None, instance, None // RE-REVERT to None. Cross-thread ownership triggers deadlocks in ShowWindow / Resize.
     );
     println!("[Native] Dummy window created: {:?}", hwnd);
 
@@ -2118,7 +2217,9 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32) -> Result<VstInstanc
         if width < 50 || height < 50 { width = 800; height = 600; }
         let mut win_rect = RECT { left: 0, top: 0, right: width, bottom: height };
         AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
-        SetWindowPos(hwnd, None, 0, 0, win_rect.right - win_rect.left, win_rect.bottom - win_rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        // Do not use HWND_TOPMOST (-1) as it's too aggressive.
+        // Also don't show the window yet via SetWindowPos.
+        let _ = SetWindowPos(hwnd, None, 0, 0, win_rect.right - win_rect.left, win_rect.bottom - win_rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
         
         // Attach
         println!("[Native] Creating PlugFrame...");
@@ -2136,8 +2237,12 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32) -> Result<VstInstanc
              err => println!("[Native] Attach failed: {}", err),
         }
         
-        println!("[Native] Showing Window...");
-        ShowWindow(hwnd, SW_SHOW);
+        if visible {
+            println!("[Native] Showing Window (Async)...");
+            windows::Win32::UI::WindowsAndMessaging::ShowWindowAsync(hwnd, SW_SHOW);
+        } else {
+            println!("[Native] Window created but kept hidden.");
+        }
     } else {
         println!("[Native] No View provided. Running in Headless mode.");
         
@@ -2151,7 +2256,9 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32) -> Result<VstInstanc
         AdjustWindowRect(&mut win_rect, WS_OVERLAPPEDWINDOW, false);
         SetWindowPos(hwnd, None, 0, 0, win_rect.right - win_rect.left, win_rect.bottom - win_rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
         
-        ShowWindow(hwnd, SW_SHOW);
+        if visible {
+            ShowWindow(hwnd, SW_SHOW);
+        }
     }
     
     // Set Timer for retry (every 1000ms)
@@ -2169,6 +2276,8 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32) -> Result<VstInstanc
         edit_controller: Some(edit_controller),
         view,
         midi_events: std::collections::VecDeque::new(),
+        param_changes: std::collections::VecDeque::new(),
+        is_ui_visible: visible, 
         sample_rate: sample_rate as f64,
         continuous_time_samples: 0,
     })
@@ -2241,7 +2350,10 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
     match msg {
         WM_CLOSE => {
              println!("[Native] wnd_proc: WM_CLOSE received. Hiding Window instead of Destroying...");
-             windows::Win32::UI::WindowsAndMessaging::ShowWindow(hwnd, windows::Win32::UI::WindowsAndMessaging::SW_HIDE);
+             use windows::Win32::System::Threading::GetCurrentThreadId;
+             use windows::Win32::UI::WindowsAndMessaging::{PostThreadMessageW, ShowWindow, SW_HIDE};
+             let _ = PostThreadMessageW(GetCurrentThreadId(), WM_VST_HIDE_INSTANCE, WPARAM(hwnd.0 as usize), LPARAM(0));
+             unsafe { ShowWindow(hwnd, SW_HIDE); }
              LRESULT(0)
         }
         WM_DESTROY => {
@@ -2419,6 +2531,80 @@ pub fn show_window(vst_id: u32) -> Result<(), String> {
     let coord_lock = COORDINATOR.lock().unwrap();
     if let Some(coordinator) = coord_lock.as_ref() {
         coordinator.tx.send(VstCommand::Show(vst_id)).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
+    }
+}
+
+pub fn hide_window(vst_id: u32) -> Result<(), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        coordinator.tx.send(VstCommand::Hide(vst_id)).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
+    }
+}
+
+pub fn set_all_vst_visible(visible: bool) -> Result<(), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        coordinator.tx.send(VstCommand::SetGlobalVisibility(visible)).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Coordinator not running.".to_string())
+    }
+}
+
+pub fn set_all_vst_topmost(topmost: bool) -> Result<(), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        coordinator.tx.send(VstCommand::SetGlobalTopmost(topmost)).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("Coordinator not running.".to_string())
+    }
+}
+
+pub fn get_parameters(vst_id: u32) -> Result<Vec<VstParameterInfo>, String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        coordinator.tx.send(VstCommand::GetParameters(vst_id, tx)).map_err(|e| e.to_string())?;
+        loop {
+            match rx.recv_timeout(std::time::Duration::from_millis(50)) {
+                Ok(result) => return result,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { continue; },
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err("GetParameters channel disconnected".to_string()),
+            }
+        }
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
+    }
+}
+
+pub fn get_parameter(vst_id: u32, param_id: u32) -> Result<f64, String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        coordinator.tx.send(VstCommand::GetParameter(vst_id, param_id, tx)).map_err(|e| e.to_string())?;
+        loop {
+            match rx.recv_timeout(std::time::Duration::from_millis(50)) {
+                Ok(result) => return result,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => { continue; },
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err("GetParameter channel disconnected".to_string()),
+            }
+        }
+    } else {
+        Err("Coordinator not running. VST must be loaded first.".to_string())
+    }
+}
+
+pub fn set_parameter(vst_id: u32, param_id: u32, value: f64) -> Result<(), String> {
+    let coord_lock = COORDINATOR.lock().unwrap();
+    if let Some(coordinator) = coord_lock.as_ref() {
+        coordinator.tx.send(VstCommand::SetParameter(vst_id, param_id, value)).map_err(|e| e.to_string())?;
         Ok(())
     } else {
         Err("Coordinator not running. VST must be loaded first.".to_string())

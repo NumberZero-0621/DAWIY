@@ -19,6 +19,8 @@ const template = doc/*html*/`
     }
     .time-signature-section {
       border-color: rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
     }
     #input {
       color: lightgrey;
@@ -42,22 +44,15 @@ const template = doc/*html*/`
       &:hover{
         font-weight: bold;
       }
-      &:invalid {
+    #input:invalid {
         color:red;
       }
     }
-    #label {
-      color: lightgrey;
-      font-family: Arial;
-      font-size: 14px;
-      margin: 0;
-      padding: 0;
-      border: 0;
-    }
-=  </style>
+  </style>
   <div class="time-signature-section">
+    <link rel="stylesheet" href="style/icons.css">
     <input id="input" value="4/4" id="time-signature" pattern="^([1-9][0-9]*/[1-9][0-9]*)$" maxlength=5> 
-    <span id="label">sig</span> 
+    <i class="icon automation-icon" style="width: 15px; margin-left: 5px; cursor: pointer;"></i>
   </div>
 `;
 

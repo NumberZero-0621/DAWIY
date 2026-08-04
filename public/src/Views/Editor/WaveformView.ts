@@ -41,7 +41,7 @@ export default class WaveformView extends Container {
         super();
         this._editorView = editor;
         this.trackId = track.id;
-        this.color = track.color;
+        this.color = track.color || "#ffcc00";
         this.track = track;
 
 
@@ -57,7 +57,12 @@ export default class WaveformView extends Container {
         this.ghostAutomationGraphics.zIndex = 50;
         this.addChild(this.ghostAutomationGraphics);
 
-        this.setPos(track);
+        if (this.trackId !== -1) {
+            this.setPos(track);
+        } else {
+            this.position.x = 0;
+            this.position.y = 0; // Default, will be reset by resizeCanvas
+        }
     }
 
     /**
@@ -109,15 +114,21 @@ export default class WaveformView extends Container {
     }
 
     public updateAutomationPositions(): void {
+        const track = this.track || this._editorView.app.host;
+        const automationRegions = this.trackId === -1 ? (this._editorView.app.host.bpmAutomationRegion ? [this._editorView.app.host.bpmAutomationRegion] : []) : this.track.automationRegions;
+
         for (let regionView of this.regionViews) {
-            const index = this.track.automationRegions.findIndex(r => r.id === regionView.id);
+            const index = automationRegions.findIndex(r => r.id === regionView.id);
             if (index !== -1) {
-                regionView.y = HEIGHT_TRACK + (index * HEIGHT_AUTOMATION);
+                const baseHeight = (this.track && this.trackId !== -1) ? HEIGHT_TRACK : 0;
+                regionView.y = baseHeight + (index * HEIGHT_AUTOMATION);
             }
         }
     }
 
     public drawGhostAutomations() {
+        if (this.trackId === -1 || !this.track) return; // Host doesn't have ghost automations yet
+        
         this.ghostAutomationGraphics.clear();
 
         const openParams = new Set(this.track.automationRegions.map(r => r.paramId));
@@ -125,6 +136,7 @@ export default class WaveformView extends Container {
         for (const [paramId, points] of this.track.automationData) {
             if (openParams.has(paramId)) continue;
             if (points.length < 2) continue;
+// ...
 
             // Check if values change (simple logic: not flat)
             let hasChange = false;
@@ -145,9 +157,10 @@ export default class WaveformView extends Container {
 
             this.ghostAutomationGraphics.lineStyle(1, color, 0.4);
 
-            this.ghostAutomationGraphics.moveTo(points[0].time / RATIO_MILLS_BY_PX, HEIGHT_TRACK * (1 - points[0].value));
+            const app = this._editorView.app;
+            this.ghostAutomationGraphics.moveTo(app.msToX(points[0].time), HEIGHT_TRACK * (1 - points[0].value));
             for (let i = 1; i < points.length; i++) {
-                this.ghostAutomationGraphics.lineTo(points[i].time / RATIO_MILLS_BY_PX, HEIGHT_TRACK * (1 - points[i].value));
+                this.ghostAutomationGraphics.lineTo(app.msToX(points[i].time), HEIGHT_TRACK * (1 - points[i].value));
             }
         }
     }

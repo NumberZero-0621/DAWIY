@@ -133,6 +133,8 @@ export default class DawProjectLoader {
                                                 const stateStr = await zipFile.async("string");
                                                 try {
                                                     const state = JSON.parse(stateStr);
+                                                    // プロジェクトロード時の自動ポップアップを防ぐため、一時的に非表示フラグを注入
+                                                    state._guiVisible = false;
                                                     await instance.setState(state);
                                                 } catch (e) {
                                                     console.error("Failed to parse or set plugin state", e);

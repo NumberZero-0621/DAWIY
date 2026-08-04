@@ -1,33 +1,48 @@
 import App from "../App";
 import AutomationTrackElement from "../Components/Editor/AutomationTrackElement";
-import { MAX_DURATION_SEC } from "../Env";
+import { MAX_DURATION_SEC, TEMPO } from "../Env";
 import AutomationRegion, { CurveMode, AutomationPoint } from "../Models/Region/AutomationRegion";
 import Track from "../Models/Track/Track";
 import AutomationView from "../Views/AutomationView";
 import ColorPickerView from "../Views/ColorPickerView";
+import ParameterMenuView from "../Views/Editor/Automation/ParameterMenuView";
 
+export interface ParameterDefinition {
+    id: string;
+    label: string;
+    category?: string;
+}
 
 export default class AutomationController {
 
     private _app: App;
     private _view: AutomationView;
     private _colorPicker: ColorPickerView;
+    private _paramMenu: ParameterMenuView;
 
     public static readonly PARAM_VOLUME = "__dawiy_volume__";
     public static readonly PARAM_PAN = "__dawiy_pan__";
-    public static readonly RAMP_GRANULARITY = 0.25; // 250msに増加（パフォーマンス改善）
-
+    public static readonly PARAM_BPM = "__dawiy_bpm__";
+    public static readonly RAMP_GRANULARITY = 0.05; // 50ms (滑らかな変化のため)
+    
     // ストリーミング用の状態管理
     private static readonly LOOK_AHEAD_MS = 2000;  // 2秒先までスケジュール
-    private static readonly UPDATE_INTERVAL_MS = 500; // 500ms毎に更新
+    private static readonly UPDATE_INTERVAL_MS = 50; // 50ms毎に更新 (0.5sから短縮)
     private _streamingInterval: number | null = null;
     private _lastScheduledPlayhead: number = 0; // 最後にスケジュールした再生位置(ms)
     private _isStreaming: boolean = false;
+    private _isBpmAutomating: boolean = false;
+    private _isBpmToggling: boolean = false;
+
+    public get isBpmAutomating(): boolean {
+        return this._isBpmAutomating;
+    }
 
     constructor(app: App) {
         this._app = app;
         this._view = this._app.automationView;
         this._colorPicker = new ColorPickerView();
+        this._paramMenu = new ParameterMenuView();
     }
 
     /**
@@ -46,8 +61,17 @@ export default class AutomationController {
                     await this.addAutomationLane(track, paramId);
                 }
             } else if (track.automationRegions.length === 0) {
-                // 初回あるいは前回情報がない場合はデフォルト（1つ追加）
-                await this.addAutomationLane(track);
+                // 編集済みのパラメータをすべて抽出
+                const automatedIds = track.getAutomatedParamIds();
+                if (automatedIds.length > 0) {
+                    // 全展開
+                    for (const paramId of automatedIds) {
+                        await this.addAutomationLane(track, paramId);
+                    }
+                } else {
+                    // 編集済みがない場合はデフォルト（ボリューム）
+                    await this.addAutomationLane(track);
+                }
             }
         } else {
             // 非表示: 状態を保存してから削除
@@ -60,7 +84,91 @@ export default class AutomationController {
             });
             track.automationRegions = [];
         }
+        track.updateAutomationIcon();
         this._app.editorView.resizeCanvas();
+    }
+
+    /**
+     * Toggles global BPM automation visibility.
+     */
+    public async toggleBpmAutomation(visible: boolean) {
+        if (this._isBpmToggling) return;
+        this._isBpmToggling = true;
+
+        try {
+            const host = this._app.host;
+            
+            // Clean up existing elements regardless of current state if showing or explicitly hiding
+            // Clean up existing elements regardless of current state if showing or explicitly hiding
+            if (visible || host.bpmAutomationRegion) {
+                const els = document.querySelectorAll("#automation-track-bpm");
+                els.forEach(el => this._app.tracksView.removeAutomationTrack(el as any));
+                
+                // Remove ALL existing BPM waveforms to prevent duplicates
+                let existingWave;
+                while (existingWave = this._app.editorView.getWaveFormViewById(-1)) {
+                    this._app.editorView.removeWaveForm({ id: -1 } as any);
+                }
+
+                if (host.bpmAutomationRegion) {
+                    host.bpmAutomationData = host.bpmAutomationRegion.points;
+                    host.bpmAutomationRegion = null;
+                }
+            }
+
+            host.bpmAutomationOpened = visible;
+
+            if (visible) {
+                // Prepare BPM automation data
+                if (host.bpmAutomationData.length === 0) {
+                    host.bpmAutomationData = []; 
+                }
+
+                const region = new AutomationRegion(0, MAX_DURATION_SEC * 1000);
+                region.paramId = AutomationController.PARAM_BPM;
+                region.points = host.bpmAutomationData;
+                host.bpmAutomationRegion = region;
+
+                if (region.points.length === 0) {
+                    await this.initializeBpmRegionPoints(region);
+                }
+
+                this._app.regionsController.addRegion(null as any, region); // Track null for global
+                
+                // UI
+                const paramList = [{ id: AutomationController.PARAM_BPM, label: "BPM" }];
+                this.createBpmAutomationTrackElement(region, paramList);
+            }
+            this._app.editorView.resizeCanvas();
+        } finally {
+            this._isBpmToggling = false;
+        }
+    }
+
+    private async initializeBpmRegionPoints(region: AutomationRegion) {
+        // BPM 60-200 を 0.0-1.0 にマップする標準スケール
+        // (後で動的スケールに対応するが、初期は 120bpm -> 0.5 付近にする)
+        const currentBpm = TEMPO;
+        const normalized = (currentBpm - 60) / (200 - 60);
+        const initialVal = Math.max(0, Math.min(1, normalized));
+
+        region.points = [
+            { time: 0, value: initialVal, curve: CurveMode.Linear },
+            { time: region.duration, value: initialVal, curve: CurveMode.Linear }
+        ];
+        this._app.host.bpmAutomationData = region.points;
+    }
+
+    private createBpmAutomationTrackElement(region: AutomationRegion, paramList: ParameterDefinition[]) {
+        let el = document.createElement("automation-track-element") as AutomationTrackElement;
+        el.id = "automation-track-bpm";
+        
+        // 最上部に追加
+        this._app.tracksView.addBpmAutomationTrack(el);
+        
+        el.setParameters(paramList, region.paramId);
+        el.setButtonsVisible(false); // 新しく追加するメソッド
+        el.setColor("#ffcc00"); // BPM用カラー
     }
 
     /**
@@ -118,6 +226,7 @@ export default class AutomationController {
 
         // 追加ボタンの状態更新（全てのレーンに対してチェック）
         await this.updateAllAutomationLanes(track);
+        track.updateAutomationIcon();
     }
 
     /**
@@ -148,6 +257,7 @@ export default class AutomationController {
         if (track.automationRegions.length === 0) {
             track.isAutomationOpened = false;
         }
+        track.updateAutomationIcon();
     }
 
     private async createAutomationTrackElement(track: Track, region: AutomationRegion, paramList: { id: string, label: string }[]) {
@@ -176,14 +286,18 @@ export default class AutomationController {
         automationTrackElement.setParameters(paramList, region.paramId);
 
         // イベントリスナー設定
-        automationTrackElement.onChange = async (newParamId) => {
-            await this.handleParamChange(track, region, newParamId);
+        automationTrackElement.onParamSelectClick = (x, y) => {
+            const automatedIds = track.getAutomatedParamIds();
+            this._paramMenu.show(x, y, paramList, automatedIds, async (newParamId: string) => {
+                await this.handleParamChange(track, region, newParamId);
 
-            const newColor = region.color || track.color;
-            automationTrackElement.setColor(newColor);
+                const newColor = region.color || track.color;
+                automationTrackElement.setColor(newColor);
+                automationTrackElement.setParameters(paramList, newParamId);
 
-            await this.updateAllAutomationLanes(track);
-            this._app.editorView.resizeCanvas();
+                await this.updateAllAutomationLanes(track);
+                this._app.editorView.resizeCanvas();
+            });
         };
 
         automationTrackElement.onAdd = async () => {
@@ -243,6 +357,31 @@ export default class AutomationController {
         if (regionView) {
             regionView.redraw(region.color, region);
         }
+    }
+
+    /**
+     * パラメータのデフォルト値（正規化済み 0.0 ~ 1.0）を取得する
+     */
+    public async getParameterDefaultValue(track: Track, paramId: string): Promise<number> {
+        if (paramId === AutomationController.PARAM_VOLUME) return 0.5; // Volume default is 1.0 (normalized 0.5 for our internal 0-2 range or similar? No, here it seems 0.5 is 100% gain if it's 0-1.0)
+        if (paramId === AutomationController.PARAM_PAN) return 0.5;    // Pan default is 0.5 (Center)
+
+        const plugin = track.plugins.length > 0 ? track.plugins[0] : null;
+        if (plugin?.instance) {
+            const info = await plugin.instance._audioNode.getParameterInfo(paramId);
+            if (info && info[paramId]) {
+                const defaultValue = info[paramId].defaultValue ?? 0;
+                const min = info[paramId].minValue ?? 0;
+                const max = info[paramId].maxValue ?? 1;
+                const range = max - min;
+                if (range !== 0) {
+                    let normalized = (defaultValue - min) / range;
+                    return Math.max(0, Math.min(1, normalized));
+                }
+                return 0;
+            }
+        }
+        return 0.5; // Fallback
     }
 
     private async initializeRegionPoints(track: Track, region: AutomationRegion) {
@@ -330,18 +469,22 @@ export default class AutomationController {
         }
     }
 
-    private async getAvailableParameters(track: Track): Promise<{ id: string, label: string }[]> {
-        let paramList: { id: string, label: string }[] = [];
-        paramList.push({ id: AutomationController.PARAM_VOLUME, label: "Volume" });
-        paramList.push({ id: AutomationController.PARAM_PAN, label: "Pan" });
+    private async getAvailableParameters(track: Track): Promise<ParameterDefinition[]> {
+        let paramList: ParameterDefinition[] = [];
+        paramList.push({ id: AutomationController.PARAM_VOLUME, label: "Volume", category: "Main" });
+        paramList.push({ id: AutomationController.PARAM_PAN, label: "Pan", category: "Main" });
 
-        if (track.plugins.length > 0 && track.plugins[0].instance) {
-            let params = await track.plugins[0].instance._audioNode.getParameterInfo();
-            for (let paramId in params) {
-                paramList.push({
-                    id: paramId,
-                    label: params[paramId].label || paramId
-                });
+        for (const plugin of track.plugins) {
+            if (plugin.instance) {
+                const pluginName = plugin.name;
+                const params = await plugin.instance._audioNode.getParameterInfo();
+                for (let paramId in params) {
+                    paramList.push({
+                        id: paramId,
+                        label: params[paramId].label || paramId,
+                        category: pluginName
+                    });
+                }
             }
         }
         return paramList;
@@ -561,7 +704,35 @@ export default class AutomationController {
             }
         }
 
+        // 3. Global BPM Automation
+        const host = this._app.host;
+        if (host.bpmAutomationRegion) {
+            this._isBpmAutomating = true;
+            const points = host.bpmAutomationRegion.points;
+            if (points && points.length > 0) {
+                const val = this.interpolateValueAtTime(points, currentPlayhead);
+                const bpm = this.denormalizeBpm(val);
+                // 誤差による頻繁な更新を避けるため
+                if (Math.abs(TEMPO - bpm) > 0.001) {
+                    this._app.hostView.tempoSelector.tempo = bpm;
+                }
+            }
+        }
+
         this._lastScheduledPlayhead = targetPlayhead;
+        this._isBpmAutomating = false;
+    }
+
+    private denormalizeBpm(normalized: number): number {
+        const min = this._app.host.bpmMinDisplay;
+        const max = this._app.host.bpmMaxDisplay;
+        return min + normalized * (max - min);
+    }
+
+    private normalizeBpm(bpm: number): number {
+        const min = this._app.host.bpmMinDisplay;
+        const max = this._app.host.bpmMaxDisplay;
+        return (bpm - min) / (max - min);
     }
 
     /**

@@ -116,11 +116,13 @@ body {
     min-width: var(--track-container-width);
     display: flex;
     flex-direction: column;
+    position: relative; /* REQUIRED for absolute header */
     border-right: 1px solid black;
     border-left: 1px solid black;
     background-color: rgb(23, 23, 26);
     min-height: 100%;
     overflow-y: scroll;
+    padding-top: 25px; /* Added padding to account for absolute header */
     padding-bottom: 15px;
     -ms-overflow-style: none;
     /* IE and Edge */
@@ -128,20 +130,12 @@ body {
     /* Firefox */
 }
 
-#track-container::-webkit-scrollbar {
-    display: none;
-}
-
-#track-container track-element:nth-child(2) {
-    margin-top: 25px;
-}
-
-#track-container .new-track:nth-child(2) {
-    margin-top: 34px;
-}
-
 #track-container-header {
     position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 100; /* Ensure it stays above scrollable items */
     min-height: 25px;
     min-width: 200px;
     border-bottom: 1px solid rgb(0, 0, 0);

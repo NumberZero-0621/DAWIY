@@ -254,17 +254,6 @@ export default class Track extends SoundProvider {
   public isSolo: boolean = false
 
   /**
-   * Is the automation menu opened for this track.
-   */
-  @observed({
-    set(this: Track, value: boolean) {
-      // Trigger a global resize or update if necessary when this changes
-      // For now, we just store the state, the controller will handle layout updates
-    }
-  })
-  public isAutomationOpened: boolean = false;
-
-  /**
    * The automation regions associated with the track.
    * Multiple regions can be displayed simultaneously.
    */
@@ -273,10 +262,61 @@ export default class Track extends SoundProvider {
   /**
    * Stores automation points for each parameter ID.
    */
-  /**
-   * Stores automation points for each parameter ID.
-   */
   public automationData: Map<string, AutomationPoint[]> = new Map();
+
+  /**
+   * Is the automation menu opened for this track.
+   */
+  @observed({
+    set(this: Track, value: boolean) {
+      this.updateAutomationIcon();
+    }
+  })
+  public isAutomationOpened: boolean = false;
+
+  /**
+   * Updates the automation icon state (opened/has-data/none).
+   */
+  public updateAutomationIcon() {
+      this.element.isAutomationOpened = this.isAutomationOpened;
+      this.element.hasAutomation = this.checkIfHasAutomationData();
+  }
+
+  private checkIfHasAutomationData(): boolean {
+      if (!this.automationData || !this.automationRegions) return false;
+      // 1. 保管されているデータを確認
+      for (const [_, points] of this.automationData) {
+          if (this.isPointsAutomated(points)) return true;
+      }
+      // 2. 現在開いているリージョンのデータを確認
+      for (const region of this.automationRegions) {
+          if (this.isPointsAutomated(region.points)) return true;
+      }
+      return false;
+  }
+
+    private isPointsAutomated(points: AutomationPoint[]): boolean {
+        if (points.length < 2) return false;
+        const first = points[0].value;
+        for (let i = 1; i < points.length; i++) {
+            if (points[i].value !== first) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 実際に編集（値の変化）が行われているオートメーションパラメータIDのリストを取得
+     */
+    public getAutomatedParamIds(): string[] {
+        const ids: string[] = [];
+        for (const [paramId, points] of this.automationData) {
+            if (this.isPointsAutomated(points)) {
+                ids.push(paramId);
+            }
+        }
+        return ids;
+    }
+
 
   /**
    * Stores custom color for each parameter ID.

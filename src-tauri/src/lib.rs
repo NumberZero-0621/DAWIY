@@ -101,8 +101,13 @@ mod vst_host;
 mod midi;  // スタンドアロンVST起動モジュール
 
 #[command]
-fn open_vst_editor(path: String, sample_rate: f32) -> Result<u32, String> {
-    vst_host::load_and_open(path, sample_rate)
+fn open_vst_editor(path: String, sample_rate: f32, visible: Option<bool>) -> Result<u32, String> {
+    vst_host::load_and_open(path, sample_rate, visible.unwrap_or(true), None)
+}
+
+#[command]
+fn hide_vst_editor(instance_id: u32) -> Result<(), String> {
+    vst_host::hide_window(instance_id)
 }
 
 #[command]
@@ -143,6 +148,21 @@ fn get_vst_audio(instance_id: u32, req_samples: usize) -> Result<tauri::ipc::Res
     bytes.extend_from_slice(r_bytes);
     
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[command]
+fn get_vst_parameters(instance_id: u32) -> Result<Vec<vst_host::VstParameterInfo>, String> {
+    vst_host::get_parameters(instance_id)
+}
+
+#[command]
+fn get_vst_parameter(instance_id: u32, param_id: u32) -> Result<f64, String> {
+    vst_host::get_parameter(instance_id, param_id)
+}
+
+#[command]
+fn set_vst_parameter(instance_id: u32, param_id: u32, value: f64) -> Result<(), String> {
+    vst_host::set_parameter(instance_id, param_id, value)
 }
 
 #[command]
@@ -189,18 +209,29 @@ pub fn run() {
             send_vst_midi,
         get_vst_audio,
         process_vst_audio,
+        get_vst_parameters,
+        get_vst_parameter,
+        set_vst_parameter,
         midi::list_midi_outputs,
         midi::open_midi_output,
         midi::close_midi_output,
-        midi::send_midi_message
+        midi::send_midi_message,
+        hide_vst_editor
     ])
-    .on_window_event(|window, event| {
+    .on_window_event(|_window, event| {
         match event {
-            tauri::WindowEvent::CloseRequested { .. } => {
-                println!("[TAURI] Window Close Requested (Label: {}). Cleaning up...", window.label());
+            tauri::WindowEvent::Focused(focused) => {
+                // DAWIY本体がフォーカスを得たときだけVSTを最前面にする
+                let _ = vst_host::set_all_vst_topmost(*focused);
             }
-            tauri::WindowEvent::Destroyed => {
-                println!("[TAURI] Window Destroyed (Label: {}).", window.label());
+            tauri::WindowEvent::Resized(_) => {
+                // DAWIY本体の最小化状態をチェックしてVSTの表示を切り替える
+                if let Ok(minimized) = _window.is_minimized() {
+                    let _ = vst_host::set_all_vst_visible(!minimized);
+                }
+            }
+            tauri::WindowEvent::CloseRequested { .. } => {
+                println!("[TAURI] Window Close Requested. Cleaning up...");
             }
             _ => {}
         }

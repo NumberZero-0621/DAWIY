@@ -41,6 +41,63 @@ class VstProxyNode extends CompositeAudioNode {
         // 今後は VstProxyNode 自身の scheduleEvents のみで処理します。
     }
 
+    // 外部からパラメータ一覧を取得する（DAW側からの要求）
+    async getParameterInfo(...parameterIds) {
+        if (!window.__TAURI__ || this.instanceId == null) return {};
+        
+        try {
+            const params = await window.__TAURI__.core.invoke("get_vst_parameters", { instanceId: this.instanceId });
+            
+            const result = {};
+            for (const p of params) {
+                result[p.id.toString()] = {
+                    id: p.id.toString(),
+                    label: p.title || p.short_title || `Param ${p.id}`,
+                    type: p.step_count > 0 ? "discrete" : "float",
+                    minValue: 0,
+                    maxValue: 1,
+                    defaultValue: p.default_value
+                };
+            }
+            if (parameterIds && parameterIds.length > 0) {
+                const filtered = {};
+                for (const id of parameterIds) {
+                    if (result[id]) filtered[id] = result[id];
+                }
+                return filtered;
+            }
+            return result;
+        } catch (e) {
+            console.error("Failed to get VST parameters:", e);
+            return {};
+        }
+    }
+
+    // パラメータ値の取得
+    async getParameterValues(normalized, ...parameterIds) {
+        if (!window.__TAURI__ || this.instanceId == null) return {};
+        if (!parameterIds || parameterIds.length === 0) return {};
+        
+        try {
+            const result = {};
+            for (const id of parameterIds) {
+                const val = await window.__TAURI__.core.invoke("get_vst_parameter", { 
+                    instanceId: this.instanceId, 
+                    paramId: parseInt(id) 
+                });
+                result[id.toString()] = {
+                    id: id.toString(),
+                    value: val,
+                    normalized: normalized
+                };
+            }
+            return result;
+        } catch (e) {
+            console.error("Failed to get VST parameter value:", e);
+            return {};
+        }
+    }
+
     scheduleEvents(...events) {
         // 直接MIDIをRustへ転送する
 
@@ -79,6 +136,29 @@ class VstProxyNode extends CompositeAudioNode {
                                 data2
                             }).catch(err => console.error("VST MIDI failed:", err));
                         }
+                    }
+                }
+            } else if (e.type === 'wam-automation') {
+                const data = e.data;
+                if (data && data.id && data.value !== undefined && window.__TAURI__ && this.instanceId != null) {
+                    const now = this.context.currentTime;
+                    const eventTime = e.time !== undefined ? e.time : now;
+                    let delayMs = (eventTime - now) * 1000;
+                    if (delayMs < 0) delayMs = 0;
+
+                    const sendParam = () => {
+                        if (!window.__TAURI__ || this.instanceId == null) return;
+                        window.__TAURI__.core.invoke("set_vst_parameter", {
+                            instanceId: this.instanceId,
+                            paramId: parseInt(data.id),
+                            value: data.value
+                        }).catch(err => console.error("VST Param failed:", err));
+                    };
+
+                    if (delayMs > 0) {
+                        setTimeout(sendParam, delayMs);
+                    } else {
+                        sendParam();
                     }
                 }
             }
@@ -403,7 +483,7 @@ class VstProxyNode extends CompositeAudioNode {
     _isLoadingVst = false;
 
     /** VSTへのパスを設定する */
-    async setVstPath(path) {
+    async setVstPath(path, visible = false) {
         if (this._isLoadingVst) return;
         if (this.vstPath === path && this.instanceId != null) return;
         this._isLoadingVst = true;
@@ -414,7 +494,8 @@ class VstProxyNode extends CompositeAudioNode {
                 const sampleRate = this.context.sampleRate || 48000;
                 this.instanceId = await window.__TAURI__.core.invoke("open_vst_editor", {
                     path: this.vstPath,
-                    sampleRate: sampleRate
+                    sampleRate: sampleRate,
+                    visible: visible
                 });
                 console.log(`[VstProxy] VST Loaded with instanceId: ${this.instanceId}`);
                 if (this._audioOutputNode) {
@@ -443,7 +524,7 @@ class VstProxyNode extends CompositeAudioNode {
 
     async setState(state) {
         if (state?.vstPath) {
-            await this.setVstPath(state.vstPath);
+            await this.setVstPath(state.vstPath, !!state._guiVisible);
         }
         return super.setState(state);
     }
@@ -489,7 +570,7 @@ export default class VstProxy extends WebAudioModule {
 
         // VSTパスを設定
         if (initialState?.vstPath) {
-            await node.setVstPath(initialState.vstPath);
+            await node.setVstPath(initialState.vstPath, !!initialState._guiVisible);
         }
 
         if (initialState) node.setState(initialState);

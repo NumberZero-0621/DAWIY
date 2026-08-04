@@ -1,5 +1,6 @@
 import { Viewport } from "pixi-viewport";
 import { Application, Graphics } from "pixi.js";
+import App from "../../App";
 import ScrollBarElement from "../../Components/ScrollBarElement";
 import { ScrollEvent } from "../../Controllers/Editor/EditorController";
 import {
@@ -95,22 +96,23 @@ export default class EditorView extends Application {
 
     public onResize: (() => void)[] = [];
 
-    constructor() {
+    /**
+     * The main application.
+     */
+    private _app: App;
+
+    public get app() { return this._app; }
+
+    constructor(app: App) {
         super({
             width: 0,
             height: 0,
         });
+        this._app = app;
         this.canvasContainer.appendChild(this.view as HTMLCanvasElement);
 
         this.width = this.canvasContainer.clientWidth;
         this.height = this.canvasContainer.clientHeight;
-
-        // Use ResizeObserver to detect any layout changes (window resize, plugin rack resize, etc.)
-        const observer = new ResizeObserver(() => {
-            this.resizeCanvas();
-        });
-        observer.observe(this.editorDiv);
-        observer.observe(this.canvasContainer);
 
         this.renderer.resize(this.width, this.height);
 
@@ -160,7 +162,16 @@ export default class EditorView extends Application {
 
         this.stage.addChild(this.viewport);
 
+        // Resize Canvas initially
         this.resizeCanvas();
+
+        // Use ResizeObserver to detect any layout changes (window resize, plugin rack resize, etc.)
+        // Initialized AT THE END to ensure all properties are ready
+        const observer = new ResizeObserver(() => {
+            this.resizeCanvas();
+        });
+        observer.observe(this.editorDiv);
+        observer.observe(this.canvasContainer);
     }
 
     public drawTimelineSelection(x: number, width: number) {
@@ -287,7 +298,11 @@ export default class EditorView extends Application {
     }
 
     public addWaveformView(waveformView: WaveformView) {
-        this.waveforms.push(waveformView);
+        if (waveformView.trackId === -1) {
+            this.waveforms.unshift(waveformView);
+        } else {
+            this.waveforms.push(waveformView);
+        }
         this.resizeCanvas();
         this.grid.resize();
     }
@@ -328,10 +343,13 @@ export default class EditorView extends Application {
                 this.height += (this.editorDiv.clientHeight - this.height) - scrollbarThickness
 
                 let tracksHeight = this.waveforms.reduce((acc, wave) => {
-                    let h = HEIGHT_TRACK;
-                    if (wave.track.isAutomationOpened) {
+                    let h = (wave.track && wave.trackId !== -1) ? HEIGHT_TRACK : 0; // Global BPM waveform has 0 base height
+                    if (wave.track && wave.track.isAutomationOpened) {
                         const laneCount = Math.max(1, wave.track.automationRegions.length);
                         h += HEIGHT_AUTOMATION * laneCount;
+                    } else if (wave.trackId === -1 && this._app.host.bpmAutomationOpened) {
+                        // Global BPM Automation Special case
+                        h += HEIGHT_AUTOMATION;
                     }
                     return acc + h;
                 }, 0) + HEIGHT_NEW_TRACK + 4 + EditorView.LOOP_HEIGHT + EditorView.PLAYHEAD_HEIGHT
@@ -344,26 +362,38 @@ export default class EditorView extends Application {
                 let currentY = EditorView.LOOP_HEIGHT + EditorView.PLAYHEAD_HEIGHT;
                 for (let wave of this.waveforms) {
                     wave.position.y = currentY;
-                    wave.drawGhostAutomations();
-                    currentY += HEIGHT_TRACK;
+                    
+                    if (wave.track && wave.trackId !== -1) {
+                        wave.drawGhostAutomations();
+                        currentY += HEIGHT_TRACK;
+                        
+                        // Draw separator below track
+                        this.separatorsGraphics.moveTo(0, currentY);
+                        this.separatorsGraphics.lineTo(this.worldWidth, currentY);
+                    }
 
-                    // Draw separator below track
-                    this.separatorsGraphics.moveTo(0, currentY);
-                    this.separatorsGraphics.lineTo(this.worldWidth, currentY);
-
-                    if (wave.track.isAutomationOpened) {
+                    // Handle automation lanes (for both tracks and global BPM)
+                    if (wave.track && wave.track.isAutomationOpened) {
                         wave.updateAutomationPositions();
                         const laneCount = Math.max(1, wave.track.automationRegions.length);
                         for (let i = 0; i < laneCount; i++) {
                             currentY += HEIGHT_AUTOMATION;
-
-                            // Draw separator below automation
+                            // Draw separator below each automation lane
                             this.separatorsGraphics.moveTo(0, currentY);
                             this.separatorsGraphics.lineTo(this.worldWidth, currentY);
                         }
+                    } else if (wave.trackId === -1 && this._app.host.bpmAutomationOpened) {
+                        // Global BPM automation special case
+                        // Positioning of points is handled inside wave (WaveformView)
+                        wave.updateAutomationPositions();
+                        currentY += HEIGHT_AUTOMATION;
+                        
+                        // Draw separator below global BPM automation
+                        this.separatorsGraphics.moveTo(0, currentY);
+                        this.separatorsGraphics.lineTo(this.worldWidth, currentY);
                     }
                 }
-                this.worldWidth = Math.max((MAX_DURATION_SEC * 1000) / RATIO_MILLS_BY_PX, this.width)
+                this.worldWidth = Math.max(this._app.msToX(MAX_DURATION_SEC * 1000), this.width)
 
                 this._originalCenter = { x: this.width / 2, y: this.height / 2 }
 

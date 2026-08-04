@@ -80,7 +80,8 @@ export default class VstPluginController {
             // Switch to Native Implementation
             const result = await invoke<string>("open_vst_editor", {
                 path: pluginPath,
-                sampleRate: audioCtx.sampleRate
+                sampleRate: audioCtx.sampleRate,
+                visible: true
             });
             console.log("[VST] Native launch result:", result);
             this.app.showToast("VST plugin launched (Native Mode)!");

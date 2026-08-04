@@ -1,6 +1,7 @@
 import { WamNode } from "@webaudiomodules/sdk";
 import { audioCtx } from "../..";
 import App from "../../App";
+import { TEMPO } from "../../Env";
 import AudioGraph, { AudioGraphInstance } from "../../Audio/Graph/AudioGraph";
 import ObservePlayerNode from "../../Audio/Players/Observer/ObservePlayerNode";
 import ObservePlayerWAM from "../../Audio/Players/Observer/ObservePlayerWAM";
@@ -8,6 +9,8 @@ import SoundProviderElement from "../../Components/Editor/SoundProviderElement";
 import { ReadOnlyObservableArray } from "../../Utils/observable/observables";
 import SoundProvider, { SoundProviderGraphInstance } from "./SoundProvider";
 import Track, { TrackGraphInstance } from "./Track";
+import AutomationRegion, { AutomationPoint } from "../Region/AutomationRegion";
+import TempoMap from "../../Utils/TempoMap";
 /**
  * Host class that work as the master sound provider.
  * Its output is the combined output of all the tracks.
@@ -34,6 +37,43 @@ export default class Host extends SoundProvider {
      * Boolean that indicates if the host is recording.
      */
     public recording: boolean
+
+    /**
+     * BPM automation state
+     */
+    public bpmAutomationOpened: boolean = false;
+    public bpmAutomationRegion: AutomationRegion | null = null;
+    public bpmAutomationData: AutomationPoint[] = [];
+    public bpmMinDisplay: number = 60;
+    public bpmMaxDisplay: number = 200;
+
+    /**
+     * Updates the BPM display range and re-normalizes existing automation points to keep their absolute BPM values.
+     */
+    public updateBpmDisplayRange(newMin?: number, newMax?: number) {
+        const oldMin = this.bpmMinDisplay;
+        const oldMax = this.bpmMaxDisplay;
+        
+        if (newMin !== undefined) this.bpmMinDisplay = Math.max(5, Math.min(this.bpmMaxDisplay - 10, newMin));
+        if (newMax !== undefined) this.bpmMaxDisplay = Math.min(600, Math.max(this.bpmMinDisplay + 10, newMax));
+        
+        if (this.bpmMinDisplay === oldMin && this.bpmMaxDisplay === oldMax) return;
+
+        // Re-normalize all points in the BPM region to maintain their absolute BPM values
+        if (this.bpmAutomationRegion) {
+            this.bpmAutomationRegion.points.forEach((p: any) => {
+                const absoluteBpm = oldMin + p.value * (oldMax - oldMin);
+                p.value = (absoluteBpm - this.bpmMinDisplay) / (this.bpmMaxDisplay - this.bpmMinDisplay);
+                p.value = Math.max(0, Math.min(1, p.value));
+            });
+        }
+    }
+
+    public getTempoMap(pixelsPerBeat: number = 29.67): TempoMap {
+        const points = this.bpmAutomationRegion ? this.bpmAutomationRegion.points : [];
+        const denormalize = (v: number) => this.bpmMinDisplay + v * (this.bpmMaxDisplay - this.bpmMinDisplay);
+        return new TempoMap(points, TEMPO, pixelsPerBeat, denormalize);
+    }
 
     metronome: any;
     metronomeOn: any;

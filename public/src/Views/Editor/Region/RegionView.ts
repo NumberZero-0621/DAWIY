@@ -17,7 +17,7 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
     public id: number;
 
     /** The main editor of the application. */
-    private _editorView: EditorView;
+    protected _editorView: EditorView;
 
     /** The PIXI.Graphics that represent the waveform. */
     private _wave: Graphics;
@@ -59,8 +59,9 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
      * @param region - The region that will contain the buffer to draw.
      */
     public initializeRegionView(color: string, region: REGION): void {
-        this.position.x = region.pos
-        this.region_width = region.width
+        const app = this._editorView.app;
+        this.position.x = app.msToX(region.start);
+        this.region_width = app.msToX(region.end) - this.position.x;
         this._wave.position.x = 0;
 
         // 初期色を保存
@@ -92,7 +93,10 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
         }
         const useColor = this._lastColor || color;
 
-        this.region_width = region.width
+        const app = this._editorView.app;
+        this.position.x = app.msToX(region.start);
+        this.region_width = app.msToX(region.end) - this.position.x;
+
         this._wave.position.x = 0;
         this.drawBackground()
         this.updateMask()
@@ -150,17 +154,18 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
      * @param originalStart - The original start position in milliseconds (before resize began).
      */
     public stretch(duration: number, start: number, originalStart: number): void {
+        const app = this._editorView.app;
         this.scale.x = 1;
-        const newWidth = (duration * 1000) / RATIO_MILLS_BY_PX;
+        const startX = app.msToX(start);
+        const endX = app.msToX(start + duration * 1000);
+        const newWidth = endX - startX;
 
         // Update position
-        this.position.x = start / RATIO_MILLS_BY_PX;
+        this.position.x = startX;
 
         // Shift content to counter-act the position change, keeping it stationary in world space
-        // if start > originalStart (shrunk from left), we moved right. Content must move left.
-        // offset = originalStart - start. 
-        // e.g. orig=0, start=100. offset=-100.
-        const offset = (originalStart - start) / RATIO_MILLS_BY_PX;
+        const originalStartX = app.msToX(originalStart);
+        const offset = originalStartX - startX;
         this._wave.position.x = offset;
 
         // Update visual width (background and mask)

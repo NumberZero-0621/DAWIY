@@ -87,8 +87,8 @@ export default class LoopView extends Container {
      * @param rightTime - The right time of the loop in milliseconds.
      */
     public updatePositionFromTime(leftTime: number, rightTime: number): void {
-        const leftPosition = leftTime / RATIO_MILLS_BY_PX;
-        const rightPosition = rightTime / RATIO_MILLS_BY_PX;
+        const leftPosition = this._editor.app.msToX(leftTime);
+        const rightPosition = this._editor.app.msToX(rightTime);
 
         this.updateHandlePosition(leftPosition, rightPosition-LoopView.HANDLE_WIDTH, true);
     }

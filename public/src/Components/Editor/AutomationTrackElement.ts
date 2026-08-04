@@ -1,5 +1,6 @@
 import { HEIGHT_AUTOMATION } from "../../Env";
 import { doc } from "../../Utils/dom";
+import { ParameterDefinition } from "../../Controllers/AutomationController";
 
 const template = doc/*html*/`
 <style>
@@ -14,6 +15,7 @@ const template = doc/*html*/`
     border-left: solid 1px black;
     border-right: solid 1px black;
     box-sizing: border-box;
+    user-select: none;
 }
 
 .main-content {
@@ -23,6 +25,7 @@ const template = doc/*html*/`
     justify-content: space-evenly;
     padding: 4px;
     height: 100%;
+    overflow: hidden;
 }
 
 .automation-header {
@@ -47,15 +50,26 @@ const template = doc/*html*/`
     gap: 4px;
 }
 
-.param-select {
+.param-selector {
     background-color: #333;
     color: white;
     border: 1px solid #555;
-    padding: 2px 4px;
+    padding: 2px 8px;
     border-radius: 4px;
     font-size: 11px;
     width: 100%;
     box-sizing: border-box;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    height: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.param-selector:hover {
+    background-color: #444;
 }
 
 .btn-container {
@@ -82,7 +96,7 @@ const template = doc/*html*/`
     <div class="automation-header">
         <div class="automation-title">Automation</div>
         <div class="automation-controls">
-            <select class="param-select"></select>
+            <div class="param-selector">Select Parameter</div>
             <div class="btn-container"></div>
         </div>
     </div>
@@ -92,21 +106,23 @@ const template = doc/*html*/`
 
 export default class AutomationTrackElement extends HTMLElement {
 
-    private _paramSelect: HTMLSelectElement;
-    private _addBtn: HTMLButtonElement;
-    private _removeBtn: HTMLButtonElement;
+    private _paramSelector: HTMLDivElement;
+    private _addBtn: HTMLDivElement;
+    private _removeBtn: HTMLDivElement;
+    private _btnContainer: HTMLDivElement;
     private _colorStrip: HTMLDivElement;
 
     public onAdd: (() => void) | null = null;
     public onRemove: (() => void) | null = null;
     public onColorClick: ((x: number, y: number) => void) | null = null;
+    public onParamSelectClick: ((x: number, y: number) => void) | null = null;
 
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
         if (this.shadowRoot) {
             this.shadowRoot.appendChild(template.cloneNode(true));
-            this._paramSelect = this.shadowRoot.querySelector(".param-select") as HTMLSelectElement;
+            this._paramSelector = this.shadowRoot.querySelector(".param-selector") as HTMLDivElement;
             this._colorStrip = this.shadowRoot.querySelector(".color-strip") as HTMLDivElement;
 
             this._colorStrip.addEventListener("click", (e) => {
@@ -116,12 +132,19 @@ export default class AutomationTrackElement extends HTMLElement {
                 }
             });
 
+            this._paramSelector.addEventListener("click", (e) => {
+                if (this.onParamSelectClick) {
+                    const rect = this._paramSelector.getBoundingClientRect();
+                    this.onParamSelectClick(rect.left, rect.bottom);
+                }
+            });
+
             // UI作成
-            const btnContainer = this.shadowRoot.querySelector(".btn-container") as HTMLDivElement;
+            this._btnContainer = this.shadowRoot.querySelector(".btn-container") as HTMLDivElement;
 
 
             // Add Button
-            this._addBtn = document.createElement("div") as any;
+            this._addBtn = document.createElement("div");
             this._addBtn.className = "icon _letter";
             this._addBtn.innerText = "+";
             this._addBtn.style.cursor = "pointer";
@@ -140,7 +163,7 @@ export default class AutomationTrackElement extends HTMLElement {
             this._addBtn.title = "Add Automation Lane";
 
             // Remove Button
-            this._removeBtn = document.createElement("div") as any;
+            this._removeBtn = document.createElement("div");
             this._removeBtn.className = "icon _letter";
             this._removeBtn.innerText = "-";
             this._removeBtn.style.cursor = "pointer";
@@ -158,8 +181,8 @@ export default class AutomationTrackElement extends HTMLElement {
             this._removeBtn.style.width = "40px"; // 幅を指定
             this._removeBtn.title = "Remove Automation Lane";
 
-            btnContainer.appendChild(this._addBtn);
-            btnContainer.appendChild(this._removeBtn);
+            this._btnContainer.appendChild(this._addBtn);
+            this._btnContainer.appendChild(this._removeBtn);
 
             this._addBtn.addEventListener("click", () => {
                 if (this.onAdd && !this._addBtn.classList.contains("disabled")) this.onAdd();
@@ -185,15 +208,9 @@ export default class AutomationTrackElement extends HTMLElement {
         this.style.boxSizing = "border-box";
     }
 
-    public setParameters(params: { id: string, label: string }[], currentId: string) {
-        this._paramSelect.innerHTML = "";
-        params.forEach(p => {
-            const option = document.createElement("option");
-            option.value = p.id;
-            option.text = p.label;
-            option.selected = p.id === currentId;
-            this._paramSelect.appendChild(option);
-        });
+    public setParameters(params: ParameterDefinition[], currentId: string) {
+        const current = params.find(p => p.id === currentId);
+        this._paramSelector.innerText = current ? current.label : "Select Parameter";
     }
 
     public setAddButtonEnabled(enabled: boolean) {
@@ -208,19 +225,16 @@ export default class AutomationTrackElement extends HTMLElement {
         }
     }
 
-    public set onChange(callback: (id: string) => void) {
-        this._paramSelect.onchange = (e) => {
-            const target = e.target as HTMLSelectElement;
-            callback(target.value);
-        }
-    }
-
     public setColor(color: string | null) {
         if (color) {
             this._colorStrip.style.backgroundColor = color;
         } else {
             this._colorStrip.style.backgroundColor = "#555";
         }
+    }
+
+    public setButtonsVisible(visible: boolean) {
+        this._btnContainer.style.display = visible ? "flex" : "none";
     }
 }
 

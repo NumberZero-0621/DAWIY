@@ -264,7 +264,11 @@ export default class PluginsController {
                     try {
                         const plugin = await this.fetchPlugin(actualName);
                         if (plugin) {
-                            await this.selected.addPlugin(plugin);
+                            const instance = await this.selected.addPlugin(plugin);
+                            // 新規追加時は明示的にGUIを表示する
+                            if (instance && (instance as any).instance?.audioNode?.showVstUi) {
+                                (instance as any).instance.audioNode.showVstUi();
+                            }
                             this.updatePluginList();
                         } else {
                             this._app.showToast(`Failed to fetch plugin: ${actualName}`, true);
@@ -288,7 +292,11 @@ export default class PluginsController {
                 // Add the VST wrapper to the rack
                 const plugin = await this.fetchPlugin(actualName);
                 if (plugin) {
-                    await this.selected.addPlugin(plugin);
+                    const instance = await this.selected.addPlugin(plugin);
+                    // 新規追加時は明示的にGUIを表示する
+                    if (instance && (instance as any).instance?.audioNode?.showVstUi) {
+                        (instance as any).instance.audioNode.showVstUi();
+                    }
                     this.updatePluginList();
                 }
                 return;

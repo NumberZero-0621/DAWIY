@@ -36,20 +36,26 @@ export default class MIDIRegionView extends RegionView<MIDIRegion> {
         let maxnote=127
         let amplitude=maxnote-minnote
 
+        const app = this._editorView.app;
+        const regionStartX = app.msToX(region.start);
+
         // Draw notes
         const note_height=(HEIGHT_TRACK-HEIGHT_TRACK/20)/amplitude
-        const note_width=range/region.duration
-        console.log(from,to)
         region.midi.forEachNote((note, start)=>{
-            if(start+note.duration<from) return
-            if(start>to) return
-            const local_note=amplitude-(note.note-minnote)
-            const y=local_note*note_height
-            const x=start*note_width
-            const w=Math.max(1,note.duration*note_width)
-            const h=HEIGHT_TRACK/128*5
+            const absoluteStartMs = region.start + start;
+            if(absoluteStartMs + note.duration < from) return
+            if(absoluteStartMs > to) return
+            
+            const startX = app.msToX(absoluteStartMs) - regionStartX;
+            const endX = app.msToX(absoluteStartMs + note.duration) - regionStartX;
+
+            const local_note = amplitude - (note.note - minnote)
+            const y = local_note * note_height
+            const x = startX
+            const w = Math.max(1, endX - startX)
+            const h = HEIGHT_TRACK / 128 * 5
             target.drawRect(x, y, w, h)
-            target.drawRect(x+w-HEIGHT_TRACK/20, y, HEIGHT_TRACK/20, h)
+            target.drawRect(x + w - HEIGHT_TRACK/20, y, HEIGHT_TRACK/20, h)
         })
     }
 
