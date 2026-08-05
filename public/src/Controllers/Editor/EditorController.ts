@@ -34,25 +34,29 @@ export default class EditorController {
      * The file loaders used to load dragged files.
      * It should return the loaded region or null if the file is not supported.
      */
-    static DRAG_LOADERS: ((start: number, file: ArrayBuffer | string, type: string, onProgressCallback?: (message: any) => void) => Promise<RegionOf<any> | null>)[] = [
+    static DRAG_LOADERS: ((start: number, file: ArrayBuffer | string, type: string, onProgressCallback?: (message: any) => void, name?: string) => Promise<RegionOf<any> | null>)[] = [
         // Load MIDI files through note list
-        async function (start, buffer, type, onProgressCallback) {
+        async function (start, buffer, type, onProgressCallback, name) {
             if (typeof buffer === "string") return null;
             const midi = await parseNoteList(buffer)
             if (midi) return new MIDIRegion(midi, start)
             else return null
         },
         // Load MIDI files
-        async function (start, buffer, type, onProgressCallback) {
+        async function (start, buffer, type, onProgressCallback, name) {
             if (typeof buffer === "string") return null;
-            if (!["audio/mid"].includes(type)) return null
+            if (!["audio/mid"].includes(type) && !name?.toLowerCase().endsWith(".mid") && !name?.toLowerCase().endsWith(".midi")) return null
             const midi = await MIDI.load2(buffer)
             if (midi) return new MIDIRegion(midi, start)
             else return null
         },
         // Load sample files
-        async function (start, buffer, type, onProgressCallback) {
-            if (!["audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav"].includes(type)) return null
+        async function (start, buffer, type, onProgressCallback, name) {
+            const ext = name?.split('.').pop()?.toLowerCase();
+            const isValidExt = ["wav", "mp3", "ogg", "flac", "m4a", "aac"].includes(ext || "");
+            const isValidType = ["audio/mpeg", "audio/ogg", "audio/wav", "audio/x-wav", "audio/mp3", "audio/flac", "audio/aac", "audio/m4a"].includes(type);
+            
+            if (!isValidExt && !isValidType) return null;
             try {
                 if (typeof buffer === "string") {
                     const { invoke, Channel } = await import('@tauri-apps/api/core');
@@ -431,16 +435,6 @@ export default class EditorController {
                 // Filter out items because Tauri `onFileDropEvent` handles local files!
                 // We only handle non-file items (like dragged text/URLs) OR custom web imports here.
                 for (const item of items) {
-                    if (item.kind === 'file') {
-                        const file = item.getAsFile();
-                        if (file) {
-                            const isAudio = file.name.match(/\.(wav|mp3|ogg|flac|m4a|aac)$/i);
-                            if (isAudio && (window as any).__TAURI_INTERNALS__) {
-                                // OS file drops are handled by Tauri's onFileDropEvent to get absolute paths.
-                                continue;
-                            }
-                        }
-                    }
                     const file = item.getAsFile();
                     if (file) {
                         const ext = "." + file.name.split('.').pop()?.toLowerCase();
@@ -559,9 +553,9 @@ export default class EditorController {
                         if (!audioFile) return null
                         target.track.element.name = audioFile.name
                         if ((window as any).__TAURI__ && audioFile.path) {
-                            return { buffer: audioFile.path, type: item.type }
+                            return { buffer: audioFile.path, type: item.type, name: audioFile.name }
                         }
-                        return { buffer: await audioFile.arrayBuffer(), type: item.type }
+                        return { buffer: await audioFile.arrayBuffer(), type: item.type, name: audioFile.name }
                     },
                     target.track,
                     target.start
@@ -585,7 +579,7 @@ export default class EditorController {
         const result = await this.importFile(
             async () => {
                 let file = await fetch(url, { mode: "cors" });
-                return { buffer: await file.arrayBuffer(), type: file.headers.get("content-type") || "" }
+                return { buffer: await file.arrayBuffer(), type: file.headers.get("content-type") || "", name: url.split('/').pop() || "" }
             },
             target.track,
             target.start
@@ -636,11 +630,15 @@ export default class EditorController {
 
     /**
      * Import a file as a region in a track at a given position.
-     * @param bufferLoader The function that loads the file, returning the file content as an arraybuffer and the file type
+     * @param fileProvider The function that loads the file, returning the file content as an arraybuffer and the file type
      * @param track The track to import the file in
      * @param start The start position of the loaded region
      */
-    private async importFile(bufferLoader: () => Promise<{ buffer: ArrayBuffer | string, type: string } | null>, track: Track, start: number): Promise<RegionOf<any> | null> {
+    private async importFile(
+        fileProvider: () => Promise<{ buffer: ArrayBuffer | string, type: string, name?: string } | null>,
+        track: Track,
+        start: number
+    ): Promise<RegionOf<any> | null> {
         if (this._app.host.isPlaying) {
             this._app.hostController.stop();
         }
@@ -648,33 +646,40 @@ export default class EditorController {
         this._view.setLoading(true)
         track.element.progress();
 
-        // Fetch the file
-        const file = await bufferLoader()
-        if (!file) {
+        const fileData = await fileProvider()
+        if (!fileData) {
             this._view.setLoading(false)
             console.error("File could not be loaded")
             return null
         }
 
         // Get the array buff
-        const { buffer, type } = file
+        const { buffer, type, name } = fileData
 
         // Decode the audio file as a node
         let region: RegionOf<any> | null = null
         for (const loader of EditorController.DRAG_LOADERS) {
-            // Try each audio file loader until one can decode the file
-            let loaded_region = await loader(start, buffer, type, (message) => {
-                track.element.progress(message.loaded, message.total);
-            });
-            if (loaded_region !== null) {
-                region = loaded_region
-                this._app.regionsController.addRegion(track, loaded_region)
-                break
-            }
+            region = await loader(start, buffer, type, (message: any) => {
+                if (message.total) track.element.progress(message.loaded, message.total)
+            }, name)
+            if (region) break;
         }
-        track.element.progressDone();
-        this._view.setLoading(false)
-        return region
+
+        if (region) {
+            // Add the region to the track
+            this._app.regionsController.addRegion(track, region);
+            if (this._app.pianoRollController.isVisible) {
+                this._app.pianoRollController.redraw();
+            }
+            this._view.setLoading(false)
+            track.element.progressDone();
+            return region
+        } else {
+            this._view.setLoading(false)
+            track.element.progressDone();
+            console.error("File could not be loaded")
+            return null
+        }
     }
 
 }
