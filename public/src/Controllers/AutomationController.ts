@@ -656,30 +656,30 @@ export default class AutomationController {
         const targetPlayhead = currentPlayhead + AutomationController.LOOK_AHEAD_MS;
 
         for (const track of tracks) {
-            // 1. AudioParam系（Volume/Pan）は最初に一度だけ設定
-            if (currentPlayhead <= this._lastScheduledPlayhead + 100) {
+                // Volume and Pan automation for Rust backend synchronization
                 // Volume
                 const activeVolume = track.automationRegions.find(r => r.paramId === AutomationController.PARAM_VOLUME);
-                if (activeVolume) {
-                    this.applyToAudioParam(track.gainParameter, activeVolume.points, currentTime, currentPlayhead, false);
-                } else {
-                    const volumePoints = track.automationData.get(AutomationController.PARAM_VOLUME);
-                    if (volumePoints && volumePoints.length > 0) {
-                        this.applyToAudioParam(track.gainParameter, volumePoints, currentTime, currentPlayhead, false);
+                const volumePoints = activeVolume ? activeVolume.points : track.automationData.get(AutomationController.PARAM_VOLUME);
+                if (volumePoints && volumePoints.length > 0) {
+                    const val = this.interpolateValueAtTime(volumePoints, currentPlayhead);
+                    // 0.0 - 1.0 => 0.0 - 1.0 (Track Volume natively handles up to 1.0, though UI might allow more)
+                    track.volume = val;
+                    if (track.element) {
+                        track.element.volume = val * 100;
                     }
                 }
 
                 // Pan
                 const activePan = track.automationRegions.find(r => r.paramId === AutomationController.PARAM_PAN);
-                if (activePan) {
-                    this.applyToAudioParam(track.panParameter, activePan.points, currentTime, currentPlayhead, true);
-                } else {
-                    const panPoints = track.automationData.get(AutomationController.PARAM_PAN);
-                    if (panPoints && panPoints.length > 0) {
-                        this.applyToAudioParam(track.panParameter, panPoints, currentTime, currentPlayhead, true);
+                const panPoints = activePan ? activePan.points : track.automationData.get(AutomationController.PARAM_PAN);
+                if (panPoints && panPoints.length > 0) {
+                    const val = this.interpolateValueAtTime(panPoints, currentPlayhead);
+                    // 0.0 - 1.0 => -1.0 - 1.0
+                    track.balance = (val * 2) - 1.0;
+                    if (track.element) {
+                        track.element.balance = track.balance;
                     }
                 }
-            }
 
             // 2. プラグインパラメータはストリーミングでスケジュール
             if (track.plugins.length === 0 || !track.plugins[0].instance?._audioNode) continue;

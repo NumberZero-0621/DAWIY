@@ -569,33 +569,31 @@ export default class PianoRollView extends Container {
         for (const region of track.regions) {
             if (region instanceof MIDIRegion) {
                 region.midi.forEachNote((note, start) => {
+                    const offsetMs = region.offset || 0;
+                    const relativeStartMs = start - offsetMs;
+                    const relativeEndMs = relativeStartMs + note.duration;
+
+                    if (relativeEndMs <= 0 || relativeStartMs >= region.duration) return;
+
+                    const visibleRelativeStartMs = Math.max(0, relativeStartMs);
+                    const visibleRelativeEndMs = Math.min(region.duration, relativeEndMs);
+                    const clippedDuration = visibleRelativeEndMs - visibleRelativeStartMs;
+
+                    if (clippedDuration <= 0) return;
+
                     const rect = new Graphics();
 
                     const isSelected = selectedNotes ? selectedNotes.has(note) : false;
-                    // const fillColor = isSelected ? lightenColor(color, 0.5) : color; 
-
-                    // Velocity coloring: Stronger velocity -> Lighter (White), Weaker -> Darker (Black)
-                    // We mix the track color with Black/White based on velocity
-                    // But typically DAWs make high velocity more saturated/bright and low velocity darker/faded.
-
-                    // Let's try: 
-                    // Base is track `color`.
-                    // We can use mixColors.
-                    // If velocity is high (near 127), mix with White.
-                    // If velocity is low (near 0), mix with Black.
-                    // Standard: 64.
-
                     const velRatio = note.velocity / 127;
                     const noteColor = this.getVelocityColor(color, velRatio);
-
                     const fillColor = isSelected ? lightenColor(noteColor, 0.5) : noteColor;
 
-                    // Global position: Region Start + Note Start
-                    const globalStart = region.start + start;
+                    // Global position: Region Start + Clipped Note Start
+                    const globalStart = region.start + visibleRelativeStartMs;
 
                     const x = globalStart / RATIO_MILLS_BY_PX;
                     const y = (127 - note.note) * this.NOTE_HEIGHT;
-                    const w = Math.max(5, note.duration / RATIO_MILLS_BY_PX);
+                    const w = Math.max(5, clippedDuration / RATIO_MILLS_BY_PX);
                     const h = this.NOTE_HEIGHT;
 
                     rect.beginFill(fillColor);
@@ -715,8 +713,16 @@ export default class PianoRollView extends Container {
         for (const region of track.regions) {
             if (region instanceof MIDIRegion) {
                 region.midi.forEachNote((note, start) => {
-                    const globalStart = region.start + start;
-                    items.push({ note, region, start, globalStart });
+                    const offsetMs = region.offset || 0;
+                    const relativeStartMs = start - offsetMs;
+                    const relativeEndMs = relativeStartMs + note.duration;
+
+                    if (relativeEndMs <= 0 || relativeStartMs >= region.duration) return;
+
+                    const visibleRelativeStartMs = Math.max(0, relativeStartMs);
+                    const globalStart = region.start + visibleRelativeStartMs;
+
+                    items.push({ note, region, start: visibleRelativeStartMs, globalStart });
                 });
             }
         }

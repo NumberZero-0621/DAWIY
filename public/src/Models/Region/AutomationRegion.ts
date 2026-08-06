@@ -72,10 +72,11 @@ export default class AutomationRegion extends RegionOf<AutomationRegion> {
      * Clone the region.
      */
     clone(): AutomationRegion {
-        const newPoints = this.points.map(p => ({ ...p }));
+        const newPoints = this.points.map(p => ({ ...p })); // Still copying points here, could share for true non-destructive if points don't change
         const r = new AutomationRegion(this.start, this.duration, newPoints);
         r.paramId = this.paramId;
         r.color = this.color;
+        r.offset = this.offset;
         return r;
     }
 
@@ -84,27 +85,20 @@ export default class AutomationRegion extends RegionOf<AutomationRegion> {
     }
 
     split(cut: number): [AutomationRegion, AutomationRegion] {
-        // Implementation for splitting automation... 
-        // For now, simple split logic:
-        // region1 gets points < cut
-        // region2 gets points >= cut (adjusted by cut offset)
-        // Also need to inject point at cut.
+        const r1 = this.clone();
+        r1.duration = cut;
 
-        // Simulating simple split for type compatibility.
-        // Real implementation might be needed if user splits regions.
-        // But AutomationRegion is intended to be track-long.
+        const r2 = this.clone();
+        r2.start = this.start + cut;
+        r2.offset = this.offset + cut;
+        r2.duration = Math.max(0, this.duration - cut);
 
-        const r1 = new AutomationRegion(this.start, cut, []);
-        const r2 = new AutomationRegion(this.start + cut, this.duration - cut, []);
-
-        // Distribute points (simple copy for now or todo)
         return [r1, r2];
     }
 
     mergeWith(other: AutomationRegion): void {
-        // Merge points...
-        // Assuming user won't merge automation regions mainly.
-        // Or if they do, we concat points?
+        // In a non-destructive paradigm, mergeWith for simple trimming isn't typically used.
+        // Or if they do, we concat points? (Not implementing complex point merging for simple trims)
     }
 
     async createPlayer(groubid: string, audioContext: BaseAudioContext): Promise<RegionPlayer> {

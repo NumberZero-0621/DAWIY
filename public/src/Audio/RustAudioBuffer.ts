@@ -102,6 +102,28 @@ export default class RustAudioBuffer extends OperableAudioBuffer {
             }
 
             return new RustAudioBuffer(this.bufferId, newLength, this._sampleRate, this._channels, combinedPeaks, this.nativePath, start);
+        } else if (!(that instanceof RustAudioBuffer)) {
+            // Extending region with an empty buffer (e.g. from emptyAlike)
+            // We treat the 'that' buffer as silence in terms of peaks.
+            let beforeLength = start_offset >= 0 ? this.length : that.length;
+            let afterLength = start_offset >= 0 ? that.length : this.length;
+            const newLength = Math.max(beforeLength, afterLength + Math.abs(start_offset));
+            
+            const newPeakPairs = Math.ceil(newLength / 256);
+            const newPeaks = new Float32Array(newPeakPairs * 2);
+            
+            if (start_offset >= 0) {
+                // this is before, that is after
+                newPeaks.set(this._peaks, 0);
+                const start = this.offset;
+                return new RustAudioBuffer(this.bufferId, newLength, this._sampleRate, this._channels, newPeaks, this.nativePath, start);
+            } else {
+                // that is before, this is after
+                const offsetPairs = Math.floor(Math.abs(start_offset) / 256) * 2;
+                newPeaks.set(this._peaks, offsetPairs);
+                const start = this.offset - Math.abs(start_offset); // Note: backend might not like negative offset
+                return new RustAudioBuffer(this.bufferId, newLength, this._sampleRate, this._channels, newPeaks, this.nativePath, Math.max(0, start));
+            }
         } else {
             console.warn("Merging different RustAudioBuffers is not fully supported without memory overhead. Returning silence.");
             return super.merge(that, start_offset);

@@ -69,6 +69,7 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
             this._lastColor = color;
         }
 
+        this._wave.clear()
         this.drawContent(this._wave, color, region, 0, region.duration)
         this.drawBackground()
         this.updateMask()
@@ -116,6 +117,7 @@ export default abstract class RegionView<REGION extends RegionOf<REGION>> extend
         this._wave.position.x = 0;
         this.drawBackground()
         this.updateMask()
+        this._wave.clear()
         this.drawContent(this._wave, color, region, start, from)
     }
 

@@ -141,8 +141,22 @@ export default class Track extends SoundProvider {
           
           if (midiRegion.midi) {
               midiRegion.midi.forEachNote((note: any, start: number) => {
-                  const noteOnTimeMs = regionStartMs + start;
-                  const noteOffTimeMs = noteOnTimeMs + note.duration;
+                  const offsetMs = midiRegion.offset || 0;
+                  const relativeStartMs = start - offsetMs;
+                  const relativeEndMs = relativeStartMs + note.duration;
+
+                  // Cull notes completely outside the visible region
+                  if (relativeEndMs <= 0 || relativeStartMs >= midiRegion.duration) return;
+
+                  // Clip note duration to region boundaries
+                  const visibleRelativeStartMs = Math.max(0, relativeStartMs);
+                  const visibleRelativeEndMs = Math.min(midiRegion.duration, relativeEndMs);
+                  const clippedDuration = visibleRelativeEndMs - visibleRelativeStartMs;
+
+                  if (clippedDuration <= 0) return;
+
+                  const noteOnTimeMs = regionStartMs + visibleRelativeStartMs;
+                  const noteOffTimeMs = noteOnTimeMs + clippedDuration;
                   
                   const noteOnSample = Math.floor((noteOnTimeMs / 1000) * this.audioContext.sampleRate);
                   const noteOffSample = Math.floor((noteOffTimeMs / 1000) * this.audioContext.sampleRate);

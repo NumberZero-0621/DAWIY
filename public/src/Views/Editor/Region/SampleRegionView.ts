@@ -47,14 +47,14 @@ export default class SampleRegionView extends RegionView<SampleRegion> {
                 let rustBuffer = region.buffer as unknown as RustAudioBuffer;
                 let peaks = rustBuffer.peaks;
                 let numChunks = Math.floor(peaks.length / 2); 
-                const chunkDurationMs = region.duration / numChunks;
+                const chunkDurationMs = rustBuffer.duration / numChunks;
                 
                 for (let i = 0; i < regionWidth; i++) {
                     const tCurrent = app.xToMs(regionStartX + i);
                     const tNext = app.xToMs(regionStartX + i + 1);
                     
-                    const relativeStartMs = tCurrent - region.start;
-                    const relativeEndMs = tNext - region.start;
+                    const relativeStartMs = tCurrent - region.start + region.offset;
+                    const relativeEndMs = tNext - region.start + region.offset;
                     
                     let startChunk = Math.floor(relativeStartMs / chunkDurationMs);
                     let endChunk = Math.max(startChunk + 1, Math.floor(relativeEndMs / chunkDurationMs));
@@ -87,8 +87,8 @@ export default class SampleRegionView extends RegionView<SampleRegion> {
                     const tCurrent = app.xToMs(regionStartX + i);
                     const tNext = app.xToMs(regionStartX + i + 1);
                     
-                    const relativeStartMs = tCurrent - region.start;
-                    const relativeEndMs = tNext - region.start;
+                    const relativeStartMs = tCurrent - region.start + region.offset;
+                    const relativeEndMs = tNext - region.start + region.offset;
                     
                     const startSample = Math.floor(relativeStartMs * sampleRate / 1000);
                     const endSample = Math.max(startSample + 1, Math.floor(relativeEndMs * sampleRate / 1000));

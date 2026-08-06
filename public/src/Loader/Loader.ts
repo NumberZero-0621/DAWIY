@@ -130,6 +130,8 @@ export interface ProjectData {
             type: string;
             content_name: string;
             start: number;
+            offset?: number;
+            duration?: number;
             native_path?: string;
         }[]
     }[];
@@ -251,6 +253,8 @@ export default class Loader {
                     content_name,
                     type: region.regionType,
                     start: region.start,
+                    offset: region.offset,
+                    duration: (region as any)._customDuration,
                     native_path: native_path
                 });
             }
@@ -482,6 +486,8 @@ export default class Loader {
                             region.native_path
                         );
                         let newRegion = new SampleRegion(rustBuffer, region.start);
+                        if (region.offset !== undefined) newRegion.offset = region.offset;
+                        if (region.duration !== undefined) newRegion._customDuration = region.duration;
                         
                         if (!track.deleted) {
                             this._app.regionsController.addRegion(track, newRegion);
@@ -528,6 +534,9 @@ export default class Loader {
                         }
 
                         newRegion.start = region.start;
+                        if (region.offset !== undefined) newRegion.offset = region.offset;
+                        if (region.duration !== undefined) (newRegion as any)._customDuration = region.duration;
+
                         this._app.regionsController.addRegion(track, newRegion);
                     } catch (e) {
                         console.error("Failed to decode region", e);

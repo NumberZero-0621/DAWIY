@@ -66,13 +66,22 @@ impl AudioEngineHandle {
                     }
                 };
                 
+                let default_sample_rate = device.default_output_config()
+                    .map(|c| c.sample_rate())
+                    .unwrap_or(cpal::SampleRate(48000));
+
                 let supported_config = supported_configs_range
                     .filter(|c| c.sample_format() == cpal::SampleFormat::F32)
-                    .next()
+                    .find(|c| c.min_sample_rate() <= default_sample_rate && c.max_sample_rate() >= default_sample_rate)
                     .unwrap_or_else(|| device.supported_output_configs().unwrap().next().unwrap());
 
-                let config = supported_config.with_max_sample_rate().config();
+                let config = supported_config.with_sample_rate(default_sample_rate).config();
                 let channels = config.channels as usize;
+                
+                // ミキサー側のサンプルレートも合わせる
+                if let Ok(mut m) = mixer.lock() {
+                    m.sample_rate = config.sample_rate.0;
+                }
                 
                 let err_fn = |err| log::error!("an error occurred on stream: {}", err);
 

@@ -19,20 +19,41 @@ export default class SampleRegion extends RegionOf<SampleRegion> {
     }
 
 
-    override get duration(): number { return this.buffer.duration }
+    _customDuration?: number;
+
+    override get duration(): number { 
+        return this._customDuration ?? Math.max(0, this.buffer.duration - this.offset);
+    }
 
     override split(cut: number): [SampleRegion, SampleRegion] {
-        const [first, second] = this.buffer.split(cut * audioCtx.sampleRate / 1000)
-        return [new SampleRegion(first!, this.start), new SampleRegion(second!, this.start + cut)]
+        const first = this.clone();
+        first._customDuration = cut;
+
+        const second = this.clone();
+        second.start = this.start + cut;
+        second.offset = this.offset + cut;
+        second._customDuration = Math.max(0, this.duration - cut);
+
+        return [first, second];
     }
 
     override clone(): SampleRegion {
-        return new SampleRegion(this.buffer.clone(), this.start);
+        const cloned = new SampleRegion(this.buffer, this.start); // Share the buffer reference for non-destructive edits
+        cloned.offset = this.offset;
+        cloned._customDuration = this._customDuration;
+        return cloned;
     }
 
     override mergeWith(other: SampleRegion): void {
+        // In a non-destructive paradigm, mergeWith for simple trimming isn't typically used.
+        // If we really need to merge disparate buffers, we fall back to the old behavior.
+        // For extending/trimming, RegionController will just adjust customDuration.
         this.buffer = this.buffer.merge(other.buffer, (other.start - this.start) * audioCtx.sampleRate / 1000)
-        if (other.start < this.start) this.start = other.start
+        if (other.start < this.start) {
+            const diff = this.start - other.start;
+            this.start = other.start;
+            this.offset += diff;
+        }
     }
 
     override emptyAlike(start: number, duration: number): SampleRegion {

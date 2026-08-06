@@ -42,12 +42,22 @@ export default class MIDIRegionView extends RegionView<MIDIRegion> {
         // Draw notes
         const note_height=(HEIGHT_TRACK-HEIGHT_TRACK/20)/amplitude
         region.midi.forEachNote((note, start)=>{
-            const absoluteStartMs = region.start + start;
-            if(absoluteStartMs + note.duration < from) return
-            if(absoluteStartMs > to) return
+            const offsetMs = region.offset;
+            const relativeStartMs = start - offsetMs;
+            const relativeEndMs = relativeStartMs + note.duration;
+
+            // Do not draw notes completely outside the visible region
+            if (relativeEndMs <= 0 || relativeStartMs >= region.duration) return;
+
+            // Clip the note drawing to the region boundaries
+            const visibleRelativeStartMs = Math.max(0, relativeStartMs);
+            const visibleRelativeEndMs = Math.min(region.duration, relativeEndMs);
+
+            const absoluteStartMs = region.start + visibleRelativeStartMs;
+            const absoluteEndMs = region.start + visibleRelativeEndMs;
             
             const startX = app.msToX(absoluteStartMs) - regionStartX;
-            const endX = app.msToX(absoluteStartMs + note.duration) - regionStartX;
+            const endX = app.msToX(absoluteEndMs) - regionStartX;
 
             const local_note = amplitude - (note.note - minnote)
             const y = local_note * note_height

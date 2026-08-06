@@ -17,6 +17,8 @@ export default abstract class Region{
     start: number;
     trackId: number=-1;
     id: number=-1;
+    /** The offset from the start of the source data (e.g., audio buffer or MIDI sequence) in milliseconds */
+    offset: number = 0;
 
     /**
      * @param trackId The unique ID of the track. 

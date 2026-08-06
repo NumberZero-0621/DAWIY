@@ -16,26 +16,41 @@ export default class MIDIRegion extends RegionOf<MIDIRegion>{
         this.midi = midi;
     }
     
-    override get duration(): number { return this.midi.duration; }
+    _customDuration?: number;
+
+    override get duration(): number { 
+        return this._customDuration ?? Math.max(0, this.midi.duration - this.offset);
+    }
 
     override split(cut:number): [MIDIRegion, MIDIRegion] {
-        const first=this.midi.view(0,cut-1).clone()
-        const second=this.midi.view(cut-1).clone()
-        return [new MIDIRegion(first, this.start), new MIDIRegion(second, this.start+cut)]
+        const first = this.clone();
+        first._customDuration = cut;
+
+        const second = this.clone();
+        second.start = this.start + cut;
+        second.offset = this.offset + cut;
+        second._customDuration = Math.max(0, this.duration - cut);
+
+        return [first, second];
     }
 
     override clone(): MIDIRegion {
-        return new MIDIRegion(this.midi.clone(), this.start);
+        const cloned = new MIDIRegion(this.midi, this.start); // Share the midi reference for non-destructive edits
+        cloned.offset = this.offset;
+        cloned._customDuration = this._customDuration;
+        return cloned;
     }
 
     override mergeWith(other: MIDIRegion): void {
-        const offset= other.start-this.start
-        if(offset>0) this.midi= this.midi.merge(other.midi, offset)
-        else{
-            this.start= other.start
-            this.midi= other.midi.merge(this.midi, -offset)
+        // In a non-destructive paradigm, mergeWith for simple trimming isn't typically used.
+        const offset = other.start - this.start
+        if(offset > 0) {
+            this.midi = this.midi.merge(other.midi, offset)
+        } else {
+            this.start = other.start
+            this.midi = other.midi.merge(this.midi, -offset)
+            this.offset = 0;
         }
-        
     }
 
     override save(): Blob {

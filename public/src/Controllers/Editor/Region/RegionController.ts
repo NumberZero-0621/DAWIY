@@ -2204,34 +2204,25 @@ export default class RegionController {
             let regionToRemove: RegionOf<any> = originalRegion;
 
             try {
+                regionToAdd = originalRegion.clone() as RegionOf<any>;
+                
                 if (mode === 'LEFT') {
                     const diff = newStartMs - initialStart;
-                    if (diff > 0) { // Shrink from left
-                        if (diff < originalRegion.duration) {
-                            const [, right] = originalRegion.split(diff);
-                            regionToAdd = right as RegionOf<any>;
-                        }
-                    } else if (diff < 0) { // Extend to left
-                        const gapDuration = -diff;
-                        const gapRegion = originalRegion.emptyAlike(newStartMs, gapDuration);
-                        gapRegion.mergeWith(originalRegion as any);
-                        regionToAdd = gapRegion as RegionOf<any>;
-                    }
+                    // Shrink or extend from left.
+                    // The offset shifts along with the start.
+                    // Note: We prevent extending to the left beyond the beginning of the source data (offset 0).
+                    const newOffset = Math.max(0, regionToAdd.offset + diff);
+                    const actualDiff = newOffset - regionToAdd.offset;
+                    
+                    regionToAdd.start = initialStart + actualDiff;
+                    regionToAdd.offset = newOffset;
+                    
+                    const initialEnd = initialStart + initialDuration;
+                    (regionToAdd as any)._customDuration = Math.max(10, initialEnd - regionToAdd.start);
                 } else { // RIGHT
+                    // Start and offset remain the same, only duration changes.
                     const diff = newDurationMs - initialDuration;
-                    if (diff < 0) { // Shrink from right
-                        if (newDurationMs > 0 && newDurationMs < originalRegion.duration) {
-                            const [left] = originalRegion.split(newDurationMs);
-                            regionToAdd = left as RegionOf<any>;
-                        }
-                    } else if (diff > 0) { // Extend to right
-                        const oldEnd = initialStart + initialDuration;
-                        const gapDuration = diff;
-                        const gapRegion = originalRegion.emptyAlike(oldEnd, gapDuration);
-                        const base = originalRegion.clone();
-                        base.mergeWith(gapRegion as any);
-                        regionToAdd = base as RegionOf<any>;
-                    }
+                    (regionToAdd as any)._customDuration = Math.max(10, initialDuration + diff);
                 }
             } catch (e) {
                 console.error("Resize operation failed", e);

@@ -657,11 +657,33 @@ export default class HostController {
               if (midiObj && typeof midiObj.stretch === 'function') {
                 midiObj.stretch(ratio);
               }
-            } else if (region.regionType === "Automation" && 'points' in region) {
-              const points = (region as any).points;
-              if (Array.isArray(points)) {
-                for (const p of points) {
+            }
+          }
+
+          // Scale automation regions and data so they stretch in absolute time,
+          // keeping their visual shape on the grid intact.
+          // Use a Set to prevent double-scaling if references are shared.
+          const scaledPoints = new Set<any>();
+
+          for (const region of track.automationRegions) {
+            if (region.points && Array.isArray(region.points)) {
+              for (const p of region.points) {
+                if (!scaledPoints.has(p)) {
+                  scaledPoints.add(p);
                   p.time *= ratio;
+                }
+              }
+            }
+          }
+          
+          if (track.automationData) {
+            for (const [paramId, points] of track.automationData) {
+              if (points && Array.isArray(points)) {
+                for (const p of points) {
+                  if (!scaledPoints.has(p)) {
+                    scaledPoints.add(p);
+                    p.time *= ratio;
+                  }
                 }
               }
             }
