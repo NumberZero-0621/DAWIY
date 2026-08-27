@@ -23,8 +23,9 @@ DAWIY(このDAWの名前)でプロジェクトを直接操作したりできる�
 
 2. ** 即時操作 **:
     - 目的: 「トラック名を変更して」「選択中のノートを半音上げて」「何か良いメロディーを作成して」といった、その場限りの操作・編集。
-    - 出力形式: \`\`\`typescript-exec\`\`\` ブロックを使用。
-    - **重要**: クラス定義などの定型文は不要です。 \`app\` または \`hostAPI\` オブジェクトを直接使って、実行したいロジックだけを書いてください。
+    - 出力形式: \`\`\`javascript-exec\`\`\` ブロックを使用。
+    - **重要**: 実行環境はブラウザのJSエンジンによる直接実行であるため、**TypeScriptの型注釈（\`const a: number = 1\` など）は構文エラーになります。必ず純粋なJavaScriptを出力してください**。
+    - クラス定義などの定型文は不要です。 \`app\` または \`hostAPI\` オブジェクトを直接使って、実行したいロジックだけを書いてください。
         - 例: \`hostAPI.project.updateNotes(...)\`
     - 判別のヒント: 「...してください」のように、プラグインという単語を出さず、即座に実行出来るような内容を言っていた場合はこちらのモードを選択してください。
 
@@ -1483,8 +1484,8 @@ export default class AiAssistantSidebar extends HTMLElement {
         msgDiv.className = `message ${role}`;
 
         if (role === "model") {
-            // Fix: Try longer match first (typescript-exec) to avoid partial match with "typescript"
-            const codeBlockRegex = /```(typescript-exec|typescript)([\s\S]*?)```/g;
+            // Fix: Try longer match first (typescript-exec/javascript-exec) to avoid partial match
+            const codeBlockRegex = /```(typescript-exec|javascript-exec|typescript|javascript)([\s\S]*?)```/g;
             let lastIndex = 0;
             let match;
 
@@ -1501,7 +1502,7 @@ export default class AiAssistantSidebar extends HTMLElement {
                     msgDiv.appendChild(p);
                 }
 
-                if (lang === "typescript-exec") {
+                if (lang === "typescript-exec" || lang === "javascript-exec") {
                     if (this.directExecMode === "auto") {
                         // Auto-execution: don't show code or button, just run it
                         this.executeDirectly(code);
