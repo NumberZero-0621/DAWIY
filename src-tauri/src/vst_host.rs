@@ -2198,33 +2198,32 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
 
     // 1. Create View (Init -> Controller -> SetupProcessing -> SetActive -> View)
     let mut view: Option<VstPtr<dyn IPlugView>> = None;
-    if visible {
-        println!("[Native] Creating view...");
-        let mut view_ptr_void = edit_controller.create_view(b"editor\0".as_ptr() as *const i8);
-        
-        if view_ptr_void.is_null() {
-            println!("[Native] 'editor' failed. Trying ''...");
-            view_ptr_void = edit_controller.create_view(b"\0".as_ptr() as *const i8);
-        }
-        
-        if view_ptr_void.is_null() {
-            println!("[Native] create_view returned NULL. Trying QueryInterface<IPlugView>...");
-            let i_view_iid = <dyn IPlugView as ComInterface>::IID;
-            let mut view_ptr_qi: *mut c_void = std::ptr::null_mut();
-            if edit_controller.query_interface(&i_view_iid, &mut view_ptr_qi) == kResultOk {
-                 println!("[Native] Success! Controller implements IPlugView.");
-                 view_ptr_void = view_ptr_qi;
-            } else {
-                 println!("[Native] Controller does not implement IPlugView.");
-            }
-        }
-
-        if !view_ptr_void.is_null() {
-             view = Some(VstPtr::<dyn IPlugView>::owned(view_ptr_void as *mut *mut _).unwrap());
-             println!("[Native] View created successfully.");
+    
+    println!("[Native] Creating view...");
+    let mut view_ptr_void = edit_controller.create_view(b"editor\0".as_ptr() as *const i8);
+    
+    if view_ptr_void.is_null() {
+        println!("[Native] 'editor' failed. Trying ''...");
+        view_ptr_void = edit_controller.create_view(b"\0".as_ptr() as *const i8);
+    }
+    
+    if view_ptr_void.is_null() {
+        println!("[Native] create_view returned NULL. Trying QueryInterface<IPlugView>...");
+        let i_view_iid = <dyn IPlugView as ComInterface>::IID;
+        let mut view_ptr_qi: *mut c_void = std::ptr::null_mut();
+        if edit_controller.query_interface(&i_view_iid, &mut view_ptr_qi) == kResultOk {
+             println!("[Native] Success! Controller implements IPlugView.");
+             view_ptr_void = view_ptr_qi;
         } else {
-             println!("[Native] View creation failed. Fallback to Headless mode.");
+             println!("[Native] Controller does not implement IPlugView.");
         }
+    }
+
+    if !view_ptr_void.is_null() {
+         view = Some(VstPtr::<dyn IPlugView>::owned(view_ptr_void as *mut *mut _).unwrap());
+         println!("[Native] View created successfully.");
+    } else {
+         println!("[Native] View creation failed. Fallback to Headless mode.");
     }
 
     if let Some(ref v) = view {
