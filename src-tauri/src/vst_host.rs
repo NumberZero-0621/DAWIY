@@ -15,7 +15,7 @@ static LOADED_LIBRARIES: Lazy<Mutex<HashMap<isize, usize>>> = Lazy::new(|| {
 
 use vst3_sys::base::{kResultOk, IPluginFactory, kNoInterface, IPluginBase, IUnknown, tresult, TBool, kNotImplemented, kInvalidArgument};
 use vst3_sys::vst::{
-    IComponent, IEditController, IHostApplication, IComponentHandler, ParamID, ParamValue
+    IComponent, IEditController, IHostApplication, IComponentHandler, ParamID, ParamValue, IAudioProcessor
 };
 use vst3_sys::gui::{IPlugView, ViewRect, IPlugFrame}; 
 
@@ -73,6 +73,7 @@ struct VstInstance {
     pub component: Option<VstPtr<dyn IComponent>>,
     pub edit_controller: Option<VstPtr<dyn IEditController>>,
     pub view: Option<VstPtr<dyn IPlugView>>,
+    pub processor: Option<VstPtr<dyn vst3_sys::vst::IAudioProcessor>>,
     pub path: String,
     pub midi_events: std::collections::VecDeque<(u8, u8, u8)>,
     pub param_changes: std::collections::VecDeque<(u32, f64)>,
@@ -193,6 +194,9 @@ unsafe extern "system" fn attr_list_query_interface(this: *mut c_void, iid: *con
         *obj = this;
         attr_list_add_ref(this);
         return kResultOk;
+    }
+    if !obj.is_null() {
+        *obj = std::ptr::null_mut();
     }
     kNoInterface
 }
@@ -360,6 +364,9 @@ unsafe extern "system" fn message_query_interface(this: *mut c_void, iid: *const
         message_add_ref(this);
         return kResultOk;
     }
+    if !obj.is_null() {
+        *obj = std::ptr::null_mut();
+    }
     kNoInterface
 }
 unsafe extern "system" fn message_add_ref(this: *mut c_void) -> u32 {
@@ -454,6 +461,9 @@ unsafe extern "system" fn eventlist_query_interface(this: *mut c_void, iid: *con
         *obj = this;
         eventlist_add_ref(this);
         return kResultOk;
+    }
+    if !obj.is_null() {
+        *obj = std::ptr::null_mut();
     }
     kNoInterface
 }
@@ -673,6 +683,9 @@ unsafe fn unified_query_interface(this: *mut UnifiedHost, iid: *const IID, obj: 
         // println!("[Native] Check != IID_ICOMPONENTHANDLER3");
     }
     
+    if !obj.is_null() {
+        *obj = std::ptr::null_mut();
+    }
     kNoInterface
 }
 
@@ -681,8 +694,12 @@ unsafe fn unified_add_ref(this: *mut UnifiedHost) -> u32 {
 }
 unsafe fn unified_release(this: *mut UnifiedHost) -> u32 {
     let val = (*this).ref_count.fetch_sub(1, Ordering::Relaxed);
+    // println!("[Native] unified_release: ref_count going from {} to {}", val, val - 1);
     if val == 1 {
-        let _ = Box::from_raw(this);
+        println!("[Native] unified_release: FREEING UnifiedHost! (PREVENTED/LEAKED)");
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+        // let _ = Box::from_raw(this);
     }
     val as u32 - 1
 }
@@ -791,6 +808,9 @@ unsafe extern "system" fn HostApplication_create_instance(_this: *mut c_void, ci
     }
 
     println!("[Native] HostApplication::create_instance -> Unknown CID. Not Implemented.");
+    if !obj.is_null() {
+        *obj = std::ptr::null_mut();
+    }
     kNotImplemented
 }
 
@@ -822,10 +842,13 @@ unsafe extern "system" fn PlugFrame_query_interface(this: *mut c_void, iid: *con
     if check != <dyn IUnknown as ComInterface>::IID && check != <dyn IPlugFrame as ComInterface>::IID {
         println!("[Native] PlugFrame::QueryInterface unknown IID: {:?}", check);
     }
-    if *iid == <dyn IUnknown as ComInterface>::IID || *iid == <dyn IPlugFrame as ComInterface>::IID {
+    if check == <dyn IUnknown as ComInterface>::IID || check == <dyn IPlugFrame as ComInterface>::IID {
         *obj = this;
         PlugFrame_add_ref(this);
         return kResultOk;
+    }
+    if !obj.is_null() {
+        *obj = std::ptr::null_mut();
     }
     kNoInterface
 }
@@ -999,15 +1022,25 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
         match rx_cmd.recv_timeout(std::time::Duration::from_millis(1)) {
             Ok(cmd) => match cmd {
                 VstCommand::Load(path, sample_rate, visible, parent_hwnd, tx_res) => {
-                     // We need to refactor run_vst_session to create_vst_instance
+                     println!("[Native] VstCommand::Load - Calling create_vst_instance...");
+                     let _ = std::io::stdout().flush();
+                     
                      match create_vst_instance(&path, sample_rate, visible, parent_hwnd) {
                          Ok(mut inst) => {
+                             println!("[Native] create_vst_instance returned Ok! Adding to instances array.");
+                             let _ = std::io::stdout().flush();
+                             
                              inst.id = NEXT_INSTANCE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                              let instance_id = inst.id;
                              instances.push(inst);
+                             
+                             println!("[Native] Sending Ok({}) back to Tauri thread.", instance_id);
+                             let _ = std::io::stdout().flush();
                              let _ = tx_res.send(Ok(instance_id));
                          }
                          Err(e) => {
+                             println!("[Native] create_vst_instance returned Err: {:?}", e);
+                             let _ = std::io::stdout().flush();
                              let _ = tx_res.send(Err(e));
                          }
                      }
@@ -1025,17 +1058,19 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                 }
                 VstCommand::GetAudio(vst_id, req_samples, tx_audio) => {
                     // 対象インスタンスのプロセスを呼び出してオーディオ生成
+
                     let mut found = false;
+                    static FIRST_GET_AUDIO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+                    if FIRST_GET_AUDIO.swap(false, std::sync::atomic::Ordering::Relaxed) {
+                         println!("[Native] GetAudio called for the FIRST time!");
+                         let _ = std::io::stdout().flush();
+                    }
                     for inst in instances.iter_mut() {
                         if inst.id == vst_id {
                             found = true;
                             unsafe {
                                 use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, AudioBusBuffers};
-                                let processor_iid = <dyn IAudioProcessor as vst3_com::ComInterface>::IID;
-                                let mut processor_ptr: *mut c_void = std::ptr::null_mut();
-                                if let Some(comp) = &inst.component {
-                                    if comp.query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
-                                        let processor = vst3_com::VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
+                                if let Some(processor) = &inst.processor {
                                         
                                         let num_samples = req_samples.min(8192); // Increase upper bound logic
                                         let mut out_l = vec![0.0f32; num_samples];
@@ -1142,9 +1177,6 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         }
                                         
                                         let _ = tx_audio.send(Ok((out_l, out_r)));
-                                    } else {
-                                        let _ = tx_audio.send(Err("Failed to get IAudioProcessor".into()));
-                                    }
                                 } else {
                                     let _ = tx_audio.send(Err("No component".into()));
                                 }
@@ -1157,6 +1189,11 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                     }
                 }
                 VstCommand::ProcessAudio(vst_id, req_samples, mut in_l, mut in_r, is_playing, is_offline, playhead_samples, tx_audio) => {
+                    static FIRST_PROCESS_AUDIO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+                    if FIRST_PROCESS_AUDIO.swap(false, std::sync::atomic::Ordering::Relaxed) {
+                         println!("[Native] ProcessAudio called for the FIRST time!");
+                         let _ = std::io::stdout().flush();
+                    }
                     // 対象インスタンスのプロセスを呼び出してオーディオ生成（入力あり）
                     let mut found = false;
                     for inst in instances.iter_mut() {
@@ -1164,11 +1201,7 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                             found = true;
                             unsafe {
                                 use vst3_sys::vst::{IAudioProcessor, ProcessData, ProcessModes, SymbolicSampleSizes, AudioBusBuffers};
-                                let processor_iid = <dyn IAudioProcessor as vst3_com::ComInterface>::IID;
-                                let mut processor_ptr: *mut c_void = std::ptr::null_mut();
-                                if let Some(comp) = &inst.component {
-                                    if comp.query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
-                                        let processor = vst3_com::VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
+                                if let Some(processor) = &inst.processor {
                                         
                                         let num_samples = req_samples.min(8192);
                                         
@@ -1310,9 +1343,6 @@ unsafe fn coordinator_main_loop(rx_cmd: Receiver<VstCommand>) {
                                         }
                                         
                                         let _ = tx_audio.send(Ok((out_l, out_r)));
-                                    } else {
-                                        let _ = tx_audio.send(Err("Failed to get IAudioProcessor".into()));
-                                    }
                                 } else {
                                     let _ = tx_audio.send(Err("No component".into()));
                                 }
@@ -1527,6 +1557,9 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
     // We shouldn't drop this factory immediately. `factory` var keeps it alive.
     // Wait, CreateInstance is called on `factory_vtbl`.
     
+    // Create Unified Host ONCE for both factory context and component initialization
+    let host_app = unsafe { create_unified_host() };
+
     // Check for IPluginFactory3 to set Host Context
     let mut factory3_ptr: *mut c_void = std::ptr::null_mut();
     // Manual QueryInterface on factory (IUnknown)
@@ -1534,8 +1567,6 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
         let res = factory.query_interface(&IID_IPLUGINFACTORY3, &mut factory3_ptr);
         if res == kResultOk && !factory3_ptr.is_null() {
              println!("[Native] Factory supports IPluginFactory3. Setting Host Context...");
-             // Create Host App (we need one anyway)
-             let host_app = create_unified_host();
              let host_unknown = host_app as *mut c_void;
              
              let factory3_vtbl = *(factory3_ptr as *mut *const IPluginFactory3VTableLayout);
@@ -1543,19 +1574,6 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
              
              // Release factory3
              ((*factory3_vtbl).release)(factory3_ptr);
-             
-             // We must keep host_app alive?
-             // Component takes ownership/reference usually. 
-             // But setHostContext implies the factory might use it for creation.
-             // We should probably keep `host_app` until createInstance is done.
-             // But `host_app` is ref-counted.
-             // `create_unified_host` returns a raw pointer with RefCount=1.
-             // If Factory AddRef'd it, good. If not, and we drop it?
-             // We passed raw pointer. We haven't transferred ownership.
-             // If we want to reuse it for component initialization, we should manage it.
-             
-             // Let's store it to pass to initialize() later if needed, or rely on Factory using it.
-             // But `initialize` takes `allocator`? No, `context`.
         }
     }
     
@@ -1651,9 +1669,6 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
     let component = VstPtr::<dyn IComponent>::owned(component_ptr as *mut *mut _).unwrap();
     println!("[Native] Component created.");
     
-    // Unified Host Creation
-    let host_app = create_unified_host();
-    
     // Try kAdvanced instead of kSimple
     component.set_io_mode(vst3_sys::vst::IoModes::kAdvanced as i32);
     if component.initialize(host_app as *mut c_void) != kResultOk {
@@ -1679,6 +1694,7 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
      }
 
     // 4. Edit Controller
+    let mut is_separate_controller = false;
     let edit_controller: VstPtr<dyn IEditController>;
     
     // Check if Component implements IEditController
@@ -1692,6 +1708,7 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
          edit_controller = VstPtr::<dyn IEditController>::owned(edit_controller_ptr as *mut *mut _).unwrap();
     } else {
         println!("[Native] Has separate controller class.");
+        is_separate_controller = true;
         // Look for Controller Class
         let mut controller_cid: Option<IID> = None;
         for i in 0..count {
@@ -1758,10 +1775,14 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
          let unified_unknown = host_app as *mut c_void;
          let unified_vtbl = *(unified_unknown as *mut *const IHostApplicationVTableLayout); 
          if ((*unified_vtbl).query_interface)(unified_unknown, &i_component_handler_iid, &mut handler_ptr) == kResultOk {
-               let handler = VstPtr::<dyn IComponentHandler>::owned(handler_ptr as *mut *mut _).unwrap();
-               // Cast VstPtr (Smart Ptr) to raw pointer, then transmute to SharedVstPtr (Structure wrapping raw ptr)
-               // set_component_handler takes SharedVstPtr<dyn IComponentHandler>
-               // SharedVstPtr is #[repr(transparent)] wrapper around *mut *mut T
+               // handler_ptr is a valid COM object with ref count 1 (from query_interface).
+               let handler = vst3_com::VstPtr::<dyn IComponentHandler>::owned(handler_ptr as *mut *mut _).unwrap();
+               // We need to pass a SharedVstPtr which will call Release on drop.
+               // We manually call add_ref so the reference we pass is balanced, keeping `handler` alive.
+               unsafe {
+                   let vtbl = *(handler_ptr as *mut *const IComponentHandlerVTableLayout);
+                   ((*vtbl).add_ref)(handler_ptr);
+               }
                let shared_handler: vst3_sys::utils::SharedVstPtr<dyn IComponentHandler> = std::mem::transmute(handler.as_ptr());
                if edit_controller.set_component_handler(shared_handler) == kResultOk {
                     println!("[Native] Component Handler set.");
@@ -1809,41 +1830,46 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
         println!("[Native] Controller supports IEditController2.");
     }
 
-    // Connection Point Handshake
-    use vst3_sys::vst::IConnectionPoint;
-    let cp_iid = IID_ICONNECTIONPOINT;
-    let mut comp_cp_ptr: *mut c_void = std::ptr::null_mut();
-    let mut ctrl_cp_ptr: *mut c_void = std::ptr::null_mut();
-    
-    println!("[Native] Attempting ConnectionPoint Handshake...");
-    let res_comp = component.query_interface(&cp_iid, &mut comp_cp_ptr);
-    let res_ctrl = edit_controller.query_interface(&cp_iid, &mut ctrl_cp_ptr);
-    
-    if res_comp == kResultOk && !comp_cp_ptr.is_null() && res_ctrl == kResultOk && !ctrl_cp_ptr.is_null() {
-             println!("[Native] Both support IConnectionPoint. Connecting...");
-             
-             let comp_cp = VstPtr::<dyn IConnectionPoint>::owned(comp_cp_ptr as *mut *mut _).unwrap();
-             let ctrl_cp = VstPtr::<dyn IConnectionPoint>::owned(ctrl_cp_ptr as *mut *mut _).unwrap();
-             
-             // Connect Logic:
-             // Usually Host connects Component -> Controller and Controller -> Component
-             
-             let this_comp = comp_cp.as_ptr() as *mut c_void;
-             let this_ctrl = ctrl_cp.as_ptr() as *mut c_void;
-             let vptr_comp = *(this_comp as *mut *const IConnectionPointVTable);
-             
-             let res_conn1 = ((*vptr_comp).connect)(this_comp, ctrl_cp.as_ptr() as *mut c_void);
-             println!("[Native] IConnectionPoint::Connect (Comp->Ctrl) Result: {}", res_conn1);
-             
-             let vptr_ctrl = *(this_ctrl as *mut *const IConnectionPointVTable);
-             let res_conn2 = ((*vptr_ctrl).connect)(this_ctrl, comp_cp.as_ptr() as *mut c_void);
-             println!("[Native] IConnectionPoint::Connect (Ctrl->Comp) Result: {}", res_conn2);
-             
-             println!("[Native] Connected.");
-             let _ = std::io::stdout().flush();
+    if is_separate_controller {
+        // Connection Point Handshake
+        use vst3_sys::vst::IConnectionPoint;
+        let cp_iid = IID_ICONNECTIONPOINT;
+        let mut comp_cp_ptr: *mut c_void = std::ptr::null_mut();
+        let mut ctrl_cp_ptr: *mut c_void = std::ptr::null_mut();
+        
+        println!("[Native] Attempting ConnectionPoint Handshake...");
+        let res_comp = component.query_interface(&cp_iid, &mut comp_cp_ptr);
+        let res_ctrl = edit_controller.query_interface(&cp_iid, &mut ctrl_cp_ptr);
+        
+        if res_comp == kResultOk && !comp_cp_ptr.is_null() && res_ctrl == kResultOk && !ctrl_cp_ptr.is_null() {
+                 println!("[Native] Both support IConnectionPoint. Connecting...");
+                 
+                 let comp_cp = VstPtr::<dyn IConnectionPoint>::owned(comp_cp_ptr as *mut *mut _).unwrap();
+                 let ctrl_cp = VstPtr::<dyn IConnectionPoint>::owned(ctrl_cp_ptr as *mut *mut _).unwrap();
+                 
+                 // Connect Logic:
+                 // Usually Host connects Component -> Controller and Controller -> Component
+                 
+                 let this_comp = comp_cp.as_ptr() as *mut c_void;
+                 let this_ctrl = ctrl_cp.as_ptr() as *mut c_void;
+                 let vptr_comp = *(this_comp as *mut *const IConnectionPointVTable);
+                 
+                 let res_conn1 = ((*vptr_comp).connect)(this_comp, ctrl_cp.as_ptr() as *mut c_void);
+                 println!("[Native] IConnectionPoint::Connect (Comp->Ctrl) Result: {}", res_conn1);
+                 
+                 let vptr_ctrl = *(this_ctrl as *mut *const IConnectionPointVTable);
+                 let res_conn2 = ((*vptr_ctrl).connect)(this_ctrl, comp_cp.as_ptr() as *mut c_void);
+                 println!("[Native] IConnectionPoint::Connect (Ctrl->Comp) Result: {}", res_conn2);
+                 
+                 println!("[Native] Connected.");
+                 let _ = std::io::stdout().flush();
+        } else {
+                 println!("[Native] ConnectionPoint Handshake Failed or Unsupported (Comp: {:?}/{}, Ctrl: {:?}/{}).", res_comp, !comp_cp_ptr.is_null(), res_ctrl, !ctrl_cp_ptr.is_null());
+        }
     } else {
-             println!("[Native] ConnectionPoint Handshake Failed or Unsupported (Comp: {:?}/{}, Ctrl: {:?}/{}).", res_comp, !comp_cp_ptr.is_null(), res_ctrl, !ctrl_cp_ptr.is_null());
-             // Fallback: State Synchronization via IBStream... (Omitted for brevity in refactor)
+        println!("[Native] Component and Controller are unified. Skipping IConnectionPoint connection.");
+    }
+    // Fallback: State Synchronization via IBStream... (Omitted for brevity in refactor)
              
              // Define IBStream VTable and Struct
              #[repr(C)]
@@ -1892,13 +1918,13 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
              // ISizeableStream check
              let iid_isizeablestream = IID { data: [0xE2, 0x93, 0xD4, 0x6C, 0x5D, 0x05, 0xCB, 0x47, 0x91, 0xA4, 0xDE, 0x48, 0x60, 0x92, 0xFF, 0x76] };
              if check == iid_isizeablestream { // 6CD493E2...
-                  // println!("[Native] IBStream::QueryInterface -> ISizeableStream matched.");
-                  *obj = this;
-                  stream_add_ref(this);
-                  return kResultOk;
+                  // WE DON'T FULLY IMPLEMENT ISizeableStream YET (wrong vtable).
+                  // Return kNoInterface to prevent crash.
              }
 
-            // println!("[Native] IBStream::QueryInterface Unknown IID: {:?}", check);
+            if !obj.is_null() {
+                *obj = std::ptr::null_mut();
+            }
             kNoInterface
         }
         unsafe extern "system" fn stream_add_ref(this: *mut c_void) -> u32 {
@@ -1909,12 +1935,13 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
             let s = &*(this as *const HostMemoryStream);
             let val = s.ref_count.fetch_sub(1, Ordering::Relaxed);
             if val == 1 {
-                let _ = Box::from_raw(this as *mut HostMemoryStream);
+                // LEAK MEMORY
+                // let _ = Box::from_raw(this as *mut HostMemoryStream);
             }
             val as u32 - 1
         }
         unsafe extern "system" fn stream_read(this: *mut c_void, buffer: *mut c_void, num_bytes: i32, num_bytes_read: *mut i32) -> tresult {
-             // use std::io::Write;
+             if buffer.is_null() { return vst3_sys::base::kInvalidArgument; }
              let s = &*(this as *const HostMemoryStream);
              let data = s.data.lock().unwrap();
              let mut cursor_guard = s.cursor.lock().unwrap();
@@ -1922,8 +1949,6 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
              
              let available = data.len().saturating_sub(cursor);
              let to_read = std::cmp::min(available, num_bytes as usize);
-             
-             // println!("[Native] IBStream::read req={} avail={} cursor={} len={} -> reading {}", num_bytes, available, cursor, data.len(), to_read);
              
              if to_read > 0 {
                 std::ptr::copy_nonoverlapping(data.as_ptr().add(cursor), buffer as *mut u8, to_read);
@@ -1938,7 +1963,7 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
         }
 
         unsafe extern "system" fn stream_write(this: *mut c_void, buffer: *mut c_void, num_bytes: i32, num_bytes_written: *mut i32) -> tresult {
-             // println!("[Native] IBStream::write req={}", num_bytes);
+             if buffer.is_null() { return vst3_sys::base::kInvalidArgument; }
              let s = &*(this as *const HostMemoryStream);
              let mut data = s.data.lock().unwrap();
              let mut cursor_guard = s.cursor.lock().unwrap();
@@ -2020,105 +2045,80 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
             set_stream_size: stream_set_stream_size,
         };
 
-        let stream_ptr = Box::into_raw(Box::new(HostMemoryStream {
-            vptr: &STREAM_VTBL,
-            ref_count: AtomicI32::new(1),
-            data: Mutex::new(Vec::new()),
-            cursor: Mutex::new(0),
-        })) as *mut c_void;
-        
-        // Wrap for VstPtr
-        use vst3_sys::vst::IComponent;
-        use vst3_sys::base::IBStream;
-        use vst3_sys::utils::SharedVstPtr;
+        if is_separate_controller {
+            let host_stream = Box::into_raw(Box::new(HostMemoryStream {
+                vptr: &STREAM_VTBL,
+                ref_count: AtomicI32::new(1),
+                data: Mutex::new(Vec::new()),
+                cursor: Mutex::new(0),
+            }));
+            let stream_ptr: *mut c_void = host_stream as *mut c_void;
+            
+            // Wrap for VstPtr
+            use vst3_sys::vst::IComponent;
+            use vst3_sys::base::IBStream;
+            use vst3_sys::utils::SharedVstPtr;
 
-        // transmute raw pointer to SharedVstPtr<dyn IBStream>
-        // SharedVstPtr is transparent wrapper around *mut *mut VTable.
-        // stream_ptr is *mut HostMemoryStream, which starts with *const VTable.
-        let ibstream_wrapper: SharedVstPtr<dyn IBStream> = std::mem::transmute(stream_ptr);
+            // stream_ptr is a valid COM object with ref count 1. 
+            // We use VstPtr to manage it, which DOES NOT increment ref count on creation (owns the existing ref).
+            let ibstream_ptr = vst3_com::VstPtr::<dyn IBStream>::owned(stream_ptr as *mut *mut _).unwrap();
 
-        println!("[Native] Getting state from component...");
-        if component.get_state(ibstream_wrapper) == kResultOk {
-             println!("[Native] Read state from component. Size: {} bytes.", (*(stream_ptr as *mut HostMemoryStream)).data.lock().unwrap().len());
-             
-             // Rewind
-              *(*(stream_ptr as *mut HostMemoryStream)).cursor.lock().unwrap() = 0;
-             
-             // 2. Set State to Controller
-             println!("[Native] Setting state to controller...");
-             let _ = std::io::stdout().flush();
-             // Re-create wrapper because SharedVstPtr<dyn IBStream> is not Copy
-             let ibstream_wrapper_ctrl: SharedVstPtr<dyn IBStream> = std::mem::transmute(stream_ptr);
-             
-             let res_sync = edit_controller.set_component_state(ibstream_wrapper_ctrl);
-             if res_sync == kResultOk {
-                  println!("[Native] State sync successful (set_component_state)!");
-             } else {
-                  println!("[Native] Controller rejected set_component_state. Error Code: {}", res_sync);
-                  
-                  // Try explicit set_state (Controller State)
-                  // Rewind again
+            println!("[Native] Getting state from component...");
+            
+            let ibstream_wrapper1: SharedVstPtr<dyn IBStream> = {
+                 let vtbl = *(stream_ptr as *mut *const IBStreamVTable);
+                 ((*vtbl).add_ref)(stream_ptr);
+                 std::mem::transmute(ibstream_ptr.as_ptr())
+            };
+            
+            if component.get_state(ibstream_wrapper1) == kResultOk {
+                 println!("[Native] Component state saved. Restoring to Controller...");
+                 // Seek to start
                  *(*(stream_ptr as *mut HostMemoryStream)).cursor.lock().unwrap() = 0;
-                  println!("[Native] Attempting edit_controller.set_state (fallback)...");
-                  let _ = std::io::stdout().flush();
-                  
-                  // Re-create wrapper again
-                  let ibstream_wrapper_ctrl2: SharedVstPtr<dyn IBStream> = std::mem::transmute(stream_ptr);
-                  let res_state = edit_controller.set_state(ibstream_wrapper_ctrl2);
-                  if res_state == kResultOk {
-                       println!("[Native] edit_controller.set_state successful!");
-                  } else {
-                       println!("[Native] edit_controller.set_state failed. Error Code: {}", res_state);
+                 
+                 let ibstream_wrapper2: SharedVstPtr<dyn IBStream> = {
+                      let vtbl = *(stream_ptr as *mut *const IBStreamVTable);
+                      ((*vtbl).add_ref)(stream_ptr);
+                      std::mem::transmute(ibstream_ptr.as_ptr())
+                 };
+                 let res_sync = edit_controller.set_component_state(ibstream_wrapper2);
+                 if res_sync == kResultOk {
+                      println!("[Native] State sync successful (set_component_state)!");
+                 } else {
+                      println!("[Native] Controller rejected set_component_state. Error Code: {}", res_sync);
+                      
+                      // Try explicit set_state (Controller State)
+                      // Rewind again
+                     *(*(stream_ptr as *mut HostMemoryStream)).cursor.lock().unwrap() = 0;
+                      println!("[Native] Attempting edit_controller.set_state (fallback)...");
+                      let _ = std::io::stdout().flush();
+                      
+                      let ibstream_wrapper3: SharedVstPtr<dyn IBStream> = {
+                           let vtbl = *(stream_ptr as *mut *const IBStreamVTable);
+                           ((*vtbl).add_ref)(stream_ptr);
+                           std::mem::transmute(ibstream_ptr.as_ptr())
+                      };
+                       let res_state = edit_controller.set_state(ibstream_wrapper3);
+                       if res_state == kResultOk {
+                            println!("[Native] edit_controller.set_state successful!");
+                       } else {
+                            println!("[Native] edit_controller.set_state failed. Error Code: {}", res_state);
+                       }
                   }
+             } else {
+                 println!("[Native] Failed to get state from component.");
              }
-        } else {
-            println!("[Native] Failed to get state from component.");
-        }
-        
-        // Release stream
-        stream_release(stream_ptr);
-    } // End of else (ConnectionPoint failed)
+             
+             // When ibstream_ptr drops here, it will correctly call Release() reducing ref count to 0 and freeing it.
+         } else {
+             println!("[Native] Component and Controller are unified. Skipping state synchronization.");
+         }
 
-    // 1. Create View (Init -> Controller -> View)
-    println!("[Native] Creating view...");
-    let mut fs_name = [0u8; 128]; 
-    let mut view_ptr_void = edit_controller.create_view(fs_name.as_ptr() as *const i8);
-    let mut view_ptr_void2: *mut c_void = std::ptr::null_mut();
-    
-    if view_ptr_void.is_null() {
-        println!("[Native] '' failed. Trying 'editor'...");
-        let editor_s = b"editor\0";
-        for (i, &b) in editor_s.iter().enumerate() { fs_name[i] = b; }
-        view_ptr_void2 = edit_controller.create_view(fs_name.as_ptr() as *const i8);
-        if !view_ptr_void2.is_null() {
-             println!("[Native] 'editor' worked.");
-             view_ptr_void = view_ptr_void2;
-             println!("[Native] View created with 'editor'.");
-        }
-    }
-    
-    if view_ptr_void.is_null() && view_ptr_void2.is_null() {
-        println!("[Native] create_view returned NULL. Trying QueryInterface<IPlugView>...");
-        let i_view_iid = <dyn IPlugView as ComInterface>::IID;
-        let mut view_ptr_qi: *mut c_void = std::ptr::null_mut();
-        if edit_controller.query_interface(&i_view_iid, &mut view_ptr_qi) == kResultOk {
-             println!("[Native] Success! Controller implements IPlugView.");
-             view_ptr_void = view_ptr_qi;
-        } else {
-             println!("[Native] Controller does not implement IPlugView.");
-        }
-    }
-    
-    let mut view: Option<VstPtr<dyn IPlugView>> = None;
-    if !view_ptr_void.is_null() {
-          view = Some(VstPtr::<dyn IPlugView>::owned(view_ptr_void as *mut *mut _).unwrap());
-          println!("[Native] View created successfully.");
-    }
-    
     // 2. Audio Bus Initialization & Arrangement
     use vst3_sys::vst::{IAudioProcessor, BusDirections, MediaTypes, ProcessSetup, ProcessModes, SymbolicSampleSizes};
     let processor_iid = <dyn IAudioProcessor as ComInterface>::IID;
     let mut processor_ptr: *mut c_void = std::ptr::null_mut();
+    let mut kept_processor: Option<VstPtr<dyn IAudioProcessor>> = None;
     if component.query_interface(&processor_iid, &mut processor_ptr) == kResultOk {
         println!("[Native] IAudioProcessor interface obtained.");
         let processor = VstPtr::<dyn IAudioProcessor>::owned(processor_ptr as *mut *mut _).unwrap();
@@ -2127,11 +2127,11 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
         let num_outputs = component.get_bus_count(MediaTypes::kAudio as i32, BusDirections::kOutput as i32);
         println!("[Native] Bus Count: Inputs={}, Outputs={}", num_inputs, num_outputs);
 
-        let mut input_arrangements = vec![3u64; num_inputs as usize];
-        let mut output_arrangements = vec![3u64; num_outputs as usize];
+        let input_arrangements = Box::into_raw(Box::new(vec![3u64; num_inputs as usize]));
+        let output_arrangements = Box::into_raw(Box::new(vec![3u64; num_outputs as usize]));
         
-        let input_ptr = if num_inputs > 0 { input_arrangements.as_mut_ptr() } else { std::ptr::null_mut() };
-        let output_ptr = if num_outputs > 0 { output_arrangements.as_mut_ptr() } else { std::ptr::null_mut() };
+        let input_ptr = if num_inputs > 0 { unsafe { (*input_arrangements).as_mut_ptr() } } else { std::ptr::null_mut() };
+        let output_ptr = if num_outputs > 0 { unsafe { (*output_arrangements).as_mut_ptr() } } else { std::ptr::null_mut() };
 
         println!("[Native] Setting Bus Arrangements...");
         if processor.set_bus_arrangements(input_ptr, num_inputs, output_ptr, num_outputs) == kResultOk {
@@ -2150,37 +2150,39 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
             println!("[Native] WARNING: Plugin does not support 32-bit audio processing!");
         }
 
-        let setup = ProcessSetup {
+        let setup = Box::into_raw(Box::new(ProcessSetup {
             process_mode: ProcessModes::kRealtime as i32,
             symbolic_sample_size,
             max_samples_per_block: 4096,
             sample_rate: sample_rate as f64,
-        };
+        }));
         println!("[Native] ProcessSetup Size: {} bytes, Align: {}", std::mem::size_of::<ProcessSetup>(), std::mem::align_of::<ProcessSetup>());
         println!("[Native] Setting up processing (SR=44100, Block=512, Sample={}-bit)...", if symbolic_sample_size == SymbolicSampleSizes::kSample64 as i32 { 64 } else { 32 });
-        if processor.setup_processing(&setup) == kResultOk {
+        if unsafe { processor.setup_processing(&*setup) } == kResultOk {
              println!("[Native] Processing setup successful.");
         } else {
              println!("[Native] Failed to setup processing.");
         }
-        
+        // Activate Component
+        println!("[Native] Activating component...");
+        let _ = std::io::stdout().flush();
+        if component.set_active(1) != kResultOk {
+            println!("[Native] WARNING: Failed to activate component.");
+        } else {
+            println!("[Native] Component activated.");
+        }
+
         println!("[Native] Setting processing to true...");
         if processor.set_processing(1) == kResultOk {
              println!("[Native] set_processing(1) successful.");
         } else {
              println!("[Native] Failed to set_processing(1).");
         }
+        
+        kept_processor = Some(processor);
     }
     
-    // Activate Component
-    println!("[Native] Activating component...");
-    let _ = std::io::stdout().flush();
-    if component.set_active(1) != kResultOk {
-        println!("[Native] WARNING: Failed to activate component.");
-    } else {
-        println!("[Native] Component activated.");
-    }
-    
+
     // Parameter Scan (Post-Activation)
     println!("[Native] Scanning parameters (Post-Activation)...");
     let param_count = edit_controller.get_parameter_count();
@@ -2194,29 +2196,36 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
         }
     }
 
+    // 1. Create View (Init -> Controller -> SetupProcessing -> SetActive -> View)
+    let mut view: Option<VstPtr<dyn IPlugView>> = None;
+    if visible {
+        println!("[Native] Creating view...");
+        let mut view_ptr_void = edit_controller.create_view(b"editor\0".as_ptr() as *const i8);
+        
+        if view_ptr_void.is_null() {
+            println!("[Native] 'editor' failed. Trying ''...");
+            view_ptr_void = edit_controller.create_view(b"\0".as_ptr() as *const i8);
+        }
+        
+        if view_ptr_void.is_null() {
+            println!("[Native] create_view returned NULL. Trying QueryInterface<IPlugView>...");
+            let i_view_iid = <dyn IPlugView as ComInterface>::IID;
+            let mut view_ptr_qi: *mut c_void = std::ptr::null_mut();
+            if edit_controller.query_interface(&i_view_iid, &mut view_ptr_qi) == kResultOk {
+                 println!("[Native] Success! Controller implements IPlugView.");
+                 view_ptr_void = view_ptr_qi;
+            } else {
+                 println!("[Native] Controller does not implement IPlugView.");
+            }
+        }
 
-
-
-
-
-
-    /* 
-    if view_ptr_void.is_null() {
-            println!("[Native] create_view returned NULL.");
-            // return Err("No view returned from create_view".into()); // ALLOW CONTINUE
+        if !view_ptr_void.is_null() {
+             view = Some(VstPtr::<dyn IPlugView>::owned(view_ptr_void as *mut *mut _).unwrap());
+             println!("[Native] View created successfully.");
+        } else {
+             println!("[Native] View creation failed. Fallback to Headless mode.");
+        }
     }
-    let view = VstPtr::<dyn IPlugView>::owned(view_ptr_void as *mut *mut _).unwrap();
-    println!("[Native] View created.");
-    */
-    
-    /* 
-    if !view_ptr_void.is_null() {
-         view = Some(VstPtr::<dyn IPlugView>::owned(view_ptr_void as *mut *mut _).unwrap());
-         println!("[Native] View created immediately.");
-    } else {
-         println!("[Native] View creation invalid. Entering loop and will retry...");
-    }
-    */
 
     if let Some(ref v) = view {
         // Attach View info to Window for Resize
@@ -2247,9 +2256,7 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
         println!("[Native] Attaching view...");
         match v.attached(hwnd.0 as *mut c_void, type_hwnd) {
              kResultOk => {
-                 println!("[Native] Attached successfully. Forcing hide...");
-                 // プラグインが勝手に表示するのを防ぐため強制的に隠す
-                 windows::Win32::UI::WindowsAndMessaging::ShowWindow(hwnd, windows::Win32::UI::WindowsAndMessaging::SW_HIDE);
+                 println!("[Native] Attached successfully.");
              },
              err => println!("[Native] Attach failed: {}", err),
         }
@@ -2277,10 +2284,9 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
             ShowWindow(hwnd, SW_SHOW);
         }
     }
-    
-    // Set Timer for retry (every 1000ms)
-    SetTimer(hwnd, 1, 1000, None);
 
+    println!("[Native] create_vst_instance about to return Ok(VstInstance)...");
+    let _ = std::io::stdout().flush();
     
     // Return Instance
     Ok(VstInstance {
@@ -2292,6 +2298,7 @@ unsafe fn create_vst_instance(path: &str, sample_rate: f32, visible: bool, _pare
         component: Some(component),
         edit_controller: Some(edit_controller),
         view,
+        processor: kept_processor,
         midi_events: std::collections::VecDeque::new(),
         param_changes: std::collections::VecDeque::new(),
         is_ui_visible: visible, 
@@ -2412,10 +2419,14 @@ impl Drop for VstInstance {
     fn drop(&mut self) {
         println!("[Native] VstInstance Dropping... Cleaning up resources.");
         unsafe {
+            if let Some(processor) = self.processor.take() {
+                println!("[Native] Stopping processing...");
+                let _ = processor.set_processing(0);
+            }
             if let Some(component) = self.component.take() {
                 // 1. Deactivate
                 println!("[Native] Deactivating component...");
-                component.set_active(0);
+                let _ = component.set_active(0);
                 
                 // 2. Remove View
                 if let Some(v) = self.view.take() {
