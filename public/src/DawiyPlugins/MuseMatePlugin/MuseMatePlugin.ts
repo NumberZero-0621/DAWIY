@@ -20,9 +20,12 @@ export default class MuseMatePlugin extends DawiyPluginBase {
     // We want this plugin to show up as a UI component.
     override categories: ('generator' | 'modifier' | 'analysis' | 'io' | 'ui')[] = ['ui'];
 
-    private gameLogic!: GameLogic;
     private chatEngine!: ChatEngine;
+    private gameLogic!: GameLogic;
     private characterUI!: CharacterUI;
+
+    private directExecMode: "developer" | "auto" = "developer";
+    private createdPluginsInSession: Set<string> = new Set();
 
     private chatMessagesArea!: HTMLDivElement;
     private affectionDisplay!: HTMLSpanElement;
@@ -36,6 +39,9 @@ export default class MuseMatePlugin extends DawiyPluginBase {
     }
 
     public override onInit(host: HostAPI) {
+        // Load settings from localStorage
+        this.directExecMode = (localStorage.getItem("musemate_direct_exec_mode") as any) || "developer";
+
         // Initialize logic
         this.gameLogic = new GameLogic(() => this.updateUI());
 
@@ -104,17 +110,24 @@ export default class MuseMatePlugin extends DawiyPluginBase {
         charArea.className = "mm-character-area";
         this.characterUI.attachTo(charArea);
 
+        // Status / Header Area
+        const headerArea = document.createElement("div");
+        headerArea.className = "mm-header-area";
+
+        this.affectionDisplay = document.createElement("div");
+        this.affectionDisplay.className = "mm-affection-display";
+        this.affectionDisplay.innerText = "💖 好感度： 0";
+        headerArea.appendChild(this.affectionDisplay);
+
+        root.appendChild(headerArea);
+
         // --- Status Bar ---
         const statusBar = document.createElement("div");
         statusBar.className = "mm-status-bar";
 
-        this.affectionDisplay = document.createElement("span");
-        this.affectionDisplay.className = "mm-affection";
-
         this.timerDisplay = document.createElement("span");
         this.timerDisplay.className = "mm-timer";
 
-        statusBar.appendChild(this.affectionDisplay);
         statusBar.appendChild(this.timerDisplay);
 
         // --- Chat Area ---
@@ -351,6 +364,13 @@ export default class MuseMatePlugin extends DawiyPluginBase {
                 <label>COEIROINKのURL</label>
                 <input type="text" id="mm-coeiroink" class="form-control form-control-sm" value="http://127.0.0.1:50032" />
             </div>
+            <div>
+                <label>即時操作モード</label>
+                <select id="mm-exec-mode" class="form-select form-select-sm">
+                    <option value="developer">確認あり (コード表示)</option>
+                    <option value="auto">確認なし (自動実行)</option>
+                </select>
+            </div>
             <button id="mm-save-settings" class="btn btn-sm btn-primary mt-2">保存して閉じる</button>
         `;
 
@@ -361,6 +381,7 @@ export default class MuseMatePlugin extends DawiyPluginBase {
             const geminiKey = document.getElementById("mm-gemini-key") as HTMLInputElement;
             const openaiKey = document.getElementById("mm-openai-key") as HTMLInputElement;
             const coeiroink = document.getElementById("mm-coeiroink") as HTMLInputElement;
+            const execMode = document.getElementById("mm-exec-mode") as HTMLSelectElement;
             const saveBtn = document.getElementById("mm-save-settings") as HTMLButtonElement;
 
             // Set initial values
@@ -369,6 +390,12 @@ export default class MuseMatePlugin extends DawiyPluginBase {
             geminiKey.value = engine.apiKeyGemini || "";
             openaiKey.value = engine.apiKeyOpenAI || "";
             coeiroink.value = engine.coeiroinkUrl || "http://127.0.0.1:50032";
+            execMode.value = this.directExecMode;
+
+            execMode.onchange = () => {
+                this.directExecMode = execMode.value as any;
+                localStorage.setItem("musemate_direct_exec_mode", this.directExecMode);
+            };
 
             let selectedGeminiModel = engine.modelGemini || "gemini-2.5-flash";
             let selectedOpenAIModel = engine.modelOpenAI || "gpt-4o";
@@ -440,9 +467,169 @@ export default class MuseMatePlugin extends DawiyPluginBase {
     private addChatMessage(message: string, isUser: boolean) {
         const msgDiv = document.createElement("div");
         msgDiv.className = `mm-chat-message ${isUser ? 'user' : 'bot'}`;
-        msgDiv.innerText = message;
+
+        if (isUser || message.startsWith("[SYSTEM]")) {
+            msgDiv.innerText = message;
+        } else {
+            // Parse code blocks for bot messages
+            const codeBlockRegex = /```(typescript-exec|javascript-exec|typescript|javascript)([\s\S]*?)```/g;
+            let lastIndex = 0;
+            let match;
+            let foundCode = false;
+
+            while ((match = codeBlockRegex.exec(message)) !== null) {
+                foundCode = true;
+                const lang = match[1];
+                const code = match[2].trim();
+
+                const before = message.substring(lastIndex, match.index);
+                if (before.trim()) {
+                    const p = document.createElement("div");
+                    p.innerText = before.trim();
+                    msgDiv.appendChild(p);
+                }
+
+                if (lang === "typescript-exec" || lang === "javascript-exec") {
+                    if (this.directExecMode === "auto") {
+                        this.executeDirectly(code);
+                    } else {
+                        const pre = document.createElement("pre");
+                        pre.innerText = code;
+                        pre.style.background = "#212529";
+                        pre.style.color = "#ffffff";
+                        pre.style.padding = "10px";
+                        pre.style.borderRadius = "5px";
+                        pre.style.overflowX = "auto";
+                        msgDiv.appendChild(pre);
+
+                        const execBtn = document.createElement("button");
+                        execBtn.innerText = "▶ 今すぐ実行 (Execute Now)";
+                        execBtn.style.marginTop = "5px";
+                        execBtn.style.padding = "5px 10px";
+                        execBtn.style.background = "#ffc107";
+                        execBtn.style.border = "none";
+                        execBtn.style.borderRadius = "3px";
+                        execBtn.style.cursor = "pointer";
+                        execBtn.onclick = () => this.executeDirectly(code);
+                        msgDiv.appendChild(execBtn);
+                    }
+                } else if (lang === "typescript" || lang === "javascript") {
+                    const pre = document.createElement("pre");
+                    pre.innerText = code;
+                    pre.style.background = "#212529";
+                    pre.style.color = "#ffffff";
+                    pre.style.padding = "10px";
+                    pre.style.borderRadius = "5px";
+                    pre.style.overflowX = "auto";
+                    msgDiv.appendChild(pre);
+
+                    const btn = document.createElement("button");
+                    const classNameMatch = code.match(/class\s+(\w+)/);
+                    const className = classNameMatch ? classNameMatch[1] : "GeneratedPlugin";
+
+                    const codeHash = className + "_" + this.hashCode(code);
+                    if (this.createdPluginsInSession.has(codeHash)) {
+                        btn.disabled = true;
+                        btn.innerText = "✔️ 作成済み";
+                        btn.style.background = "#28a745";
+                    } else {
+                        btn.innerText = "🔧 プラグインを作成";
+                        btn.onclick = async () => {
+                            const success = await this.createPlugin(className, code);
+                            if (success) {
+                                btn.disabled = true;
+                                btn.innerText = "✔️ 作成済み";
+                                btn.style.background = "#28a745";
+                                btn.style.cursor = "default";
+                                this.createdPluginsInSession.add(codeHash);
+                            }
+                        };
+                    }
+                    btn.style.marginTop = "5px";
+                    btn.style.padding = "5px 10px";
+                    btn.style.border = "none";
+                    btn.style.borderRadius = "3px";
+                    btn.style.cursor = "pointer";
+                    if (!btn.disabled) btn.style.background = "#0d6efd";
+                    btn.style.color = "white";
+                    msgDiv.appendChild(btn);
+                }
+
+                lastIndex = match.index + match[0].length;
+            }
+
+            const remaining = message.substring(lastIndex);
+            if (remaining.trim()) {
+                const p = document.createElement("div");
+                p.innerText = remaining.trim();
+                msgDiv.appendChild(p);
+            }
+
+            if (!foundCode) {
+                msgDiv.innerText = message;
+            }
+        }
+
         this.chatMessagesArea.appendChild(msgDiv);
         this.chatMessagesArea.scrollTop = this.chatMessagesArea.scrollHeight;
+    }
+
+    private hashCode(str: string): number {
+        let hash = 0;
+        for (let i = 0, len = str.length; i < len; i++) {
+            let chr = str.charCodeAt(i);
+            hash = (hash << 5) - hash + chr;
+            hash |= 0;
+        }
+        return hash;
+    }
+
+    private async createPlugin(className: string, code: string): Promise<boolean> {
+        const filename = `${className}/${className}.ts`;
+        const confirmed = window.confirm(`プラグイン ${filename} を生成し、ホットリロードを実行しますか？`);
+        if (!confirmed) return false;
+
+        try {
+            const response = await fetch('/upload-plugin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain',
+                    'x-filename': filename
+                },
+                body: code
+            });
+
+            if (response.ok) {
+                // (removed system message for successful save)
+                return true;
+            } else {
+                const text = await response.text();
+                this.addChatMessage(`[SYSTEM] プラグインの保存に失敗しました: ` + text, false);
+                return false;
+            }
+        } catch (e: any) {
+            this.addChatMessage(`[SYSTEM] エラー: ` + e.message, false);
+            return false;
+        }
+    }
+
+    private async executeDirectly(code: string) {
+        console.log("%c[MuseMate] Executing Direct Code:", "color: #ff69b4; font-weight: bold; background: #212529; padding: 2px 5px; border-radius: 3px;");
+        console.log(code);
+
+        try {
+            // @ts-ignore
+            const app = (window as any).app;
+            const hostAPI = app.hostAPI;
+
+            const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
+            const fn = new AsyncFunction('app', 'hostAPI', code);
+            await fn(app, hostAPI);
+
+        } catch (e: any) {
+            this.addChatMessage("[SYSTEM] 直接操作の実行に失敗しました: " + e.message, false);
+            console.error("Direct Execution Error:", e);
+        }
     }
 
     private thinkingMsgDiv: HTMLDivElement | null = null;
@@ -465,7 +652,7 @@ export default class MuseMatePlugin extends DawiyPluginBase {
 
     private updateUI() {
         if (this.affectionDisplay) {
-            this.affectionDisplay.innerText = `💖 好感度： ${this.gameLogic.getAffectionScore()}`;
+            this.affectionDisplay.innerText = `♡ 好感度： ${this.gameLogic.getAffectionScore()}`;
         }
         if (this.timerDisplay) {
             if (this.gameLogic.isTimerRunning) {

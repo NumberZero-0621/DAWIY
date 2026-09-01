@@ -193,8 +193,9 @@ Tauri環境とWeb環境の両方で動作する抽象化レイヤーです。
   - 使用例: `const reg = this.app.hostAPI.project.getSelectedRegion(); if (reg) { this.app.hostAPI.project.addNotesToRegion(reg, [...]); }`
 - `hostAPI.project.getSelectedNotes()`: ピアノロールで選択されているノートを `{ note: MIDINote, region: MIDIRegion, globalStart: number }[]` の形式で取得します。
 - `hostAPI.project.updateNotes(updates)`: ノートの情報を更新します。`{ region, note, pitch?, start?, duration?, velocity? }[]` を受け取ります。
+  - **重要**: 引数の `note` には必ず `MIDINote` インスタンスそのものを指定してください。`region.midi.notes` の要素(`{ note: MIDINote, start: number }`) をそのまま渡すとエラーになります。
   - **重要**: ノートはイミュータブルなため、内部的に削除と再生成が行われ、UI も即座に更新されます。
-  - 使用例: `const notes = this.app.hostAPI.project.getSelectedNotes(); this.app.hostAPI.project.updateNotes(notes.map(n => ({ ...n, velocity: 127 })));`
+  - 使用例: `const notes = this.app.hostAPI.project.getSelectedNotes(); this.app.hostAPI.project.updateNotes(notes.map(item => ({ ...item, velocity: 127 })));`
 
 ---
 
@@ -203,12 +204,13 @@ Tauri環境とWeb環境の両方で動作する抽象化レイヤーです。
 ノートやリージョンの操作時に以下の仕様を厳守してください。
 
 1. **MIDINote クラス**:
-    - プロパティ: `note` (pitch), `velocity` (0-1), `channel`, `duration` (ms)
+    - プロパティ: `note` (数値としてのピッチを表す), `velocity` (0-1), `channel`, `duration` (ms)
+    - **注意**: `note.note` がピッチを指すことに注意してください。
     - **注意**: `clone()` メソッドはありません。新しいノートを作るには `new MIDINote(note, velocity, channel, duration)` を使用してください。
     - **イミュータブル**: `MIDINote` のプロパティの多くは `readonly` です。値を変更する場合は、常に新しいインスタンスを生成してください。
 
 2. **MIDI クラス**:
-    - プロパティ: `duration` (全体の長さms), `instant_duration` (解像度), `notes` (全ノートの配列)
+    - プロパティ: `duration` (全体の長さms), `instant_duration` (解像度), `notes` (`{ note: MIDINote, start: number }[]` 形式の全ノート配列)
     - 生成: `MIDI.fromNotes(notesArray, instantDuration, totalDuration)` を使用。
     - **注意**: 長さを示すプロパティ名は **`duration`** です。
 
