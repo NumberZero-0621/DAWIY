@@ -43,7 +43,16 @@ export default class MuseMatePlugin extends DawiyPluginBase {
             (msg, isUser) => this.addChatMessage(msg, isUser),
             () => this.characterUI.setTalking(true),
             () => this.characterUI.setTalking(false),
-            (err) => host.ui.showToast(err, true)
+            (err) => host.ui.showToast(err, true),
+            (isThinking) => {
+                this.characterUI.setThinking(isThinking);
+                if (isThinking) {
+                    this.addThinkingMessage();
+                } else {
+                    this.removeThinkingMessage();
+                }
+            },
+            (emotion) => this.characterUI.setEmotion(emotion)
         );
 
         this.characterUI = new CharacterUI();
@@ -434,6 +443,24 @@ export default class MuseMatePlugin extends DawiyPluginBase {
         msgDiv.innerText = message;
         this.chatMessagesArea.appendChild(msgDiv);
         this.chatMessagesArea.scrollTop = this.chatMessagesArea.scrollHeight;
+    }
+
+    private thinkingMsgDiv: HTMLDivElement | null = null;
+
+    private addThinkingMessage() {
+        if (this.thinkingMsgDiv) return;
+        this.thinkingMsgDiv = document.createElement("div");
+        this.thinkingMsgDiv.className = `mm-chat-message bot`;
+        this.thinkingMsgDiv.innerHTML = `にちよが考え中<span class="mm-loading-dots"></span>`;
+        this.chatMessagesArea.appendChild(this.thinkingMsgDiv);
+        this.chatMessagesArea.scrollTop = this.chatMessagesArea.scrollHeight;
+    }
+
+    private removeThinkingMessage() {
+        if (this.thinkingMsgDiv && this.thinkingMsgDiv.parentElement) {
+            this.thinkingMsgDiv.parentElement.removeChild(this.thinkingMsgDiv);
+            this.thinkingMsgDiv = null;
+        }
     }
 
     private updateUI() {

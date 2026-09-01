@@ -12,7 +12,8 @@
 
 /* Character Display Area */
 .mm-character-area {
-    flex: 0 0 250px; /* Fixed height for character */
+    flex: 0 0 250px;
+    /* Fixed height for character */
     position: relative;
     display: flex;
     justify-content: center;
@@ -20,23 +21,50 @@
     background: linear-gradient(135deg, var(--bs-primary-bg-subtle), var(--bs-secondary-bg-subtle));
     border-bottom: 1px solid var(--bs-border-color);
     overflow: hidden;
+    isolation: isolate;
+    /* Create stacking context */
+}
+
+.mm-character-area::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url('./にちよ-背景.png');
+    background-size: cover;
+    /* 縦幅に合わせてフィットし、横幅を切り取る */
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.8;
+    /* 透明度 */
+    filter: blur(4px);
+    /* ぼかし */
+    z-index: -1;
+    pointer-events: none;
 }
 
 .mm-character-placeholder {
-    width: 150px;
-    height: 200px;
-    background-color: rgba(255, 105, 180, 0.4);
-    border: 2px dashed rgba(255, 105, 180, 0.8);
-    border-radius: 20px 20px 0 0;
+    height: 100%;
+    width: 100%;
     display: flex;
     justify-content: center;
-    align-items: center;
-    color: #ff69b4;
-    font-weight: bold;
-    text-align: center;
+    align-items: flex-start;
     animation: mm-breathe 4s infinite ease-in-out;
     cursor: pointer;
     transition: transform 0.2s;
+    transform-origin: top center;
+    position: relative;
+    z-index: 1;
+    /* 背景よりも前に表示 */
+}
+
+.mm-character-placeholder img {
+    width: auto;
+    height: 135%;
+    /* 枠より少し大きくして下半身を切る */
+    margin-top: 5px;
+    /* 上部に少し余白 */
+    object-fit: contain;
+    pointer-events: none;
 }
 
 .mm-character-placeholder:hover {
@@ -44,17 +72,24 @@
 }
 
 @keyframes mm-breathe {
-    0%, 100% { transform: translateY(0) scaleY(1); }
-    50% { transform: translateY(-5px) scaleY(1.02); }
+
+    0%,
+    100% {
+        transform: translateY(0) scaleY(1);
+    }
+
+    50% {
+        transform: translateY(-5px) scaleY(1.02);
+    }
 }
 
 /* Breakout (Roam) Mode */
 .mm-character-roam {
     position: fixed;
-    z-index: 9999;
-    bottom: 20px;
-    right: 350px; /* Adjust based on sidebar width */
+    z-index: 50; /* トップナビなどを避けるために少し下げておく */
     pointer-events: all;
+    width: 300px;
+    height: 450px;
 }
 
 /* Status Bar */
@@ -145,21 +180,33 @@
     align-items: center;
     cursor: pointer;
 }
+
 .mm-input-row button.recording {
     background-color: var(--bs-danger);
     animation: mm-pulse 1.5s infinite;
 }
 
 @keyframes mm-pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 /* Settings Area */
 .mm-settings-area {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background-color: var(--bs-body-bg);
     z-index: 10;
     padding: 15px;
@@ -170,4 +217,20 @@
 
 .mm-settings-area.show {
     display: flex;
+}
+
+/* Loading Dots */
+.mm-loading-dots {
+    display: inline-block;
+}
+.mm-loading-dots::after {
+    content: '';
+    animation: mm-dots 1.5s steps(4, end) infinite;
+}
+@keyframes mm-dots {
+    0% { content: ''; }
+    25% { content: '.'; }
+    50% { content: '..'; }
+    75% { content: '...'; }
+    100% { content: ''; }
 }

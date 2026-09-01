@@ -14,23 +14,32 @@ export class ChatEngine {
     public onVoiceEnded: () => void;
     public onRecordingEnded?: () => void;
     public onError: (error: string) => void;
+    public onThinking: (isThinking: boolean) => void;
+    public onEmotion: (emotion: string) => void;
 
     private systemPrompt = `あなたは「緒守付 にちよ（おもづく にちよ）」という名前の女の子です。
     DAW（音楽制作ソフト）で作業するユーザーを応援し、モチベーションを高めるのがあなたの役割です。
     親しみやすく、少し甘えん坊で、たまにイタズラ好きな性格です。
     短い会話で、ユーザーの音楽制作をアシストしてください。
+    【重要】応答の最後には必ず、あなたの現在の感情を表すタグを含めてください。
+    使用可能なタグ: [default], [joy], [angry], [sad], [pout]
+    例: 「頑張ってね！ [joy]」
 `;
 
     constructor(
         onMessageReceived: (message: string, isUser: boolean) => void,
         onVoiceStarted: () => void,
         onVoiceEnded: () => void,
-        onError: (error: string) => void
+        onError: (error: string) => void,
+        onThinking: (isThinking: boolean) => void,
+        onEmotion: (emotion: string) => void
     ) {
         this.onMessageReceived = onMessageReceived;
         this.onVoiceStarted = onVoiceStarted;
         this.onVoiceEnded = onVoiceEnded;
         this.onError = onError;
+        this.onThinking = onThinking;
+        this.onEmotion = onEmotion;
 
         // Initialize Speech Recognition
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -147,6 +156,7 @@ export class ChatEngine {
         let responseText = "";
 
         // 2. Fetch from LLM
+        this.onThinking(true);
         try {
             if (this.provider === "gemini") {
                 responseText = await this.fetchGemini(text);
@@ -154,15 +164,40 @@ export class ChatEngine {
                 responseText = await this.fetchOpenAI(text);
             }
         } catch (e: any) {
+            this.onThinking(false);
             this.onError(e.message);
             return;
         }
+        // 音声生成完了まで Thinking 状態を維持する
 
-        // 3. Add Bot message to UI
+        // 2.5 Extract Emotion Tag
+        let emotion = "default";
+        const emotionMatch = responseText.match(/\[(joy|angry|sad|pout|default)\]/i);
+        if (emotionMatch) {
+            emotion = emotionMatch[1].toLowerCase();
+            responseText = responseText.replace(emotionMatch[0], "").trim();
+        }
+        this.onEmotion(emotion);
+
+        // 3. Synthesize voice with COEIROINK (時間がかかる処理)
+        const audio = await this.generateCoeiroinkAudio(responseText);
+        
+        // 音声生成が完了した時点で UI にテキストを表示し、Thinking 状態を解除
         this.onMessageReceived(responseText, false);
+        this.onThinking(false);
 
-        // 4. Synthesize voice with COEIROINK
-        await this.speakWithCoeiroink(responseText);
+        // 4. Play Audio
+        if (audio) {
+            this.onVoiceStarted();
+            audio.onended = () => {
+                URL.revokeObjectURL(audio.src);
+                this.onVoiceEnded();
+            };
+            audio.play().catch(e => {
+                console.error("[Muse Mate] Audio playback failed or was blocked by the browser:", e);
+                this.onVoiceEnded();
+            });
+        }
     }
 
     private async fetchGemini(text: string): Promise<string> {
@@ -229,38 +264,31 @@ export class ChatEngine {
         return replyText;
     }
 
-    private async speakWithCoeiroink(text: string) {
+    private async generateCoeiroinkAudio(text: string): Promise<HTMLAudioElement | null> {
         try {
-            // 1. Text to Audio Query
-            const queryRes = await fetch(`${this.coeiroinkUrl}/v1/audio_query?text=${encodeURIComponent(text)}&speakerUuid=3c37646f-3881-5374-2a83-149267990abc`, {
-                method: 'POST'
-            });
-            if (!queryRes.ok) throw new Error("COEIROINK Audio Query Error");
-            const queryData = await queryRes.json();
+            // COEIROINK v2 API: /v1/predict
+            const requestBody = {
+                speakerUuid: "3c37646f-3881-5374-2a83-149267990abc",
+                styleId: 0,
+                text: text,
+                speedScale: 1.0
+            };
 
-            // 2. Synthesis
-            const synthRes = await fetch(`${this.coeiroinkUrl}/v1/synthesis?speakerUuid=3c37646f-3881-5374-2a83-149267990abc`, {
+            const synthRes = await fetch(`${this.coeiroinkUrl}/v1/predict`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(queryData)
+                body: JSON.stringify(requestBody)
             });
-            if (!synthRes.ok) throw new Error("COEIROINK Synthesis Error");
+            
+            if (!synthRes.ok) throw new Error("COEIROINK API Error: " + synthRes.statusText);
             
             const audioBlob = await synthRes.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
-            
-            this.onVoiceStarted();
-            audio.onended = () => {
-                URL.revokeObjectURL(audioUrl);
-                this.onVoiceEnded();
-            };
-            audio.play();
+            return new Audio(audioUrl);
 
         } catch (e) {
             console.warn("[Muse Mate] COEIROINK Error. Make sure COEIROINK V2 is running locally on port 50032.", e);
-            // Fallback to browser TTS if COEIROINK is not available (optional)
-            // this.speakWithBrowserTTS(text);
+            return null;
         }
     }
 

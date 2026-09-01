@@ -154,6 +154,10 @@ module.exports = (env, argv) => {
                     options: {
                         sources: false,
                     },
+                },
+                {
+                    test: /\.(png|jpe?g|gif|svg)$/i,
+                    type: 'asset/resource',
                 }
             ]
         },
