@@ -6,6 +6,10 @@ import HostAPI from "../API/HostAPI";
 import { GameLogic } from "./GameLogic";
 import { ChatEngine } from "./ChatEngine";
 import { CharacterUI } from "./CharacterUI";
+import MIDIRegion from "../../Models/Region/MIDIRegion";
+import { MIDI, MIDINote } from "../../Audio/MIDI/MIDI";
+import { RATIO_MILLS_BY_PX, TEMPO } from "../../Env";
+import Track from "../../Models/Track/Track";
 
 import "./MuseMate.css";
 
@@ -33,6 +37,8 @@ export default class MuseMatePlugin extends DawiyPluginBase {
 
     // Settings state
     private settingsOpen = false;
+    private currentMode: 'assistant' | 'composer' = 'assistant';
+    private currentEmotion: string = 'default';
 
     constructor(app: App) {
         super(app);
@@ -58,7 +64,10 @@ export default class MuseMatePlugin extends DawiyPluginBase {
                     this.removeThinkingMessage();
                 }
             },
-            (emotion) => this.characterUI.setEmotion(emotion)
+            (emotion) => {
+                this.currentEmotion = emotion;
+                this.characterUI.setEmotion(emotion);
+            }
         );
 
         this.characterUI = new CharacterUI();
@@ -69,13 +78,36 @@ export default class MuseMatePlugin extends DawiyPluginBase {
         // Since DAWIY doesn't have a pub/sub event system exposed on HostAPI yet, 
         // we can poll or hook into `app.doIt` indirectly, but for now we'll do simple checks.
 
-        // Simple polling for region changes as a workaround
+        // Hook app.doIt to track parameter changes and user actions
+        const originalDoIt = this.app.doIt.bind(this.app);
+        this.app.doIt = (isUndoable, redo, undo) => {
+            this.gameLogic.recordParameterChange();
+            originalDoIt(isUndoable, redo, undo);
+        };
+
+        // Polling for region changes and stats
         setInterval(() => {
             if (!this.app || !this.app.tracksController) return;
             let currentRegionCount = 0;
+            let currentMidiNotes = 0;
+            let currentAudioRegions = 0;
+
             this.app.tracksController.tracks.forEach(track => {
                 currentRegionCount += track.regions.length;
+                track.regions.forEach(region => {
+                    // Check region type and count items
+                    if ((region as any).midi) {
+                        currentMidiNotes += (region as any).midi.notes.length;
+                    } else if ((region as any).audioBuffer || (region as any).audioUrl) {
+                        currentAudioRegions++;
+                    } else if ((region as any).type === 'audio') {
+                        currentAudioRegions++;
+                    }
+                });
             });
+
+            this.gameLogic.recordMidiCount(currentMidiNotes);
+            this.gameLogic.recordAudioRegionCount(currentAudioRegions);
 
             // If regions increased, add affection
             if (this.lastRegionCount !== -1 && currentRegionCount > this.lastRegionCount) {
@@ -119,6 +151,77 @@ export default class MuseMatePlugin extends DawiyPluginBase {
         this.affectionDisplay.innerText = "💖 好感度： 0";
         headerArea.appendChild(this.affectionDisplay);
 
+        // Mode Switch
+        const modeSwitchContainer = document.createElement("div");
+        modeSwitchContainer.className = "mm-mode-switch mt-2 d-flex justify-content-center gap-2";
+        
+        const modeAssistantBtn = document.createElement("button");
+        modeAssistantBtn.className = "btn btn-sm btn-primary";
+        modeAssistantBtn.innerText = "にちよと作曲！";
+        
+        const modeComposerBtn = document.createElement("button");
+        modeComposerBtn.className = "btn btn-sm btn-outline-primary";
+        modeComposerBtn.innerText = "にちよで作曲！";
+        
+        modeSwitchContainer.appendChild(modeAssistantBtn);
+        modeSwitchContainer.appendChild(modeComposerBtn);
+        headerArea.appendChild(modeSwitchContainer);
+        
+        // Composer Settings (Key & Scale)
+        const composerSettings = document.createElement("div");
+        composerSettings.className = "mm-composer-settings mt-2 d-flex justify-content-center gap-2";
+        composerSettings.style.display = "none";
+        
+        const keySelect = document.createElement("select");
+        keySelect.id = "mm-key-select";
+        keySelect.className = "form-select form-select-sm w-auto";
+        keySelect.style.backgroundColor = "var(--bs-body-bg)";
+        keySelect.style.color = "var(--bs-body-color)";
+        const keys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        keys.forEach((k, i) => {
+            const opt = document.createElement("option");
+            opt.value = (i + 60).toString(); // MIDI Root Note (C4 = 60)
+            opt.innerText = k;
+            keySelect.appendChild(opt);
+        });
+        
+        const scaleSelect = document.createElement("select");
+        scaleSelect.id = "mm-scale-select";
+        scaleSelect.className = "form-select form-select-sm w-auto";
+        scaleSelect.style.backgroundColor = "var(--bs-body-bg)";
+        scaleSelect.style.color = "var(--bs-body-color)";
+        const scales = [
+            { id: "major", name: "Major" },
+            { id: "minor", name: "Minor" },
+            { id: "pentatonic_major", name: "Major Pentatonic" },
+            { id: "pentatonic_minor", name: "Minor Pentatonic" },
+            { id: "chromatic", name: "Chromatic" }
+        ];
+        scales.forEach(s => {
+            const opt = document.createElement("option");
+            opt.value = s.id;
+            opt.innerText = s.name;
+            scaleSelect.appendChild(opt);
+        });
+        
+        composerSettings.appendChild(keySelect);
+        // composerSettings.appendChild(scaleSelect);
+        headerArea.appendChild(composerSettings);
+
+        modeAssistantBtn.onclick = () => {
+            this.currentMode = 'assistant';
+            modeAssistantBtn.className = "btn btn-sm btn-primary";
+            modeComposerBtn.className = "btn btn-sm btn-outline-primary";
+            composerSettings.style.display = "none";
+        };
+        
+        modeComposerBtn.onclick = () => {
+            this.currentMode = 'composer';
+            modeComposerBtn.className = "btn btn-sm btn-primary";
+            modeAssistantBtn.className = "btn btn-sm btn-outline-primary";
+            composerSettings.style.display = "flex";
+        };
+
         root.appendChild(headerArea);
 
         // --- Status Bar ---
@@ -141,9 +244,14 @@ export default class MuseMatePlugin extends DawiyPluginBase {
         const inputRow = document.createElement("div");
         inputRow.className = "mm-input-row";
 
-        const textInput = document.createElement("input");
-        textInput.type = "text";
+        const textInput = document.createElement("textarea");
         textInput.placeholder = "にちよと話す...";
+        textInput.rows = 1;
+
+        textInput.addEventListener("input", () => {
+            textInput.style.height = "auto";
+            textInput.style.height = (textInput.scrollHeight + 2) + "px";
+        });
 
         const sendBtn = document.createElement("button");
         sendBtn.innerHTML = '<i class="bi bi-send"></i>';
@@ -157,18 +265,27 @@ export default class MuseMatePlugin extends DawiyPluginBase {
             voiceBtn.classList.remove("recording");
         };
 
-        textInput.addEventListener("keypress", (e) => {
-            if (e.key === "Enter") {
-                this.chatEngine.sendMessage(textInput.value);
-                this.gameLogic.recordOperation();
+        textInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                const val = textInput.value.trim();
+                if (val) {
+                    this.chatEngine.sendMessage(val);
+                    this.gameLogic.recordChat();
+                }
                 textInput.value = "";
+                textInput.style.height = "auto";
             }
         });
 
         sendBtn.addEventListener("click", () => {
-            this.chatEngine.sendMessage(textInput.value);
-            this.gameLogic.recordOperation();
+            const val = textInput.value.trim();
+            if (val) {
+                this.chatEngine.sendMessage(val);
+                this.gameLogic.recordChat();
+            }
             textInput.value = "";
+            textInput.style.height = "auto";
         });
 
         voiceBtn.addEventListener("click", () => {
@@ -323,13 +440,276 @@ export default class MuseMatePlugin extends DawiyPluginBase {
         }
     }
 
+    private dashUpdateInterval: any = null;
+
     public override render(container: HTMLElement) {
         container.innerHTML = `
-            <div style="padding: 20px; text-align: center; color: var(--bs-secondary-color);">
-                <h4>Muse Mate (みゅーず・めいと！)</h4>
-                <p>画面右側のサイドバーに追加されています！<br>右側の「<i class="bi bi-person-heart"></i>」アイコンをクリックして開いてください。</p>
+            <div class="mm-dashboard">
+                <div class="mm-dashboard-header">
+                    <h4>Muse Mate アクティビティ</h4>
+                    <div style="font-size: 0.9em;">
+                        <label>AIモデル制限: </label>
+                        <select id="mm-dash-model-select" class="form-select form-select-sm d-inline-block" style="width: 200px; background-color: var(--bs-body-bg); color: var(--bs-body-color);">
+                            <option value="20">Gemini 2.5 Flash</option>
+                            <option value="20">Gemini 2.5 Flash Lite</option>
+                            <option value="20">Gemini 3 Flash</option>
+                            <option value="500">Gemini 3.1 Flash Lite</option>
+                            <option value="20">Gemini 3.5 Flash</option>
+                            <option value="500">Gemini 3.5 Flash Lite</option>
+                            <option value="20">Gemini 3.6 Flash</option>
+                            <option value="20">Gemini 3.7 Flash</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="mm-dashboard-grid">
+                    <div class="mm-dash-card">
+                        <div class="mm-dash-title">本日の配置MIDI数</div>
+                        <div class="mm-dash-value" id="mm-dash-midi">0</div>
+                    </div>
+                    <div class="mm-dash-card">
+                        <div class="mm-dash-title">本日の配置オーディオ数</div>
+                        <div class="mm-dash-value" id="mm-dash-audio">0</div>
+                    </div>
+                    <div class="mm-dash-card">
+                        <div class="mm-dash-title">本日の作業時間</div>
+                        <div class="mm-dash-value" id="mm-dash-time">0m 0s</div>
+                    </div>
+                    <div class="mm-dash-card">
+                        <div class="mm-dash-title">パラメータ操作回数</div>
+                        <div class="mm-dash-value" id="mm-dash-params">0</div>
+                    </div>
+                    <div class="mm-dash-card">
+                        <div class="mm-dash-title">本日の会話回数</div>
+                        <div class="mm-dash-value" id="mm-dash-chats">0</div>
+                    </div>
+                    <div class="mm-dash-card" style="border: 1px solid var(--bs-primary);">
+                        <div class="mm-dash-title text-primary">残り会話可能回数 (目安)</div>
+                        <div class="mm-dash-value text-primary" id="mm-dash-chats-remaining">0</div>
+                    </div>
+                </div>
+
+                <div class="mm-dash-graph-container mt-3">
+                    <h6 class="mb-2">好感度の推移</h6>
+                    <svg id="mm-dash-affection-graph" viewBox="0 0 500 150" preserveAspectRatio="none" style="width: 100%; height: 150px; background: rgba(0,0,0,0.1); border-radius: 5px;"></svg>
+                </div>
             </div>
         `;
+
+        const updateDashboard = () => {
+            if (!document.getElementById("mm-dash-midi")) return; // Not in DOM
+            
+            const stats = this.gameLogic.getTodayStats();
+            
+            const midiEl = document.getElementById("mm-dash-midi");
+            if (midiEl) midiEl.innerText = stats.midiNotes.toString();
+            
+            const audioEl = document.getElementById("mm-dash-audio");
+            if (audioEl) audioEl.innerText = stats.audioRegions.toString();
+            
+            const timeEl = document.getElementById("mm-dash-time");
+            if (timeEl) {
+                const h = Math.floor(stats.sessionTimeSeconds / 3600);
+                const m = Math.floor((stats.sessionTimeSeconds % 3600) / 60);
+                const s = stats.sessionTimeSeconds % 60;
+                timeEl.innerText = h > 0 ? `${h}時間 ${m}分 ${s}秒` : `${m}分 ${s}秒`;
+            }
+            
+            const paramsEl = document.getElementById("mm-dash-params");
+            if (paramsEl) paramsEl.innerText = stats.parametersChanged.toString();
+            
+            const chatsEl = document.getElementById("mm-dash-chats");
+            if (chatsEl) chatsEl.innerText = stats.chats.toString();
+            
+            const selectEl = document.getElementById("mm-dash-model-select") as HTMLSelectElement;
+            const remainingEl = document.getElementById("mm-dash-chats-remaining");
+            if (selectEl && remainingEl) {
+                const limit = parseInt(selectEl.value) || 20;
+                const remaining = Math.max(0, limit - stats.chats);
+                remainingEl.innerText = remaining.toString();
+            }
+
+            // Draw SVG Graph
+            const svg = document.getElementById("mm-dash-affection-graph");
+            if (svg) {
+                const history = this.gameLogic.affectionHistory;
+                if (history.length > 1) {
+                    const minScore = Math.min(...history.map(h => h.score));
+                    const maxScore = Math.max(...history.map(h => h.score), minScore + 10);
+                    
+                    const width = 500;
+                    const height = 150;
+                    const padding = 10;
+                    
+                    let pathD = "";
+                    history.forEach((entry, i) => {
+                        const x = padding + (i / (history.length - 1)) * (width - padding * 2);
+                        const normalizedY = (entry.score - minScore) / (maxScore - minScore);
+                        const y = height - padding - (normalizedY * (height - padding * 2));
+                        
+                        if (i === 0) pathD += `M ${x} ${y} `;
+                        else pathD += `L ${x} ${y} `;
+                    });
+                    
+                    svg.innerHTML = `
+                        <path d="${pathD}" fill="none" stroke="#ff69b4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        <text x="5" y="15" fill="#ff69b4" font-size="12">最高: ${maxScore}</text>
+                        <text x="5" y="145" fill="#ff69b4" font-size="12">最低: ${minScore}</text>
+                    `;
+                } else {
+                    svg.innerHTML = '<text x="200" y="80" fill="gray" font-size="14">データが不足しています。</text>';
+                }
+            }
+        };
+
+        // Initial update
+        updateDashboard();
+
+        // Update when select changes
+        const selectEl = document.getElementById("mm-dash-model-select");
+        if (selectEl) {
+            selectEl.addEventListener("change", updateDashboard);
+        }
+
+        if (this.dashUpdateInterval) clearInterval(this.dashUpdateInterval);
+        this.dashUpdateInterval = setInterval(updateDashboard, 1000);
+    }
+
+    public override onDeactivate() {
+        this.characterUI.detach();
+        if (this.dashUpdateInterval) {
+            clearInterval(this.dashUpdateInterval);
+        }
+    }
+
+    private async generateMelodyFromText(text: string) {
+        // Remove tags and clean text
+        const cleanText = text.replace(/\[.*?\]/g, "").replace(/\n/g, "").trim();
+        if (cleanText.length === 0) return;
+
+        // Determine key
+        const keySelect = document.getElementById("mm-key-select") as HTMLSelectElement;
+        const baseNote = parseInt(keySelect?.value || "60");
+
+        const emotion = this.currentEmotion;
+
+        // Define scale intervals based on emotion
+        let intervals = [0, 2, 4, 5, 7, 9, 11]; // Major (default/joy)
+        if (emotion === 'sad') intervals = [0, 2, 3, 5, 7, 8, 10]; // Minor
+        else if (emotion === 'angry') intervals = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]; // Chromatic
+
+        // Generate scale pool (2 octaves down, 2 octaves up)
+        const scalePool: number[] = [];
+        for (let oct = -2; oct <= 2; oct++) {
+            intervals.forEach(i => scalePool.push(baseNote + oct * 12 + i));
+        }
+
+        let baseVelocity = 100;
+        let pitchIndexOffset = Math.floor(scalePool.length / 2); // Center
+        let beatDivision = 4; // default quarter notes
+
+        if (emotion === 'joy') {
+            pitchIndexOffset += intervals.length; // +1 octave
+            beatDivision = 8; // faster
+        } else if (emotion === 'sad') {
+            pitchIndexOffset -= intervals.length; // -1 octave
+            beatDivision = 2; // slower
+            baseVelocity = 70;
+        } else if (emotion === 'angry') {
+            baseVelocity = 127;
+            beatDivision = 16; // very fast
+        } else if (emotion === 'pout') {
+            beatDivision = 8;
+        }
+
+        const beatMs = (60 / TEMPO) * 1000;
+        const notesToAdd: { pitch: number, start: number, duration: number, velocity: number }[] = [];
+        let currentMs = 0;
+        
+        let pitchIndex = pitchIndexOffset;
+        let poutRepeatCount = 0;
+        let poutCurrentPitch = scalePool[pitchIndex];
+
+        // For smooth sine-like movement
+        let phase = 0;
+
+        for (let i = 0; i < cleanText.length; i++) {
+            const char = cleanText[i];
+            
+            // Duration logic
+            let durRatio = 1 / (beatDivision / 4); // 4->1, 8->0.5, 2->2
+            if (/[\u4E00-\u9FAF]/.test(char)) {
+                durRatio *= 2; // Kanji is longer
+            }
+            
+            const noteDurMs = beatMs * durRatio;
+            
+            // Pitch logic
+            if (emotion === 'joy' || emotion === 'sad' || emotion === 'default') {
+                // Smooth continuous up/down
+                phase += 0.5 + Math.random() * 0.5; // advance phase
+                // Use sine wave to smoothly oscillate around the offset
+                const offset = Math.floor(Math.sin(phase) * (intervals.length)); 
+                pitchIndex = pitchIndexOffset + offset;
+            } else if (emotion === 'angry') {
+                // Jumpy
+                pitchIndex = pitchIndexOffset + Math.floor(Math.random() * 20) - 10;
+            } else if (emotion === 'pout') {
+                if (poutRepeatCount <= 0) {
+                    // pick a new note
+                    pitchIndex = pitchIndexOffset + Math.floor(Math.random() * intervals.length) - Math.floor(intervals.length / 2);
+                    pitchIndex = Math.max(0, Math.min(scalePool.length - 1, pitchIndex));
+                    poutCurrentPitch = scalePool[pitchIndex];
+                    poutRepeatCount = Math.floor(Math.random() * 5); // 0 to 4 more repeats (1 to 5 total)
+                } else {
+                    poutRepeatCount--;
+                }
+            }
+            
+            // Clamp pitch index
+            pitchIndex = Math.max(0, Math.min(scalePool.length - 1, pitchIndex));
+            
+            const pitch = (emotion === 'pout') ? poutCurrentPitch : scalePool[pitchIndex];
+            
+            // For pout, make it staccato
+            let actualDur = noteDurMs;
+            if (emotion === 'pout') actualDur *= 0.5;
+
+            notesToAdd.push({
+                pitch: pitch,
+                start: currentMs,
+                duration: actualDur,
+                velocity: baseVelocity + (Math.random() * 10 - 5)
+            });
+            
+            currentMs += noteDurMs;
+        }
+
+        // Add to project
+        try {
+            // Get selected track or create new
+            let targetTrack = this.app.tracksController.selectedTrack;
+            if (!targetTrack) {
+                targetTrack = await this.app.tracksController.createTrack();
+                if (targetTrack) targetTrack.element.name = "Nichiyo Composer";
+            }
+            
+            const startMs = this.app.host.playhead;
+            const midi = new MIDI(500, currentMs);
+            
+            notesToAdd.forEach(n => {
+                midi.putNote(new MIDINote(n.pitch, n.velocity, 0, n.duration), n.start);
+            });
+            
+            const newRegion = new MIDIRegion(midi, startMs);
+            if (targetTrack) {
+                this.app.regionsController.addRegion(targetTrack, newRegion);
+                this.app.hostAPI.ui.showToast(`にちよのメロディ (${notesToAdd.length}音) を追加しました！`);
+            }
+            
+        } catch (e: any) {
+            console.error("Composer Mode Error:", e);
+        }
     }
 
     private createSettingsArea(): HTMLDivElement {
@@ -485,7 +865,7 @@ export default class MuseMatePlugin extends DawiyPluginBase {
                 const before = message.substring(lastIndex, match.index);
                 if (before.trim()) {
                     const p = document.createElement("div");
-                    p.innerText = before.trim();
+                    p.innerHTML = this.parseMarkdown(before.trim());
                     msgDiv.appendChild(p);
                 }
 
@@ -561,17 +941,43 @@ export default class MuseMatePlugin extends DawiyPluginBase {
             const remaining = message.substring(lastIndex);
             if (remaining.trim()) {
                 const p = document.createElement("div");
-                p.innerText = remaining.trim();
+                p.innerHTML = this.parseMarkdown(remaining.trim());
                 msgDiv.appendChild(p);
             }
 
             if (!foundCode) {
-                msgDiv.innerText = message;
+                msgDiv.innerHTML = this.parseMarkdown(message);
             }
         }
 
         this.chatMessagesArea.appendChild(msgDiv);
         this.chatMessagesArea.scrollTop = this.chatMessagesArea.scrollHeight;
+
+        if (!isUser && this.currentMode === 'composer') {
+            this.generateMelodyFromText(message);
+        }
+    }
+
+    private parseMarkdown(text: string): string {
+        let html = text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+        // Bold
+        html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        html = html.replace(/__(.+?)__/g, "<strong>$1</strong>");
+
+        // Italic
+        html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+        // Code
+        html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+        // Line breaks
+        html = html.replace(/\n/g, '<br>');
+
+        return html;
     }
 
     private hashCode(str: string): number {
@@ -661,9 +1067,5 @@ export default class MuseMatePlugin extends DawiyPluginBase {
                 this.timerDisplay.innerText = "";
             }
         }
-    }
-
-    public override onDeactivate() {
-        this.characterUI.detach();
     }
 }

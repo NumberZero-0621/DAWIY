@@ -86,7 +86,8 @@
 /* Breakout (Roam) Mode */
 .mm-character-roam {
     position: fixed;
-    z-index: 50; /* トップナビなどを避けるために少し下げておく */
+    z-index: 50;
+    /* トップナビなどを避けるために少し下げておく */
     pointer-events: all;
     width: 300px;
     height: 450px;
@@ -159,13 +160,43 @@
     gap: 5px;
 }
 
-.mm-input-row input {
+.mm-input-row textarea {
     flex: 1;
-    padding: 6px 10px;
+    padding: 8px 12px;
     border-radius: 20px;
     border: 1px solid var(--bs-border-color);
     background-color: var(--bs-body-bg);
     color: var(--bs-body-color);
+    box-sizing: border-box;
+    resize: none;
+    min-height: 40px;
+    max-height: 150px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    font-family: inherit;
+    line-height: 1.5;
+    /* Standard scrollbar for Firefox etc. */
+    scrollbar-width: thin;
+    scrollbar-color: #ffffff transparent;
+}
+
+/* Custom Scrollbar for Textarea */
+.mm-input-row textarea::-webkit-scrollbar {
+    width: 6px;
+    background: transparent;
+}
+
+.mm-input-row textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.mm-input-row textarea::-webkit-scrollbar-thumb {
+    background: #ffffff;
+    border-radius: 3px;
+}
+
+.mm-input-row textarea::-webkit-scrollbar-button {
+    display: none;
 }
 
 .mm-input-row button {
@@ -223,14 +254,92 @@
 .mm-loading-dots {
     display: inline-block;
 }
+
 .mm-loading-dots::after {
     content: '';
     animation: mm-dots 1.5s steps(4, end) infinite;
 }
+
 @keyframes mm-dots {
-    0% { content: ''; }
-    25% { content: '.'; }
-    50% { content: '..'; }
-    75% { content: '...'; }
-    100% { content: ''; }
+    0% {
+        content: '';
+    }
+
+    25% {
+        content: '.';
+    }
+
+    50% {
+        content: '..';
+    }
+
+    75% {
+        content: '...';
+    }
+
+    100% {
+        content: '';
+    }
+}
+
+/* Dashboard Styles */
+.mm-dashboard {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    height: 100%;
+    overflow-y: auto;
+    background-color: var(--bs-body-bg);
+}
+
+.mm-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.mm-dashboard-header h4 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.mm-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 15px;
+}
+
+.mm-dash-card {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.mm-dash-title {
+    font-size: 0.8em;
+    color: var(--bs-secondary-color);
+    margin-bottom: 5px;
+}
+
+.mm-dash-value {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.mm-dash-graph-container {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
