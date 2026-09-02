@@ -576,7 +576,6 @@ export default class MuseMatePlugin extends DawiyPluginBase {
     }
 
     public override onDeactivate() {
-        this.characterUI.detach();
         if (this.dashUpdateInterval) {
             clearInterval(this.dashUpdateInterval);
         }
